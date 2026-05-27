@@ -96,6 +96,19 @@ signposter fail     --repo <owner/repo> --issue N --dry-run
 
 These commands are currently **dry-run only** and validate that the target item is in `state:active`.
 
+### `signposter run --dry-run`
+
+Plans how a selected claimable item would be executed via OpenClaw (bootstrap phase):
+
+```bash
+signposter run --repo <owner/repo> --dry-run
+```
+
+The runner planner reuses the claim planner and proposes:
+- OpenClaw profile based on role + phase (e.g. `reviewer` for `role:reviewer + phase:review`)
+- Working directory and prompt artifact path
+- Command shape (not executed)
+
 ## Project Structure
 
 ```
