@@ -17,6 +17,27 @@ Only the following exists:
 
 No actual dispatch, scheduling, GitHub integration, or state machine logic has been written.
 
+## Available Commands (Bootstrap Phase)
+
+### `signposter doctor`
+
+Run a read-only preflight check of the local environment:
+
+```bash
+signposter doctor
+```
+
+The doctor command verifies:
+- Python version compatibility
+- Git repository and working tree status
+- Presence of `gh` (GitHub CLI) and authentication state
+- Presence of `openclaw`
+- Availability of `pytest` and `ruff`
+- Existence of example configuration files
+- Existence of core documentation
+
+It is safe to run at any time and makes no changes.
+
 ## Project Structure
 
 ```
