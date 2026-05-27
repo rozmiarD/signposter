@@ -38,6 +38,21 @@ The doctor command verifies:
 
 It is safe to run at any time and makes no changes.
 
+### `signposter scan`
+
+Read-only scanner for GitHub repositories (bootstrap phase):
+
+```bash
+signposter scan --repo ExatronOmega/signposter
+```
+
+The scanner reports:
+- Count of open issues and pull requests
+- Recent workflow runs
+- Items matching neutral workflow labels (`state:ready`, `phase:*`, `gate:*`, etc.)
+
+It uses the GitHub CLI in read-only mode and performs **no** mutations.
+
 ## Project Structure
 
 ```
