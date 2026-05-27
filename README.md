@@ -80,6 +80,22 @@ The claim planner only considers items currently labeled `state:ready`. It propo
 
 This is the last purely planning step before any real claiming logic would be implemented.
 
+### `signposter release / complete / fail --dry-run`
+
+Manage already-claimed (`state:active`) items (bootstrap phase):
+
+```bash
+signposter release  --repo <owner/repo> --issue N --dry-run
+signposter complete --repo <owner/repo> --issue N --dry-run
+signposter fail     --repo <owner/repo> --issue N --dry-run
+```
+
+- `release`: Returns an active item to `state:ready` (removes active + gate labels)
+- `complete`: Marks an active item as `state:done`
+- `fail`: Marks an active item as `state:failed`
+
+These commands are currently **dry-run only** and validate that the target item is in `state:active`.
+
 ## Project Structure
 
 ```
