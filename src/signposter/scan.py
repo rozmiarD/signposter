@@ -93,6 +93,42 @@ def fetch_open_issues(repo: str, limit: int = 50) -> list[LabeledItem]:
     return items
 
 
+def fetch_issue_by_number(repo: str, number: int) -> LabeledItem | None:
+    """Fetch a single issue by number (read-only).
+
+    Always returns the *current* labels from GitHub, regardless of state.
+    Useful after claim mutations to get fresh state for prompt rendering.
+    """
+    result = subprocess.run(
+        [
+            "gh",
+            "issue",
+            "view",
+            str(number),
+            "-R",
+            repo,
+            "--json",
+            "number,title,url,labels,state",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if result.returncode != 0:
+        # Issue may not exist or be inaccessible
+        return None
+
+    data = json.loads(result.stdout)
+    labels = [lbl["name"] for lbl in data.get("labels", [])]
+    return LabeledItem(
+        number=data["number"],
+        title=data["title"],
+        html_url=data.get("url", ""),
+        labels=labels,
+        item_type="issue",
+    )
+
+
 def fetch_open_prs(repo: str, limit: int = 50) -> list[LabeledItem]:
     """Fetch open pull requests using repository-scoped gh pr list (works for private repos)."""
     result = subprocess.run(

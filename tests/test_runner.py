@@ -127,3 +127,38 @@ def test_render_prompt_role_specific_instruction():
 
     assert "review the issue/request and propose next steps" in content.lower()
     assert "do not edit files yet" in content.lower()
+
+
+# --- Post-claim freshness tests ---
+
+
+def test_render_prompt_reflects_post_claim_labels():
+    """Prompt artifact must reflect current labels after claim (state:active + gate:review)."""
+    from signposter.dispatch import classify_candidate
+    from signposter.runner import RunnerPlan, render_prompt
+
+    # Simulate post-claim item (as it would appear after refresh)
+    post_claim_item = make_item(
+        2,
+        ["phase:review", "state:active", "risk:low", "role:reviewer", "area:core", "gate:review"],
+    )
+    fresh_dispatch = classify_candidate(post_claim_item)
+
+    plan = RunnerPlan(
+        item=post_claim_item,
+        dispatch=fresh_dispatch,
+        proposed_runner="openclaw",
+        proposed_profile="reviewer",
+        proposed_working_dir="~/work/2",
+        proposed_prompt_path="artifacts/prompts/issue-2.md",
+        proposed_command_shape="openclaw run ...",
+        reason="post-claim refresh test",
+    )
+
+    content = render_prompt(plan, "ExatronOmega/signposter")
+
+    # Must show post-claim state, not stale ready state
+    assert "state:active" in content
+    assert "gate:review" in content
+    assert "state:ready" not in content
+    assert "Labels\nphase:review, state:active" in content
