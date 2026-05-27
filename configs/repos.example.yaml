@@ -1,0 +1,28 @@
+# signposter - Repository configuration
+# This file defines which repositories are managed and their basic properties.
+#
+# WARNING: This is an EXAMPLE file only.
+# Copy to repos.yaml (or similar) and customize.
+# Do not commit real repository tokens or sensitive data.
+
+repositories:
+  - name: example-org/example-repo
+    url: https://github.com/example-org/example-repo
+    enabled: true
+    # Areas help with routing and visibility
+    areas:
+      - backend
+      - infrastructure
+    # Default risk level for work coming from this repo
+    default_risk: medium
+    # Optional: override labels that trigger specific behavior
+    trigger_labels:
+      - needs-review
+      - ready-for-dispatch
+
+  - name: example-org/docs
+    url: https://github.com/example-org/docs
+    enabled: false
+    areas:
+      - documentation
+    default_risk: low
