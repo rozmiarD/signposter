@@ -1,0 +1,43 @@
+# signposter - Label definitions and semantics
+# Defines the meaning of labels used for signaling state and intent.
+#
+# Use neutral, clear names. Avoid ambiguous or overloaded terms.
+
+labels:
+  # Lifecycle / phase labels
+  needs-review:
+    description: "Work item requires human review"
+    phase: review
+    risk_impact: medium
+
+  ready-for-dispatch:
+    description: "Ready to be picked up by dispatcher"
+    phase: queued
+    risk_impact: low
+
+  in-progress:
+    description: "Currently being worked on by a worker"
+    phase: executing
+    risk_impact: medium
+
+  blocked:
+    description: "Cannot proceed until gate or dependency is resolved"
+    phase: blocked
+    risk_impact: high
+
+  # Area labels (used for routing)
+  area/backend:
+    description: "Backend code changes"
+  area/infrastructure:
+    description: "Infrastructure and deployment changes"
+  area/documentation:
+    description: "Documentation updates"
+
+  # Risk / gate related
+  high-risk:
+    description: "Marked as high risk change"
+    risk: high
+
+  requires-infra-review:
+    description: "Must pass infrastructure review gate"
+    gate: infra-review

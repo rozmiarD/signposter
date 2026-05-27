@@ -1,0 +1,30 @@
+# signposter - Scheduler configuration
+# Controls timing, polling intervals, and scheduling behavior.
+
+scheduler:
+  enabled: true
+
+  # How often the scheduler should wake up and evaluate work
+  poll_interval_seconds: 60
+
+  # Maximum number of items the scheduler will consider per cycle
+  max_items_per_cycle: 50
+
+  # Phase transition timing
+  phases:
+    queued:
+      max_wait_minutes: 1440   # 24 hours
+    review:
+      max_wait_minutes: 2880   # 48 hours
+    executing:
+      max_wait_minutes: 720    # 12 hours
+
+  # Gate timeout behavior
+  gates:
+    default_timeout_minutes: 1440
+    auto_fail_on_timeout: false
+
+  # Concurrency controls
+  concurrency:
+    max_global_workers: 10
+    per_repo_limit: 3

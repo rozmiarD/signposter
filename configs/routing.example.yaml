@@ -1,0 +1,32 @@
+# signposter - Routing rules
+# Defines how work is routed to different roles/areas/workers.
+#
+# This is a structural contract only. No logic is implemented yet.
+
+routing:
+  default_worker: reviewer
+
+  rules:
+    # Example: route high-risk changes to planner first
+    - match:
+        risk: high
+      route_to: planner
+      priority: 100
+
+    # Example: documentation changes go to docs area
+    - match:
+        areas: [documentation]
+      route_to: reviewer
+      priority: 50
+
+    # Example: infrastructure changes require extra gate
+    - match:
+        areas: [infrastructure]
+      route_to: reviewer
+      gates: [infra-review]
+      priority: 80
+
+  # Fallback when no rule matches
+  fallback:
+    route_to: reviewer
+    gates: []

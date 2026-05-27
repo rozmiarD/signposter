@@ -1,0 +1,40 @@
+# signposter - Agent / Worker role configuration
+# Defines available worker roles and their capabilities.
+#
+# "Agent" here is used in the generic sense of "autonomous worker process".
+# No AI-specific terminology is used.
+
+roles:
+  planner:
+    description: "Plans and breaks down larger pieces of work"
+    capabilities:
+      - create_plan
+      - estimate_effort
+    max_concurrent: 2
+
+  reviewer:
+    description: "Reviews changes for correctness, risk, and completeness"
+    capabilities:
+      - code_review
+      - risk_assessment
+    max_concurrent: 5
+
+  executor:
+    description: "Carries out approved, low-risk actions"
+    capabilities:
+      - apply_changes
+      - run_checks
+    max_concurrent: 3
+
+  gatekeeper:
+    description: "Evaluates gates and decides on progression"
+    capabilities:
+      - evaluate_gate
+    max_concurrent: 1
+
+# Mapping from role to default runner type (future use)
+role_to_runner:
+  planner: "local"
+  reviewer: "local"
+  executor: "local"
+  gatekeeper: "local"
