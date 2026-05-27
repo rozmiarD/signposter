@@ -11,6 +11,7 @@ import sys
 from signposter.claim import cli_main as claim_cli_main
 from signposter.dispatch import cli_main as dispatch_cli_main
 from signposter.doctor import main as doctor_main
+from signposter.runner import cli_main as runner_cli_main
 from signposter.scan import cli_main as scan_cli_main
 from signposter.transitions import (
     format_transition_plan,
@@ -139,6 +140,27 @@ def main() -> None:
     )
     fail_parser.set_defaults(func=run_fail)
 
+    # run subcommand (dry-run only in bootstrap)
+    run_parser = subparsers.add_parser(
+        "run",
+        help="Runner planner (dry-run only)",
+        description="Plan how a selected claimable item would be executed via OpenClaw.",
+    )
+    run_parser.add_argument("--repo", required=True)
+    run_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        required=True,
+        help="Required: run in dry-run mode only",
+    )
+    run_parser.add_argument(
+        "--limit",
+        type=int,
+        default=1,
+        help="Maximum number of items to plan execution for (default: 1)",
+    )
+    run_parser.set_defaults(func=run_runner)
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -261,6 +283,16 @@ def run_fail(args: argparse.Namespace) -> int:
         print("Cannot apply invalid plan.")
 
     return 0 if plan.valid else 1
+
+
+def run_runner(args: argparse.Namespace) -> int:
+    """Execute the runner planner command."""
+    repo = getattr(args, "repo", None)
+    limit = getattr(args, "limit", 1)
+    if not repo:
+        print("Error: --repo is required for run command", file=sys.stderr)
+        return 1
+    return runner_cli_main(repo, limit=limit)
 
 
 if __name__ == "__main__":
