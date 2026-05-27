@@ -150,14 +150,18 @@ def main() -> None:
     run_parser.add_argument(
         "--dry-run",
         action="store_true",
-        required=True,
-        help="Required: run in dry-run mode only",
+        help="Run in read-only planning mode",
     )
     run_parser.add_argument(
         "--limit",
         type=int,
         default=1,
         help="Maximum number of items to plan execution for (default: 1)",
+    )
+    run_parser.add_argument(
+        "--write-prompt",
+        action="store_true",
+        help="Generate and write the local prompt artifact (does not run OpenClaw)",
     )
     run_parser.set_defaults(func=run_runner)
 
@@ -289,10 +293,11 @@ def run_runner(args: argparse.Namespace) -> int:
     """Execute the runner planner command."""
     repo = getattr(args, "repo", None)
     limit = getattr(args, "limit", 1)
+    write_prompt = getattr(args, "write_prompt", False)
     if not repo:
         print("Error: --repo is required for run command", file=sys.stderr)
         return 1
-    return runner_cli_main(repo, limit=limit)
+    return runner_cli_main(repo, limit=limit, write_prompt=write_prompt)
 
 
 if __name__ == "__main__":
