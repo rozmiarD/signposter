@@ -11,6 +11,7 @@ import sys
 from signposter.claim import cli_main as claim_cli_main
 from signposter.dispatch import cli_main as dispatch_cli_main
 from signposter.doctor import main as doctor_main
+from signposter.report import report_main
 from signposter.runner import cli_main as runner_cli_main
 from signposter.scan import cli_main as scan_cli_main
 from signposter.transitions import (
@@ -175,6 +176,31 @@ def main() -> None:
     )
     run_parser.set_defaults(func=run_runner)
 
+    # report subcommand (for posting runner summaries back to GitHub)
+    report_parser = subparsers.add_parser(
+        "report",
+        help="Post a runner execution summary to a GitHub issue (dry-run by default)",
+        description="Read a local runner summary artifact and optionally post it as a comment.",
+    )
+    report_parser.add_argument("--repo", required=True)
+    report_parser.add_argument("--issue", type=int, required=True)
+    report_parser.add_argument(
+        "--summary",
+        default="artifacts/runs/issue-2-reviewer.summary.md",
+        help="Path to the local summary artifact to post",
+    )
+    report_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be posted (default)",
+    )
+    report_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually post the comment to GitHub (explicit mutation)",
+    )
+    report_parser.set_defaults(func=run_report)
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -310,6 +336,23 @@ def run_runner(args: argparse.Namespace) -> int:
         print("Error: --repo is required for run command", file=sys.stderr)
         return 1
     return runner_cli_main(repo, limit=limit, write_prompt=write_prompt, claim=claim, execute=execute)  # noqa: E501
+
+
+def run_report(args: argparse.Namespace) -> int:
+    """Execute the report command (dry-run by default, --apply for mutation)."""
+    repo = getattr(args, "repo", None)
+    issue = getattr(args, "issue", None)
+    summary = getattr(args, "summary", None)
+    apply = getattr(args, "apply", False)
+
+    if not repo or issue is None:
+        print("Error: --repo and --issue are required", file=sys.stderr)
+        return 1
+    if not summary:
+        print("Error: --summary is required", file=sys.stderr)
+        return 1
+
+    return report_main(repo, issue, summary, apply=apply)
 
 
 if __name__ == "__main__":
