@@ -53,6 +53,18 @@ The scanner reports:
 
 It uses the GitHub CLI in read-only mode and performs **no** mutations.
 
+### `signposter dispatch --dry-run`
+
+Classifies candidate items and produces a proposed routing plan (bootstrap phase):
+
+```bash
+signposter dispatch --repo ExatronOmega/signposter --dry-run
+```
+
+The dry-run command reuses the scanner and applies simple routing rules based on labels such as `phase:*`, `role:*`, `risk:*`, and `state:*`.
+
+**Important:** In the current bootstrap phase, `--dry-run` is mandatory. No actions are ever taken on GitHub.
+
 ## Project Structure
 
 ```
