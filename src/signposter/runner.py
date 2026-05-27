@@ -62,9 +62,18 @@ def plan_runner(repo: str, *, limit: int = 1) -> list[RunnerPlan]:
         # Proposed paths (dry-run only)
         working_dir = f"~/projects/signposter-work/{item.number}"
         prompt_path = f"artifacts/prompts/issue-{item.number}.md"
+
+        # Realistic OpenClaw invocation (as of 2026.5):
+        # - No "openclaw run" subcommand exists.
+        # - Use "openclaw agent --message" with a session selector.
+        # - The signposter "profile" (reviewer/worker/...) maps to an OpenClaw agent id
+        #   or routing binding that has the appropriate skills loaded.
+        # - Prompt content is passed via --message (or heredoc in real scripts).
+        # - Working directory is typically managed via the prompt instructions or agent workspace.
         command_shape = (
-            f"openclaw run --profile {profile} "
-            f"--prompt {prompt_path} --cwd {working_dir}"
+            f"openclaw agent --agent {profile} "
+            f"--session-key signposter-issue-{item.number} "
+            f"--message \"$(cat {prompt_path})\" --local"
         )
 
         reason = (
