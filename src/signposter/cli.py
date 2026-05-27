@@ -12,7 +12,11 @@ from signposter.claim import cli_main as claim_cli_main
 from signposter.dispatch import cli_main as dispatch_cli_main
 from signposter.doctor import main as doctor_main
 from signposter.scan import cli_main as scan_cli_main
-from signposter.transitions import format_transition_plan, run_transition_dry_run
+from signposter.transitions import (
+    format_transition_plan,
+    perform_transition_mutation,
+    run_transition_dry_run,
+)
 
 
 def main() -> None:
@@ -92,32 +96,47 @@ def main() -> None:
     )
     claim_parser.set_defaults(func=run_claim)
 
-    # release / complete / fail subcommands (dry-run only for now)
+    # release / complete / fail subcommands
     release_parser = subparsers.add_parser(
         "release",
-        help="Release an active item back to ready (dry-run only)",
+        help="Release an active item back to ready (dry-run by default, --apply for mutation)",
     )
     release_parser.add_argument("--repo", required=True)
     release_parser.add_argument("--issue", type=int, required=True)
-    release_parser.add_argument("--dry-run", action="store_true", required=True)
+    release_parser.add_argument(
+        "--dry-run", action="store_true", help="Run in read-only mode (default)"
+    )
+    release_parser.add_argument(
+        "--apply", action="store_true", help="Actually perform the label mutation"
+    )
     release_parser.set_defaults(func=run_release)
 
     complete_parser = subparsers.add_parser(
         "complete",
-        help="Mark an active item as successfully completed (dry-run only)",
+        help="Mark active item as done (dry-run by default, --apply for mutation)",
     )
     complete_parser.add_argument("--repo", required=True)
     complete_parser.add_argument("--issue", type=int, required=True)
-    complete_parser.add_argument("--dry-run", action="store_true", required=True)
+    complete_parser.add_argument(
+        "--dry-run", action="store_true", help="Run in read-only mode (default)"
+    )
+    complete_parser.add_argument(
+        "--apply", action="store_true", help="Actually perform the label mutation"
+    )
     complete_parser.set_defaults(func=run_complete)
 
     fail_parser = subparsers.add_parser(
         "fail",
-        help="Mark an active item as failed (dry-run only)",
+        help="Mark an active item as failed (dry-run by default, --apply for mutation)",
     )
     fail_parser.add_argument("--repo", required=True)
     fail_parser.add_argument("--issue", type=int, required=True)
-    fail_parser.add_argument("--dry-run", action="store_true", required=True)
+    fail_parser.add_argument(
+        "--dry-run", action="store_true", help="Run in read-only mode (default)"
+    )
+    fail_parser.add_argument(
+        "--apply", action="store_true", help="Actually perform the label mutation"
+    )
     fail_parser.set_defaults(func=run_fail)
 
     args = parser.parse_args()
@@ -173,38 +192,74 @@ def run_claim(args: argparse.Namespace) -> int:
 
 
 def run_release(args: argparse.Namespace) -> int:
-    """Execute release dry-run."""
+    """Execute release (dry-run by default, --apply for mutation)."""
     repo = getattr(args, "repo", None)
     issue = getattr(args, "issue", None)
+    apply = getattr(args, "apply", False)
     if not repo or issue is None:
         print("Error: --repo and --issue are required", file=sys.stderr)
         return 1
+
     plan = run_transition_dry_run(repo, issue, "release")
     print(format_transition_plan(plan))
+
+    if apply and plan.valid:
+        print("\n=== APPLYING RELEASE MUTATION ===\n")
+        commands = perform_transition_mutation(plan, repo, dry_run=False)
+        for cmd in commands:
+            print(f"  Executed: {cmd}")
+        print("\nRelease mutation complete.")
+    elif apply:
+        print("Cannot apply invalid plan.")
+
     return 0 if plan.valid else 1
 
 
 def run_complete(args: argparse.Namespace) -> int:
-    """Execute complete dry-run."""
+    """Execute complete (dry-run by default, --apply for mutation)."""
     repo = getattr(args, "repo", None)
     issue = getattr(args, "issue", None)
+    apply = getattr(args, "apply", False)
     if not repo or issue is None:
         print("Error: --repo and --issue are required", file=sys.stderr)
         return 1
+
     plan = run_transition_dry_run(repo, issue, "complete")
     print(format_transition_plan(plan))
+
+    if apply and plan.valid:
+        print("\n=== APPLYING COMPLETE MUTATION ===\n")
+        commands = perform_transition_mutation(plan, repo, dry_run=False)
+        for cmd in commands:
+            print(f"  Executed: {cmd}")
+        print("\nComplete mutation complete.")
+    elif apply:
+        print("Cannot apply invalid plan.")
+
     return 0 if plan.valid else 1
 
 
 def run_fail(args: argparse.Namespace) -> int:
-    """Execute fail dry-run."""
+    """Execute fail (dry-run by default, --apply for mutation)."""
     repo = getattr(args, "repo", None)
     issue = getattr(args, "issue", None)
+    apply = getattr(args, "apply", False)
     if not repo or issue is None:
         print("Error: --repo and --issue are required", file=sys.stderr)
         return 1
+
     plan = run_transition_dry_run(repo, issue, "fail")
     print(format_transition_plan(plan))
+
+    if apply and plan.valid:
+        print("\n=== APPLYING FAIL MUTATION ===\n")
+        commands = perform_transition_mutation(plan, repo, dry_run=False)
+        for cmd in commands:
+            print(f"  Executed: {cmd}")
+        print("\nFail mutation complete.")
+    elif apply:
+        print("Cannot apply invalid plan.")
+
     return 0 if plan.valid else 1
 
 

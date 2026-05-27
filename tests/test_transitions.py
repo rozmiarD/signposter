@@ -60,3 +60,20 @@ def test_plan_fail_invalid():
     plan = plan_fail(labels, 7)
 
     assert plan.valid is False
+
+
+def test_perform_transition_mutation_returns_commands():
+    """Verify perform_transition_mutation constructs correct gh commands (dry_run mode)."""
+    from signposter.transitions import perform_transition_mutation
+
+    labels = ["state:active", "gate:ci", "phase:build"]
+    plan = plan_release(labels, 42)  # reuse plan_release for a valid plan
+
+    commands = perform_transition_mutation(plan, "ExatronOmega/signposter", dry_run=True)
+
+    assert len(commands) == 2
+    assert "gh issue edit 42" in commands[0]
+    assert "--remove-label state:active,gate:ci" in commands[0]
+    assert "--add-label state:ready" in commands[0]
+    assert "gh issue comment 42" in commands[1]
+    assert "Signposter released this item: state=ready." in commands[1]

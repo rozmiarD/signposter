@@ -197,3 +197,58 @@ def run_transition_dry_run(repo: str, issue: int, action: str) -> TransitionPlan
         raise ValueError(f"Unknown action: {action}")
 
     return plan
+
+
+def _get_transition_comment(action: str, new_state: str) -> str:
+    """Return the exact comment text for a given transition action."""
+    if action == "release":
+        return "Signposter released this item: state=ready."
+    elif action == "complete":
+        return "Signposter completed this item: state=done."
+    elif action == "fail":
+        return "Signposter marked this item as failed: state=failed."
+    else:
+        return f"Signposter performed transition to {new_state}."
+
+
+def perform_transition_mutation(
+    plan: TransitionPlan, repo: str, *, dry_run: bool = True
+) -> list[str]:
+    """Execute (or simulate) the label mutation and comment for a transition plan.
+
+    Returns the list of gh commands that were (or would be) executed.
+    """
+    if not plan.valid:
+        raise ValueError(f"Cannot apply invalid transition plan: {plan.reason}")
+
+    commands: list[str] = []
+    issue_num = str(plan.issue_number)
+
+    # Build label edit command
+    add_labels = ",".join(plan.labels_to_add)
+    remove_labels = ",".join(plan.labels_to_remove)
+
+    edit_cmd = [
+        "gh", "issue", "edit", issue_num,
+        "-R", repo,
+        "--add-label", add_labels,
+        "--remove-label", remove_labels,
+    ]
+    commands.append(" ".join(edit_cmd))
+
+    if not dry_run:
+        subprocess.run(edit_cmd, check=True, capture_output=True, text=True)
+
+    # Build comment command
+    comment_body = _get_transition_comment(plan.action, plan.new_state)
+    comment_cmd = [
+        "gh", "issue", "comment", issue_num,
+        "-R", repo,
+        "--body", comment_body,
+    ]
+    commands.append(" ".join(comment_cmd))
+
+    if not dry_run:
+        subprocess.run(comment_cmd, check=True, capture_output=True, text=True)
+
+    return commands
