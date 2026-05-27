@@ -10,6 +10,7 @@ from signposter.scan import (
     CANDIDATE_LABELS,
     LabeledItem,
     find_candidates,
+    get_claimability,
 )
 
 
@@ -118,3 +119,49 @@ def test_parse_pr_list_style_labels():
     )
     assert item.item_type == "pr"
     assert "phase:build" in item.labels
+
+
+# --- BOOTSTRAP-019C scan semantics tests ---
+
+def test_get_claimability_ready():
+    item = make_item(1, ["state:ready", "phase:review", "role:reviewer"])
+    claimable, reason = get_claimability(item)
+    assert claimable is True
+    assert "state:ready" in reason
+
+
+def test_get_claimability_active():
+    item = make_item(2, ["state:active", "phase:review", "role:reviewer"])
+    claimable, reason = get_claimability(item)
+    assert claimable is False
+    assert "already claimed / active" in reason
+
+
+def test_get_claimability_done():
+    item = make_item(3, ["state:done", "phase:build"])
+    claimable, reason = get_claimability(item)
+    assert claimable is False
+    assert "already completed" in reason
+
+
+def test_format_scan_uses_workflow_items():
+    """The public scan report must use 'Workflow Items' not 'Candidate Items'."""
+    from signposter.scan import format_scan_report
+
+    result = {
+        "repo": "test/repo",
+        "open_issues": 2,
+        "open_prs": 0,
+        "recent_runs": 3,
+        "candidates": [
+            make_item(2, ["state:active", "phase:review", "role:reviewer"]),
+        ],
+        "issues": [],
+        "prs": [],
+        "runs": [],
+    }
+    report = format_scan_report(result)
+    assert "Workflow Items (1):" in report
+    assert "Candidate Items" not in report
+    assert "claimable: no" in report
+    assert "already claimed / active" in report

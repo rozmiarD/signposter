@@ -116,7 +116,10 @@ def test_render_prompt_contains_key_sections():
     assert "profile: reviewer" in content
     assert "Do not broaden scope" in content
     assert "Do not mutate GitHub unless explicitly instructed" in content
-    assert "review the issue/request and propose next steps" in content.lower()
+    # New structure assertions
+    assert "## Role Profile" in content
+    assert "## Private Repository Rule" in content
+    assert "Do not fetch the GitHub URL" in content
 
 
 def test_render_prompt_role_specific_instruction():
@@ -125,8 +128,8 @@ def test_render_prompt_role_specific_instruction():
     plan = make_runner_plan_for_test("reviewer", "review")
     content = render_prompt(plan, "test/repo")
 
-    assert "review the issue/request and propose next steps" in content.lower()
-    assert "do not edit files yet" in content.lower()
+    assert "# Reviewer Profile" in content
+    assert "Do not fetch private GitHub URLs" in content
 
 
 # --- Post-claim freshness tests ---
@@ -161,4 +164,137 @@ def test_render_prompt_reflects_post_claim_labels():
     assert "state:active" in content
     assert "gate:review" in content
     assert "state:ready" not in content
-    assert "Labels\nphase:review, state:active" in content
+    assert "**Labels:** phase:review, state:active" in content  # new format
+    assert "## Private Repository Rule" in content
+
+
+# --- BOOTSTRAP-019A rich prompt tests ---
+
+def test_render_prompt_includes_private_repo_rule():
+    from signposter.runner import render_prompt
+
+    plan = make_runner_plan_for_test("reviewer", "review", number=2)
+    content = render_prompt(plan, "ExatronOmega/signposter")
+
+    assert "Do not fetch the GitHub URL. This is a private repository." in content
+    assert "Use only the embedded issue context" in content
+
+
+def test_render_prompt_includes_reviewer_profile():
+    from signposter.runner import render_prompt
+
+    plan = make_runner_plan_for_test("reviewer", "review")
+    content = render_prompt(plan, "test/repo")
+
+    assert "# Reviewer Profile" in content
+    assert "You are the Signposter reviewer." in content
+    assert "Do not fetch private GitHub URLs." in content
+
+
+def test_render_prompt_embeds_issue_body_or_empty():
+    from signposter.runner import render_prompt
+
+    plan = make_runner_plan_for_test("reviewer", "review")
+    content = render_prompt(plan, "test/repo")  # no context provided
+
+    assert "Issue body:" in content  # either "empty" or fallback message
+
+
+def test_render_prompt_no_longer_relies_on_url_as_primary_context():
+    from signposter.runner import render_prompt
+
+    plan = make_runner_plan_for_test("reviewer", "review", number=2)
+    content = render_prompt(plan, "ExatronOmega/signposter")
+
+    # The prompt should tell the agent not to rely on fetching the URL
+    assert "Do not fetch the GitHub URL" in content
+    # URL is present only as reference
+    assert "URL (reference only)" in content
+
+
+# --- BOOTSTRAP-019B Evidence Bundle tests ---
+
+def test_render_prompt_includes_evidence_bundle_for_reviewer():
+    """For reviewer role, the prompt must contain an Evidence Bundle section."""
+    from signposter.runner import render_prompt
+
+    plan = make_runner_plan_for_test("reviewer", "review", number=2)
+    # Pass a minimal evidence bundle
+    evidence = {
+        "scan": "[MOCK SCAN] Issue #2 state:active",
+        "note": "Use the embedded evidence below. Do not fetch GitHub URLs.",
+    }
+    content = render_prompt(plan, "ExatronOmega/signposter", evidence_bundle=evidence)
+
+    assert "## Evidence Bundle" in content
+    assert "Use the embedded evidence below. Do not fetch GitHub URLs." in content
+    assert "[MOCK SCAN]" in content
+
+
+def test_render_prompt_embeds_scan_output():
+    """Scan output can be embedded via evidence_bundle."""
+    from signposter.runner import render_prompt
+
+    plan = make_runner_plan_for_test("reviewer", "review")
+    evidence = {"scan": "Signposter Scan Report\nCandidate Items (1): #2 state:active"}
+    content = render_prompt(plan, "test/repo", evidence_bundle=evidence)
+
+    assert "Evidence Bundle" in content
+    assert "Signposter Scan Report" in content
+
+
+def test_render_prompt_private_rule_still_present_with_evidence():
+    """Private repo no-fetch rule must remain even when Evidence Bundle is present."""
+    from signposter.runner import render_prompt
+
+    plan = make_runner_plan_for_test("reviewer", "review", number=2)
+    evidence = {"scan": "mock"}
+    content = render_prompt(plan, "ExatronOmega/signposter", evidence_bundle=evidence)
+
+    assert "Do not fetch the GitHub URL. This is a private repository." in content
+    assert "## Evidence Bundle" in content
+
+
+def test_render_prompt_evidence_includes_prompt_preview():
+    """Reviewer evidence should include prompt artifact status and preview."""
+    from signposter.runner import render_prompt
+
+    plan = make_runner_plan_for_test("reviewer", "review", number=2)
+    evidence = {
+        "scan": "mock scan",
+        "prompt_path": "artifacts/prompts/issue-2.md",
+        "prompt_exists": True,
+        "prompt_preview": "# Signposter Task Prompt\n\n## Role Profile\n...",
+        "working_dir": "~/work/2",
+        "working_dir_status": "not prepared yet",
+        "command_shape": "openclaw agent ...",
+    }
+    content = render_prompt(plan, "ExatronOmega/signposter", evidence_bundle=evidence)
+
+    assert "Prompt Artifact:" in content
+    assert "**Exists:** True" in content
+    assert "Prompt Preview (first ~80 lines or bounded):" in content
+    assert "not prepared yet" in content
+
+
+def test_render_prompt_evidence_has_working_dir_note():
+    """The evidence note must explain that missing working_dir is expected pre-execution."""
+    from signposter.runner import render_prompt
+
+    plan = make_runner_plan_for_test("reviewer", "review", number=2)
+    note = (
+        "Use the embedded evidence below. Do not fetch GitHub URLs. "
+        "A missing working_dir is not a failure before execution. "
+        "Treat it as pending preparation unless this task is an execution step."
+    )
+    evidence = {
+        "scan": "mock",
+        "working_dir": "~/work/2",
+        "working_dir_status": "not prepared yet",
+        "command_shape": "openclaw agent ...",
+        "note": note,
+    }
+    content = render_prompt(plan, "test/repo", evidence_bundle=evidence)
+
+    assert "A missing working_dir is not a failure before execution" in content
+    assert "pending preparation" in content

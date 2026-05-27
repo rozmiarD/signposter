@@ -6,11 +6,13 @@ Determines how a selected claimable item would be executed via OpenClaw.
 from __future__ import annotations
 
 import os
+import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 
 from signposter.claim import perform_claim_mutation, plan_claims
 from signposter.dispatch import DispatchDecision, classify_candidate
-from signposter.scan import LabeledItem, fetch_issue_by_number
+from signposter.scan import LabeledItem, fetch_issue_by_number, fetch_issue_context
 
 
 @dataclass(frozen=True)
@@ -174,45 +176,260 @@ def main() -> int:
 
 # --- Prompt Artifact Generation ---
 
-def render_prompt(plan: RunnerPlan, repo: str) -> str:
+def _get_role_profile(role: str | None) -> str:
+    """Return compact role-specific profile instructions."""
+    role = (role or "").lower()
+    if role == "reviewer":
+        return """# Reviewer Profile
+You are the Signposter reviewer.
+Your job is to review embedded evidence, identify risks, and recommend next steps.
+Do not mutate GitHub.
+Do not edit files.
+Do not commit.
+Do not fetch private GitHub URLs.
+Use only embedded context and local artifacts provided in this prompt.
+If evidence is missing, say exactly what is missing.
+Prefer concise, actionable review findings."""
+    elif role == "worker":
+        return """# Worker Profile
+You are the Signposter worker.
+Implement only the scoped, low-risk changes described in the embedded context.
+Do not broaden scope. Report all changes with evidence."""
+    elif role == "planner":
+        return """# Planner Profile
+You are the Signposter planner.
+Create a clear plan/roadmap only. Break work into phases with success criteria.
+Do not implement changes."""
+    elif role == "gatekeeper":
+        return """# Gatekeeper Profile
+You are the Signposter gatekeeper.
+Review evidence strictly and decide pass/fail on the gate.
+Cite specific observations. Be conservative."""
+    else:
+        return """# Agent Profile
+Execute the task according to the classification and constraints below."""
+
+
+def _ensure_evidence_dir(number: int) -> Path:
+    """Ensure artifacts/evidence/issue-<number>/ exists."""
+    path = Path(f"artifacts/evidence/issue-{number}")
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _capture_command(cmd: list[str], timeout: int = 30) -> str:
+    """Run a command and return stdout or error message.
+
+    Tries the bare command first, then falls back to common venv locations.
+    """
+    candidates = [cmd]
+    # Common venv location when running from source tree
+    if cmd[0] == "signposter":
+        venv_bin = Path(".venv/bin/signposter")
+        if venv_bin.exists():
+            candidates.append([str(venv_bin)] + cmd[1:])
+
+    for c in candidates:
+        try:
+            result = subprocess.run(c, capture_output=True, text=True, timeout=timeout)
+            if result.returncode == 0:
+                return result.stdout.strip()
+            return f"[command failed: {result.stderr.strip()[:200]}]"
+        except Exception as e:
+            last_err = str(e)
+    return f"[error: {last_err}]"
+
+
+def collect_evidence_bundle(repo: str, number: int, plan: RunnerPlan | None = None) -> dict:
+    """Collect current evidence for reviewer/gatekeeper prompts.
+
+    Saves snapshots to artifacts/evidence/issue-<number>/
+    """
+    evidence: dict = {}
+    evidence_dir = _ensure_evidence_dir(number)
+
+    # Current scan output (exact CLI view)
+    scan_out = _capture_command(["signposter", "scan", "--repo", repo])
+    evidence["scan"] = scan_out
+    (evidence_dir / "scan.txt").write_text(scan_out)
+
+    # Claim dry-run (useful context for reviewer)
+    claim_dry = _capture_command(["signposter", "claim", "--repo", repo, "--dry-run"])
+    evidence["claim_dry_run"] = claim_dry
+    (evidence_dir / "claim-dry-run.txt").write_text(claim_dry)
+
+    # Recent CI runs
+    runs_out = _capture_command([
+        "gh", "run", "list", "-R", repo, "--limit", "5",
+        "--json", "status,conclusion,workflowName,headBranch,updatedAt"
+    ])
+    evidence["recent_runs"] = runs_out
+    (evidence_dir / "runs.txt").write_text(runs_out)
+
+    # Working directory status
+    working_dir = plan.proposed_working_dir if plan else f"~/projects/signposter-work/{number}"
+    try:
+        expanded = os.path.expanduser(working_dir)
+        exists = os.path.isdir(expanded)
+    except Exception:
+        exists = False
+
+    evidence["working_dir"] = working_dir
+    evidence["working_dir_status"] = "prepared" if exists else "not prepared yet"
+
+    # Prompt artifact details
+    prompt_path = plan.proposed_prompt_path if plan else f"artifacts/prompts/issue-{number}.md"
+    prompt_exists = os.path.isfile(prompt_path)
+    prompt_preview = "(prompt file not found)"
+
+    if prompt_exists:
+        try:
+            with open(prompt_path, encoding="utf-8") as f:
+                preview = f.read(2500)  # bounded preview
+            lines = preview.splitlines()[:80]
+            prompt_preview = "\n".join(lines)
+        except Exception as e:
+            prompt_preview = f"(error reading prompt: {e})"
+
+    evidence["prompt_path"] = prompt_path
+    evidence["prompt_exists"] = prompt_exists
+    evidence["prompt_preview"] = prompt_preview
+
+    if plan:
+        evidence["command_shape"] = plan.proposed_command_shape
+
+    evidence["note"] = (
+        "Use the embedded evidence below. Do not fetch GitHub URLs. "
+        "A missing working_dir is not a failure before execution. "
+        "Treat it as pending preparation unless this task is an execution step."
+    )
+
+    return evidence
+
+
+def render_prompt(
+    plan: RunnerPlan,
+    repo: str,
+    issue_context: dict | None = None,
+    evidence_bundle: dict | None = None,
+) -> str:
     """Generate the full prompt artifact content for a RunnerPlan.
 
-    This function is pure and contains no I/O.
+    When issue_context is provided (from authenticated gh issue view), the prompt
+    becomes self-contained for private repositories.
+    evidence_bundle is added for reviewer/gatekeeper roles.
     """
     item = plan.item
     d = plan.dispatch
 
-    labels_str = ", ".join(item.labels) if item.labels else "(none)"
+    # Use rich context if available, else fall back to labels from item
+    if issue_context:
+        labels = [lbl["name"] for lbl in issue_context.get("labels", [])]
+        labels_str = ", ".join(labels) if labels else "(none)"
+        body = issue_context.get("body") or ""
+        body_text = body.strip() if body.strip() else "Issue body: empty"
+        state = issue_context.get("state", "unknown")
+        comments = issue_context.get("comments", [])
+        comments_text = ""
+        if comments:
+            recent = comments[-3:]  # last 3 comments
+            comments_lines = []
+            for c in recent:
+                author = c.get("author", {}).get("login", "unknown")
+                body_snip = (c.get("body", "") or "")[:300]
+                comments_lines.append(f"- @{author}: {body_snip}")
+            comments_text = "\n".join(comments_lines)
+        else:
+            comments_text = "(no comments)"
+        issue_state = state
+    else:
+        labels_str = ", ".join(item.labels) if item.labels else "(none)"
+        body_text = "Issue body: not embedded (context fetch failed)"
+        comments_text = "(not embedded)"
+        issue_state = d.state or "unknown"
+
+    role_profile = _get_role_profile(d.role)
 
     task_instruction = {
         "reviewer": (
-            "Review the issue/request and propose next steps. "
-            "Do not edit files yet. Provide clear findings, risks, and recommended actions."
+            "Review the embedded issue context and any attached artifacts. "
+            "Identify risks, gaps, and propose clear next steps."
         ),
-        "worker": (
-            "Implement only the scoped, low-risk changes described. "
-            "Do not broaden scope. Report all changes made."
-        ),
-        "planner": (
-            "Create a clear plan/roadmap only. Do not implement changes. "
-            "Break the work into phases with clear success criteria."
-        ),
+        "worker": "Implement only the scoped changes described in the embedded context.",
+        "planner": "Create a clear, phased plan based on the embedded context.",
         "gatekeeper": (
-            "Review the provided evidence and decide pass/fail on the gate. "
-            "Be strict and cite specific observations."
+            "Evaluate the embedded evidence against the gate criteria and decide pass/fail."
         ),
-    }.get(d.role or "", "Execute the task according to the classification above.")
+    }.get(d.role or "", "Execute the task using only the provided embedded context.")
+
+    private_rule = (
+        "Do not fetch the GitHub URL. This is a private repository. "
+        "Use only the embedded issue context, labels, body, and local artifacts "
+        "included in this prompt."
+    )
+
+    # Evidence Bundle (only for reviewer/gatekeeper)
+    evidence_section = ""
+    if evidence_bundle and d.role in ("reviewer", "gatekeeper"):
+        scan = evidence_bundle.get("scan", "(no scan output)")
+        claim_dry = evidence_bundle.get("claim_dry_run", "(no claim dry-run)")
+        runs = evidence_bundle.get("recent_runs", "(no runs)")
+        wd = evidence_bundle.get("working_dir", "unknown")
+        wd_status = evidence_bundle.get("working_dir_status", "unknown")
+        prompt_path = evidence_bundle.get("prompt_path", plan.proposed_prompt_path)
+        prompt_exists = evidence_bundle.get("prompt_exists", False)
+        prompt_preview = evidence_bundle.get("prompt_preview", "(no preview)")
+        cmd_shape = evidence_bundle.get("command_shape", plan.proposed_command_shape)
+
+        evidence_section = f"""
+
+## Evidence Bundle
+{evidence_bundle.get("note", "Use the embedded evidence below. Do not fetch GitHub URLs.")}
+
+**Current Scan Output:**
+{scan}
+
+**Claim Dry-Run:**
+{claim_dry}
+
+**Recent CI Runs (last 5):**
+{runs}
+
+**Working Directory:** {wd}
+**Status:** {wd_status}
+
+**Prompt Artifact:** {prompt_path}
+**Exists:** {prompt_exists}
+
+**Prompt Preview (first ~80 lines or bounded):**
+{prompt_preview}
+
+**Command Shape:** {cmd_shape}
+"""
 
     content = f"""# Signposter Task Prompt
 
+## Role Profile
+{role_profile}
+
+## Private Repository Rule
+{private_rule}
+
+## Issue Context
 **Repository:** {repo}
 **Issue:** #{item.number} — {item.title}
-**URL:** {item.html_url}
+**URL (reference only):** {item.html_url}
+**State:** {issue_state}
 
-## Labels
-{labels_str}
+**Labels:** {labels_str}
 
-## Classification
+**Body:**
+{body_text}
+
+**Recent Comments:**
+{comments_text}
+
+## Workflow State
 - route:  {d.proposed_route}
 - phase:  {d.phase}
 - role:   {d.role}
@@ -224,7 +441,7 @@ def render_prompt(plan: RunnerPlan, repo: str) -> str:
 - runner: openclaw
 - profile: {plan.proposed_profile}
 - working_dir: {plan.proposed_working_dir}
-- prompt_artifact: {plan.proposed_prompt_path}
+- prompt_artifact: {plan.proposed_prompt_path}{evidence_section}
 
 ## Operator Constraints
 - Do not broaden scope beyond this issue.
@@ -237,7 +454,7 @@ def render_prompt(plan: RunnerPlan, repo: str) -> str:
 
 ---
 
-Begin execution following the constraints above.
+Begin execution following the constraints and role profile above.
 """
     return content
 
@@ -245,10 +462,17 @@ Begin execution following the constraints above.
 def write_prompt_artifact(plan: RunnerPlan, repo: str) -> str:
     """Render and write the prompt artifact to disk.
 
+    Fetches full issue context + evidence bundle (for reviewer/gatekeeper).
     Returns the path of the written file.
-    Creates parent directories if needed.
     """
-    content = render_prompt(plan, repo)
+    context = fetch_issue_context(repo, plan.item.number)
+
+    evidence = None
+    role = (plan.dispatch.role or "").lower()
+    if role in ("reviewer", "gatekeeper"):
+        evidence = collect_evidence_bundle(repo, plan.item.number, plan)
+
+    content = render_prompt(plan, repo, issue_context=context, evidence_bundle=evidence)
     path = plan.proposed_prompt_path
 
     os.makedirs(os.path.dirname(path), exist_ok=True)

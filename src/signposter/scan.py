@@ -27,6 +27,32 @@ CANDIDATE_LABELS = frozenset(
 )
 
 
+def get_claimability(item: LabeledItem) -> tuple[bool, str]:
+    """Determine if an item is claimable and why.
+
+    Only state:ready items are claimable.
+    This is display-only information for reviewers.
+    """
+    state = None
+    for label in item.labels:
+        if label.startswith("state:"):
+            state = label.split(":", 1)[1]
+            break
+
+    if state == "ready":
+        return True, "state:ready → ready for claim"
+    elif state == "active":
+        return False, "state:active → already claimed / active"
+    elif state == "done":
+        return False, "state:done → already completed"
+    elif state == "blocked":
+        return False, "state:blocked → blocked"
+    elif state == "failed":
+        return False, "state:failed → failed"
+    else:
+        return False, f"state:{state or 'unknown'} → not claimable"
+
+
 @dataclass(frozen=True)
 class LabeledItem:
     """Represents an Issue or Pull Request with its labels."""
@@ -127,6 +153,32 @@ def fetch_issue_by_number(repo: str, number: int) -> LabeledItem | None:
         labels=labels,
         item_type="issue",
     )
+
+
+def fetch_issue_context(repo: str, number: int) -> dict | None:
+    """Fetch rich issue context for prompt embedding (read-only, authenticated gh).
+
+    Returns full JSON from `gh issue view --json number,title,body,url,state,labels,comments`.
+    Used for private repository prompt artifacts so the agent does not need to fetch the URL.
+    """
+    result = subprocess.run(
+        [
+            "gh",
+            "issue",
+            "view",
+            str(number),
+            "-R",
+            repo,
+            "--json",
+            "number,title,body,url,state,labels,comments",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if result.returncode != 0:
+        return None
+    return json.loads(result.stdout)
 
 
 def fetch_open_prs(repo: str, limit: int = 50) -> list[LabeledItem]:
@@ -251,15 +303,18 @@ def format_scan_report(scan_result: dict[str, Any]) -> str:
 
     candidates = scan_result["candidates"]
     if candidates:
-        lines.append(f"Candidate Items ({len(candidates)}):")
+        lines.append(f"Workflow Items ({len(candidates)}):")
         for item in candidates:
             label_str = ", ".join(item.labels)
+            claimable, reason = get_claimability(item)
+            claim_str = "yes" if claimable else "no"
             lines.append(f"  [{item.item_type.upper()}] #{item.number} — {item.title}")
             lines.append(f"    Labels: {label_str}")
+            lines.append(f"    claimable: {claim_str}  ({reason})")
             lines.append(f"    {item.html_url}")
             lines.append("")
     else:
-        lines.append("No candidate items found with workflow labels.")
+        lines.append("No workflow items found with relevant labels.")
 
     # Show recent runs summary
     runs = scan_result.get("runs", [])
