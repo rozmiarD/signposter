@@ -8,9 +8,9 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from signposter.claim import plan_claims
-from signposter.dispatch import DispatchDecision
-from signposter.scan import LabeledItem
+from signposter.claim import perform_claim_mutation, plan_claims
+from signposter.dispatch import DispatchDecision, classify_candidate
+from signposter.scan import LabeledItem, fetch_issue_by_number
 
 
 @dataclass(frozen=True)
@@ -145,6 +145,11 @@ def main() -> int:
         help="Generate and write the prompt artifact file locally",
     )
     parser.add_argument(
+        "--claim",
+        action="store_true",
+        help="Actually claim the selected item(s) on GitHub (requires explicit use)",
+    )
+    parser.add_argument(
         "--limit",
         type=int,
         default=1,
@@ -152,10 +157,10 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    # Default to dry-run behavior if neither flag is passed
     write_prompt = args.write_prompt
+    claim = args.claim
 
-    return cli_main(args.repo, limit=args.limit, write_prompt=write_prompt)
+    return cli_main(args.repo, limit=args.limit, write_prompt=write_prompt, claim=claim)
 
 
 # --- Prompt Artifact Generation ---
@@ -245,15 +250,59 @@ def write_prompt_artifact(plan: RunnerPlan, repo: str) -> str:
     return path
 
 
-def cli_main(repo: str, limit: int = 1, *, write_prompt: bool = False) -> int:
+def cli_main(repo: str, limit: int = 1, *, write_prompt: bool = False, claim: bool = False) -> int:
     """Entry point for the run command."""
     try:
         plans = plan_runner(repo, limit=limit)
         print(format_runner_plan(plans))
 
-        if write_prompt and plans:
+        claimed_numbers: list[int] = []
+        if claim and plans:
+            print("\n=== APPLYING CLAIM MUTATION (from run command) ===\n")
+            # We need the original ClaimPlan objects for mutation
+            claim_result = plan_claims(repo, limit=limit)
+            for claim_plan in claim_result.selected:
+                print(f"Claiming issue #{claim_plan.item.number}...")
+                commands = perform_claim_mutation(claim_plan, repo, dry_run=False)
+                for cmd in commands:
+                    print(f"  Executed: {cmd}")
+                claimed_numbers.append(claim_plan.item.number)
+            print("Claim mutation complete.")
+
+        # If we claimed items and want to write prompts, re-fetch current state
+        # so the artifact reflects post-claim labels (e.g. state:active + gate:review)
+        final_plans = plans
+        if write_prompt and claimed_numbers:
+            print("\n=== Refreshing plans from current GitHub state (post-claim) ===\n")
+            refreshed: list[RunnerPlan] = []
+            for num in claimed_numbers:
+                fresh_item = fetch_issue_by_number(repo, num)
+                if not fresh_item:
+                    print(f"  Warning: could not re-fetch issue #{num}, using stale plan")
+                    continue
+                fresh_dispatch = classify_candidate(fresh_item)
+                # Rebuild RunnerPlan with fresh item + dispatch (preserve other fields)
+                old_plan = next((p for p in plans if p.item.number == num), None)
+                if old_plan:
+                    refreshed.append(
+                        RunnerPlan(
+                            item=fresh_item,
+                            dispatch=fresh_dispatch,
+                            proposed_runner=old_plan.proposed_runner,
+                            proposed_profile=old_plan.proposed_profile,
+                            proposed_working_dir=old_plan.proposed_working_dir,
+                            proposed_prompt_path=old_plan.proposed_prompt_path,
+                            proposed_command_shape=old_plan.proposed_command_shape,
+                            reason=old_plan.reason,
+                        )
+                    )
+            if refreshed:
+                final_plans = refreshed
+                print(f"  Refreshed {len(refreshed)} plan(s) with current labels.")
+
+        if write_prompt and final_plans:
             print("\n=== Writing Prompt Artifact(s) ===\n")
-            for plan in plans:
+            for plan in final_plans:
                 path = write_prompt_artifact(plan, repo)
                 print(f"Wrote: {path}")
 
