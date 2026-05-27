@@ -6,6 +6,7 @@ No mutations are performed.
 
 from __future__ import annotations
 
+import subprocess
 from dataclasses import dataclass
 
 from signposter.dispatch import DispatchDecision, run_dry_run
@@ -31,6 +32,50 @@ class ClaimPlan:
     labels_to_remove: list[str]
     labels_to_add: list[str]
     reason: str
+
+
+def perform_claim_mutation(plan: ClaimPlan, repo: str, *, dry_run: bool = True) -> list[str]:
+    """Perform (or simulate) the label mutation and comment for a single claim plan.
+
+    Returns list of gh commands that were executed (or would be executed).
+    """
+    item = plan.item
+    commands: list[str] = []
+
+    # 1. Edit labels: remove state:ready, add state:active + gate label
+    add_labels = ",".join(plan.labels_to_add)
+    remove_labels = ",".join(plan.labels_to_remove)
+
+    edit_cmd = [
+        "gh", "issue", "edit", str(item.number),
+        "-R", repo,
+        "--add-label", add_labels,
+        "--remove-label", remove_labels,
+    ]
+    commands.append(" ".join(edit_cmd))
+
+    if not dry_run:
+        subprocess.run(edit_cmd, check=True, capture_output=True, text=True)
+
+    # 2. Add comment
+    comment_body = (
+        f"Signposter claimed this item: "
+        f"route={plan.dispatch.proposed_route}, "
+        f"gate={plan.dispatch.proposed_gate or 'none'}, "
+        f"lease_owner={plan.lease_owner}."
+    )
+
+    comment_cmd = [
+        "gh", "issue", "comment", str(item.number),
+        "-R", repo,
+        "--body", comment_body,
+    ]
+    commands.append(" ".join(comment_cmd))
+
+    if not dry_run:
+        subprocess.run(comment_cmd, check=True, capture_output=True, text=True)
+
+    return commands
 
 
 def _claim_sort_key(plan: ClaimPlan) -> tuple[int, int, int]:
@@ -142,14 +187,26 @@ def format_claim_plan_report(result: ClaimDryRunResult) -> str:
     return "\n".join(lines)
 
 
-def cli_main(repo: str, limit: int = 1) -> int:
+def cli_main(repo: str, limit: int = 1, *, apply: bool = False) -> int:
     """Programmatic entry point for the claim command."""
     try:
         result = plan_claims(repo, limit=limit)
         print(format_claim_plan_report(result))
+
+        if apply and result.selected:
+            print("\n=== APPLYING MUTATIONS (real changes) ===\n")
+            for plan in result.selected:
+                print(f"Applying claim to issue #{plan.item.number}...")
+                commands = perform_claim_mutation(plan, repo, dry_run=False)
+                for cmd in commands:
+                    print(f"  Executed: {cmd}")
+            print("\nMutation complete.")
+        elif apply:
+            print("No items selected to apply.")
+
         return 0
     except Exception as e:
-        print(f"Claim dry-run failed: {e}", file=__import__("sys").stderr)
+        print(f"Claim failed: {e}", file=__import__("sys").stderr)
         return 1
 
 
@@ -157,13 +214,17 @@ def main() -> int:
     """Direct CLI entry point."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Claim/lease dry-run planner")
+    parser = argparse.ArgumentParser(description="Claim/lease planner")
     parser.add_argument("--repo", required=True, help="Target repository (owner/repo)")
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        required=True,
-        help="Required: run in dry-run mode only",
+        help="Run in read-only dry-run mode (default behavior)",
+    )
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually perform the claim mutation on GitHub (requires explicit confirmation)",
     )
     parser.add_argument(
         "--limit",
@@ -173,7 +234,11 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    return cli_main(args.repo, limit=args.limit)
+    if not args.dry_run and not args.apply:
+        # Default to dry-run for safety if neither flag is given
+        args.dry_run = True
+
+    return cli_main(args.repo, limit=args.limit, apply=args.apply)
 
 
 if __name__ == "__main__":

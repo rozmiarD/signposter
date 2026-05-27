@@ -110,3 +110,35 @@ def test_claim_result_higher_limit():
     assert len(result.selected) == 2
     assert result.total_claimable == 2
     assert result.limit == 2
+
+
+# --- Mutation simulation tests (mocked) ---
+
+
+def test_perform_claim_mutation_returns_correct_commands():
+    """Verify that perform_claim_mutation generates the expected gh commands."""
+    from signposter.claim import perform_claim_mutation
+
+    item = make_ready_item(42, ["phase:build", "risk:low", "role:worker"])
+    decision = make_decision(
+        item, phase="build", risk="low", proposed_route="worker", proposed_gate="ci"
+    )
+    plan = ClaimPlan(
+        item=item,
+        dispatch=decision,
+        lease_owner="local-dry-run-worker",
+        proposed_state="active",
+        labels_to_remove=["state:ready"],
+        labels_to_add=["state:active", "gate:ci"],
+        reason="test",
+    )
+
+    commands = perform_claim_mutation(plan, "ExatronOmega/signposter", dry_run=True)
+
+    assert len(commands) == 2
+    assert "gh issue edit 42" in commands[0]
+    assert "--add-label state:active,gate:ci" in commands[0]
+    assert "--remove-label state:ready" in commands[0]
+    assert "gh issue comment 42" in commands[1]
+    assert "route=worker" in commands[1]
+    assert "gate=ci" in commands[1]
