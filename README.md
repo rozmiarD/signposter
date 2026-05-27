@@ -65,6 +65,21 @@ The dry-run command reuses the scanner and applies simple routing rules based on
 
 **Important:** In the current bootstrap phase, `--dry-run` is mandatory. No actions are ever taken on GitHub.
 
+### `signposter claim --dry-run`
+
+Determines which `state:ready` items would be claimed for execution and what label transitions would occur (bootstrap phase):
+
+```bash
+signposter claim --repo ExatronOmega/signposter --dry-run
+```
+
+The claim planner only considers items currently labeled `state:ready`. It proposes:
+- Moving the item to `state:active`
+- Adding the appropriate `gate:*` label based on dispatch classification
+- A lease owner (in dry-run: `local-dry-run-worker`)
+
+This is the last purely planning step before any real claiming logic would be implemented.
+
 ## Project Structure
 
 ```

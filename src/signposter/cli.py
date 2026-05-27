@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from signposter.claim import cli_main as claim_cli_main
 from signposter.dispatch import cli_main as dispatch_cli_main
 from signposter.doctor import main as doctor_main
 from signposter.scan import cli_main as scan_cli_main
@@ -61,6 +62,31 @@ def main() -> None:
     )
     dispatch_parser.set_defaults(func=run_dispatch)
 
+    # claim subcommand (dry-run only in bootstrap)
+    claim_parser = subparsers.add_parser(
+        "claim",
+        help="Claim/lease dry-run planner (read-only, bootstrap phase)",
+        description="Determine which ready items would be claimed for execution.",
+    )
+    claim_parser.add_argument(
+        "--repo",
+        required=True,
+        help="Target repository in owner/repo format",
+    )
+    claim_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        required=True,
+        help="Required: run in dry-run mode only (no mutations)",
+    )
+    claim_parser.add_argument(
+        "--limit",
+        type=int,
+        default=1,
+        help="Maximum number of items to claim this run (default: 1 for safety)",
+    )
+    claim_parser.set_defaults(func=run_claim)
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -100,6 +126,20 @@ def run_dispatch(args: argparse.Namespace) -> int:
         print("Error: --dry-run is currently required (bootstrap phase)", file=sys.stderr)
         return 1
     return dispatch_cli_main(repo)
+
+
+def run_claim(args: argparse.Namespace) -> int:
+    """Execute the claim dry-run command."""
+    repo = getattr(args, "repo", None)
+    dry_run = getattr(args, "dry_run", False)
+    limit = getattr(args, "limit", 1)
+    if not repo:
+        print("Error: --repo is required for claim command", file=sys.stderr)
+        return 1
+    if not dry_run:
+        print("Error: --dry-run is currently required (bootstrap phase)", file=sys.stderr)
+        return 1
+    return claim_cli_main(repo, limit=limit)
 
 
 if __name__ == "__main__":
