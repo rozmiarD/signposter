@@ -11,6 +11,7 @@ import sys
 from signposter.claim import cli_main as claim_cli_main
 from signposter.dispatch import cli_main as dispatch_cli_main
 from signposter.doctor import main as doctor_main
+from signposter.gate import format_gate_report, run_gate_dry_run
 from signposter.report import report_main
 from signposter.runner import cli_main as runner_cli_main
 from signposter.scan import cli_main as scan_cli_main
@@ -201,6 +202,26 @@ def main() -> None:
     )
     report_parser.set_defaults(func=run_report)
 
+    # gate subcommand (dry-run gate decision)
+    gate_parser = subparsers.add_parser(
+        "gate",
+        help="Evaluate review gate for an issue (dry-run by default)",
+        description="Read local runner artifacts + GitHub state and propose next gate action.",
+    )
+    gate_parser.add_argument("--repo", required=True)
+    gate_parser.add_argument("--issue", type=int, required=True)
+    gate_parser.add_argument(
+        "--summary",
+        default="artifacts/runs/issue-2-reviewer.summary.md",
+        help="Path to runner summary artifact",
+    )
+    gate_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show recommendation without taking action (default and only supported mode for now)",
+    )
+    gate_parser.set_defaults(func=run_gate)
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -353,6 +374,25 @@ def run_report(args: argparse.Namespace) -> int:
         return 1
 
     return report_main(repo, issue, summary, apply=apply)
+
+
+def run_gate(args: argparse.Namespace) -> int:
+    """Execute the gate command (currently dry-run only)."""
+    repo = getattr(args, "repo", None)
+    issue = getattr(args, "issue", None)
+    summary = getattr(args, "summary", None)
+
+    if not repo or issue is None:
+        print("Error: --repo and --issue are required", file=sys.stderr)
+        return 1
+
+    try:
+        result = run_gate_dry_run(repo, issue, summary_path=summary)
+        print(format_gate_report(result))
+        return 0
+    except Exception as e:
+        print(f"Gate evaluation failed: {e}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
