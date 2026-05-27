@@ -158,6 +158,6 @@ ehthumbs.db
 *.tmp
 .signposter/
 
-# Signposter runtime artifacts (generated prompts and working dirs)
+# Signposter runtime artifacts (generated prompts, evidence, and execution runs)
 artifacts/
 signposter-work/

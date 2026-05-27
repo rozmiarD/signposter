@@ -143,8 +143,8 @@ def main() -> None:
     # run subcommand
     run_parser = subparsers.add_parser(
         "run",
-        help="Runner planner (supports --claim and --write-prompt)",
-        description="Plan execution and optionally claim + write prompt artifact.",
+        help="Runner planner (supports --claim, --write-prompt, --execute)",
+        description="Plan execution and optionally execute OpenClaw locally.",
     )
     run_parser.add_argument("--repo", required=True)
     run_parser.add_argument(
@@ -167,6 +167,11 @@ def main() -> None:
         "--claim",
         action="store_true",
         help="Actually claim the selected item on GitHub (explicit mutation)",
+    )
+    run_parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="Run OpenClaw agent locally for already-active item (explicit)",
     )
     run_parser.set_defaults(func=run_runner)
 
@@ -300,10 +305,11 @@ def run_runner(args: argparse.Namespace) -> int:
     limit = getattr(args, "limit", 1)
     write_prompt = getattr(args, "write_prompt", False)
     claim = getattr(args, "claim", False)
+    execute = getattr(args, "execute", False)
     if not repo:
         print("Error: --repo is required for run command", file=sys.stderr)
         return 1
-    return runner_cli_main(repo, limit=limit, write_prompt=write_prompt, claim=claim)
+    return runner_cli_main(repo, limit=limit, write_prompt=write_prompt, claim=claim, execute=execute)  # noqa: E501
 
 
 if __name__ == "__main__":
