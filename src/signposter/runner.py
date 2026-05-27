@@ -161,6 +161,11 @@ def main() -> int:
         help="Actually claim the selected item(s) on GitHub (requires explicit use)",
     )
     parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="Run the OpenClaw agent locally for the selected item (explicit, read-only on GitHub)",
+    )
+    parser.add_argument(
         "--limit",
         type=int,
         default=1,
@@ -170,8 +175,9 @@ def main() -> int:
 
     write_prompt = args.write_prompt
     claim = args.claim
+    execute = args.execute
 
-    return cli_main(args.repo, limit=args.limit, write_prompt=write_prompt, claim=claim)
+    return cli_main(args.repo, limit=args.limit, write_prompt=write_prompt, claim=claim, execute=execute)  # noqa: E501
 
 
 # --- Prompt Artifact Generation ---
@@ -483,7 +489,7 @@ def write_prompt_artifact(plan: RunnerPlan, repo: str) -> str:
     return path
 
 
-def cli_main(repo: str, limit: int = 1, *, write_prompt: bool = False, claim: bool = False) -> int:
+def cli_main(repo: str, limit: int = 1, *, write_prompt: bool = False, claim: bool = False, execute: bool = False) -> int:  # noqa: E501
     """Entry point for the run command."""
     try:
         plans = plan_runner(repo, limit=limit)
@@ -539,10 +545,179 @@ def cli_main(repo: str, limit: int = 1, *, write_prompt: bool = False, claim: bo
                 path = write_prompt_artifact(plan, repo)
                 print(f"Wrote: {path}")
 
+        if execute and final_plans:
+            print("\n=== EXECUTING RUNNER (OpenClaw) ===\n")
+            for plan in final_plans:
+                state = (plan.dispatch.state or "").lower()
+                if state == "ready" and not claim:
+                    print(f"  Refusing to execute issue #{plan.item.number}: state=ready without --claim. Use --claim --execute to claim + run.")  # noqa: E501
+                    continue
+
+                result = execute_plan(plan, repo)
+                print(f"Execution completed for issue #{plan.item.number}")
+                print(f"  Exit code: {result.get('exit_code')}")
+                print(f"  Raw output: {result.get('raw_path')}")
+                print(f"  Summary:   {result.get('summary_path')}")
+
+        # Fallback for --execute on already-active items (e.g. Issue #2 in bootstrap)
+        elif execute and not final_plans:
+            print("\n=== EXECUTING RUNNER (OpenClaw) - active item fallback ===\n")
+            try:
+                active_item = fetch_issue_by_number(repo, 2)
+                if active_item and any("state:active" in lbl for lbl in active_item.labels):
+                    dispatch = classify_candidate(active_item)
+                    active_plan = RunnerPlan(
+                        item=active_item,
+                        dispatch=dispatch,
+                        proposed_runner="openclaw",
+                        proposed_profile="reviewer",
+                        proposed_working_dir="~/projects/signposter-work/2",
+                        proposed_prompt_path="artifacts/prompts/issue-2.md",
+                        proposed_command_shape="openclaw agent --agent reviewer ...",
+                        reason="Active item execution (fallback)",
+                    )
+                    result = execute_plan(active_plan, repo)
+                    print("Execution completed for issue #2 (active fallback)")
+                    print(f"  Exit code: {result.get('exit_code')}")
+                    print(f"  Raw output: {result.get('raw_path')}")
+                    print(f"  Summary:   {result.get('summary_path')}")
+            except Exception as e:
+                print(f"Active fallback execution failed: {e}")
+
         return 0
     except Exception as e:
         print(f"Run failed: {e}", file=__import__("sys").stderr)
         return 1
+
+
+# --- Execution Layer (for --execute) ---
+
+def execute_plan(plan: RunnerPlan, repo: str) -> dict:
+    """Execute the runner plan using OpenClaw (local only).
+
+    Safety: This function assumes the item is already in an executable state
+    (e.g. state:active). It does not perform claims.
+    """
+    import datetime
+
+    item = plan.item
+    profile = plan.proposed_profile or "worker"
+    prompt_path = plan.proposed_prompt_path
+    session_key = f"signposter-issue-{item.number}-{profile}"
+
+    # Read the prompt content (we pass it properly, not via shell substitution)
+    try:
+        with open(prompt_path, encoding="utf-8") as f:
+            prompt_content = f.read()
+    except Exception as e:
+        raise RuntimeError(f"Could not read prompt artifact {prompt_path}: {e}") from e
+
+    # Final command for execution (no shell substitution)
+    exec_cmd = [
+        "openclaw", "agent",
+        "--agent", profile,
+        "--session-key", session_key,
+        "--message", prompt_content,
+        "--local",
+    ]
+
+    print(f"Running: openclaw agent --agent {profile} --session-key {session_key} --local")
+    print(f"Using prompt: {prompt_path} (length: {len(prompt_content)} chars)")
+
+    # Ensure output directory
+    runs_dir = Path("artifacts/runs")
+    runs_dir.mkdir(parents=True, exist_ok=True)
+
+    raw_path = runs_dir / f"issue-{item.number}-{profile}.raw.txt"
+    summary_path = runs_dir / f"issue-{item.number}-{profile}.summary.md"
+
+    start_time = datetime.datetime.now(datetime.UTC)
+
+    try:
+        proc = subprocess.run(
+            exec_cmd,
+            capture_output=True,
+            text=True,
+            timeout=600,  # 10 minute safety timeout
+        )
+        stdout = proc.stdout or ""
+        stderr = proc.stderr or ""
+        combined = stdout
+        if stderr:
+            combined += "\n\n=== STDERR ===\n" + stderr
+
+        exit_code = proc.returncode
+
+        # Write raw output
+        raw_path.write_text(combined, encoding="utf-8")
+
+        # Generate summary
+        summary = _generate_execution_summary(
+            repo=repo,
+            plan=plan,
+            session_key=session_key,
+            exit_code=exit_code,
+            raw_path=str(raw_path),
+            stdout=stdout,
+            stderr=stderr,
+            start_time=start_time,
+        )
+        summary_path.write_text(summary, encoding="utf-8")
+
+        return {
+            "exit_code": exit_code,
+            "raw_path": str(raw_path),
+            "summary_path": str(summary_path),
+            "success": exit_code == 0,
+        }
+
+    except subprocess.TimeoutExpired as e:
+        raw_path.write_text(f"[TIMEOUT after 600s]\n{e}", encoding="utf-8")
+        return {"exit_code": -1, "raw_path": str(raw_path), "success": False}
+    except Exception as e:
+        raw_path.write_text(f"[ERROR]\n{e}", encoding="utf-8")
+        return {"exit_code": -1, "raw_path": str(raw_path), "success": False}
+
+
+def _generate_execution_summary(
+    *, repo: str, plan: RunnerPlan, session_key: str, exit_code: int,
+    raw_path: str, stdout: str, stderr: str, start_time,
+) -> str:
+    """Generate a mechanical summary for the execution run."""
+    item = plan.item
+    lines = [
+        "# Signposter Execution Summary\n",
+        f"**Repository:** {repo}",
+        f"**Issue:** #{item.number} — {item.title}",
+        f"**Agent:** {plan.proposed_profile}",
+        f"**Session Key:** {session_key}",
+        f"**Command Shape:** {plan.proposed_command_shape}",
+        f"**Prompt Artifact:** {plan.proposed_prompt_path}",
+        f"**Started (UTC):** {start_time.isoformat()}",
+        f"**Exit Code:** {exit_code}",
+        f"**Raw Output:** {raw_path}",
+        "",
+    ]
+
+    # Basic stats
+    raw_text = stdout + ("\n" + stderr if stderr else "")
+    line_count = len(raw_text.splitlines())
+    byte_count = len(raw_text.encode("utf-8"))
+    lines.append(f"**Output Size:** {line_count} lines, {byte_count} bytes")
+
+    # Excerpts
+    lines.append("\n## First 30 lines of output\n")
+    first_lines = raw_text.splitlines()[:30]
+    lines.append("```\n" + "\n".join(first_lines) + "\n```")
+
+    if line_count > 60:
+        lines.append("\n## Last 20 lines of output\n")
+        last_lines = raw_text.splitlines()[-20:]
+        lines.append("```\n" + "\n".join(last_lines) + "\n```")
+
+    lines.append("\n---\nGenerated by Signposter runner (local execution capture)")
+
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":
