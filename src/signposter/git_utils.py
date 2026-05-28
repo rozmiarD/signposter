@@ -77,3 +77,46 @@ def find_uncommitted_repo_changes(
 def has_blocking_dirty_changes(cwd: str | Path = ".") -> bool:
     """True if there are uncommitted changes outside of allowed runtime artifact paths."""
     return len(find_uncommitted_repo_changes(cwd)) > 0
+
+
+def get_current_branch(cwd: str | Path = ".") -> str | None:
+    """Return the name of the current git branch, or None if not on a branch or error."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            branch = result.stdout.strip()
+            if branch and branch != "HEAD":
+                return branch
+        return None
+    except Exception:
+        return None
+
+
+def branch_exists(branch: str, cwd: str | Path = ".") -> bool:
+    """Check if a local branch exists (read-only)."""
+    if not branch:
+        return False
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", f"{branch}^{{commit}}"],
+            cwd=str(cwd),
+            capture_output=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def worktree_path_exists(path: str | Path) -> bool:
+    """Check if a directory exists at the proposed worktree path."""
+    try:
+        return Path(path).expanduser().resolve().exists()
+    except Exception:
+        return False
