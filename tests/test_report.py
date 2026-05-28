@@ -11,11 +11,13 @@ from unittest.mock import patch
 import pytest
 
 from signposter.report import (
+    _make_bounded_excerpt,
     derive_raw_path,
     format_comment,
     load_raw_output,
     load_summary,
     post_comment,
+    strip_ansi,
 )
 
 
@@ -120,3 +122,58 @@ def test_load_summary_missing_raises(tmp_path: Path):
 def test_load_raw_output_missing_returns_none(tmp_path: Path):
     missing = tmp_path / "nope.raw.txt"
     assert load_raw_output(missing) is None
+
+
+# --- ANSI sanitization tests (HARDENING-002) ---
+
+
+def test_strip_ansi_removes_basic_colors():
+    text = "\x1b[36mHello\x1b[39m World"
+    assert strip_ansi(text) == "Hello World"
+
+
+def test_strip_ansi_removes_multiple_sequences():
+    text = "\x1b[1;32mBold Green\x1b[0m normal \x1b[31mRed\x1b[0m"
+    assert strip_ansi(text) == "Bold Green normal Red"
+
+
+def test_strip_ansi_preserves_markdown_and_backticks():
+    text = "**bold** `code` \x1b[36mcolored\x1b[0m text"
+    assert strip_ansi(text) == "**bold** `code` colored text"
+
+
+def test_make_bounded_excerpt_strips_ansi():
+    raw_with_ansi = "\x1b[36mLine 1\x1b[0m\n\x1b[32mLine 2\x1b[0m\nLine 3"
+    excerpt = _make_bounded_excerpt(raw_with_ansi, max_lines=5)
+
+    assert "\x1b" not in excerpt
+    assert "Line 1" in excerpt
+    assert "Line 2" in excerpt
+
+
+def test_format_comment_excerpt_has_no_ansi():
+    """End-to-end: ANSI in raw_content must not leak into the GitHub comment body."""
+    summary = "**Agent:** worker\n**Exit Code:** 0"
+    raw_with_ansi = (
+        "\x1b[36m[worker] Starting...\x1b[0m\n"
+        "\x1b[1;33mWarning\x1b[0m: something happened\n"
+        "Normal line\n"
+        "\x1b[31mError\x1b[0m line"
+    )
+
+    body = format_comment(
+        summary,
+        "ExatronOmega/signposter",
+        42,
+        summary_path="artifacts/runs/issue-42.summary.md",
+        raw_path="artifacts/runs/issue-42.raw.txt",
+        raw_content=raw_with_ansi,
+    )
+
+    # No ANSI escape characters should be present anywhere in the comment
+    assert "\x1b" not in body
+    assert "\x1B" not in body
+    # Actual content should still be there
+    assert "[worker] Starting..." in body
+    assert "Warning: something happened" in body
+    assert "Normal line" in body
