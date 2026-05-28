@@ -13,6 +13,7 @@ from signposter.claim import cli_main as claim_cli_main
 from signposter.dispatch import cli_main as dispatch_cli_main
 from signposter.doctor import main as doctor_main
 from signposter.gate import format_gate_report, run_gate_dry_run
+from signposter.handoff import format_handoff_plan, plan_handoff_for_issue
 from signposter.report import report_main
 from signposter.runner import cli_main as runner_cli_main
 from signposter.scan import cli_main as scan_cli_main
@@ -236,6 +237,22 @@ def main() -> None:
         help="Actually create the branch and worktree (requires explicit use)",
     )
     worktree_apply_parser.set_defaults(func=run_worktree_apply)
+
+    # handoff subcommand group (planning only — HARDENING-012)
+    handoff_parser = subparsers.add_parser(
+        "handoff",
+        help="Branch handoff / commit / PR planning (dry-run only)",
+        description="Plan commit, push, and handoff of work done inside an isolated worktree.",
+    )
+    handoff_subparsers = handoff_parser.add_subparsers(dest="handoff_command")
+
+    handoff_plan_parser = handoff_subparsers.add_parser(
+        "plan",
+        help="Produce a dry-run handoff plan for an issue's worktree",
+    )
+    handoff_plan_parser.add_argument("--repo", required=True)
+    handoff_plan_parser.add_argument("--issue", type=int, required=True)
+    handoff_plan_parser.set_defaults(func=run_handoff_plan)
 
     # report subcommand (for posting runner summaries back to GitHub)
     report_parser = subparsers.add_parser(
@@ -549,4 +566,22 @@ def run_worktree_apply(args: argparse.Namespace) -> int:
         return 0 if plan.status == "ready" else 1
     except Exception as e:
         print(f"Worktree apply failed: {e}", file=sys.stderr)
+        return 2
+
+
+def run_handoff_plan(args: argparse.Namespace) -> int:
+    """Handler for `signposter handoff plan --repo ... --issue N`."""
+    repo = getattr(args, "repo", None)
+    issue = getattr(args, "issue", None)
+
+    if not repo or not issue:
+        print("Error: --repo and --issue are required", file=sys.stderr)
+        return 1
+
+    try:
+        plan = plan_handoff_for_issue(repo, issue)
+        print(format_handoff_plan(plan))
+        return 0 if plan.status == "ready" else 1
+    except Exception as e:
+        print(f"Handoff plan failed: {e}", file=sys.stderr)
         return 2
