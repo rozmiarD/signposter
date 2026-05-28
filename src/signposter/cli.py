@@ -17,7 +17,9 @@ from signposter.handoff import format_handoff_plan, plan_handoff_for_issue
 from signposter.pr import format_pr_plan, plan_pr_for_issue
 from signposter.report import report_main
 from signposter.review import (
+    evaluate_review_gate,
     execute_pr_review,
+    format_review_gate,
     format_review_plan,
     plan_review_for_pr,
     write_review_prompt_artifact,
@@ -318,6 +320,15 @@ def main() -> None:
     execute_parser.add_argument("--repo", required=True)
     execute_parser.add_argument("--pr", type=int, required=True)
     execute_parser.set_defaults(func=run_review_execute)
+
+    # gate subcommand (HARDENING-017)
+    gate_parser = review_subparsers.add_parser(
+        "gate",
+        help="Evaluate the review gate for a PR using the reviewer opinion (dry-run only)",
+    )
+    gate_parser.add_argument("--repo", required=True)
+    gate_parser.add_argument("--pr", type=int, required=True)
+    gate_parser.set_defaults(func=run_review_gate)
 
     # report subcommand (for posting runner summaries back to GitHub)
     report_parser = subparsers.add_parser(
@@ -746,5 +757,23 @@ def run_review_execute(args: argparse.Namespace) -> int:
         return 0 if result.get("success") else 1
     except Exception as e:
         print(f"Review execute failed: {e}", file=sys.stderr)
+        return 2
+
+
+def run_review_gate(args: argparse.Namespace) -> int:
+    """Handler for `signposter review gate --repo ... --pr N` (HARDENING-017)."""
+    repo = getattr(args, "repo", None)
+    pr = getattr(args, "pr", None)
+
+    if not repo or pr is None:
+        print("Error: --repo and --pr are required", file=sys.stderr)
+        return 1
+
+    try:
+        result = evaluate_review_gate(repo, pr)
+        print(format_review_gate(result))
+        return 0 if result.gate_pass else 1
+    except Exception as e:
+        print(f"Review gate failed: {e}", file=sys.stderr)
         return 2
 
