@@ -14,6 +14,7 @@ from signposter.dispatch import cli_main as dispatch_cli_main
 from signposter.doctor import main as doctor_main
 from signposter.gate import format_gate_report, run_gate_dry_run
 from signposter.handoff import format_handoff_plan, plan_handoff_for_issue
+from signposter.merge import format_merge_plan, plan_merge_for_pr
 from signposter.pr import format_pr_plan, plan_pr_for_issue
 from signposter.report import report_main
 from signposter.review import (
@@ -346,6 +347,22 @@ def main() -> None:
         help="Actually submit the review to GitHub (default is dry-run)",
     )
     submit_parser.set_defaults(func=run_review_submit)
+
+    # merge subcommand group (HARDENING-019 — dry-run merge planning only)
+    merge_parser = subparsers.add_parser(
+        "merge",
+        help="PR merge planning (dry-run only)",
+        description="Evaluate whether a PR is eligible for a guarded merge.",
+    )
+    merge_subparsers = merge_parser.add_subparsers(dest="merge_command")
+
+    merge_plan_parser = merge_subparsers.add_parser(
+        "plan",
+        help="Produce a dry-run merge eligibility plan for a PR",
+    )
+    merge_plan_parser.add_argument("--repo", required=True)
+    merge_plan_parser.add_argument("--pr", type=int, required=True)
+    merge_plan_parser.set_defaults(func=run_merge_plan)
 
     # report subcommand (for posting runner summaries back to GitHub)
     report_parser = subparsers.add_parser(
@@ -846,5 +863,23 @@ def run_review_submit(args: argparse.Namespace) -> int:
                 return 1
     except Exception as e:
         print(f"Review submit failed: {e}", file=sys.stderr)
+        return 2
+
+
+def run_merge_plan(args: argparse.Namespace) -> int:
+    """Handler for `signposter merge plan --repo ... --pr N` (HARDENING-019)."""
+    repo = getattr(args, "repo", None)
+    pr = getattr(args, "pr", None)
+
+    if not repo or pr is None:
+        print("Error: --repo and --pr are required", file=sys.stderr)
+        return 1
+
+    try:
+        plan = plan_merge_for_pr(repo, pr)
+        print(format_merge_plan(plan))
+        return 0 if plan.status == "ready" else 1
+    except Exception as e:
+        print(f"Merge plan failed: {e}", file=sys.stderr)
         return 2
 
