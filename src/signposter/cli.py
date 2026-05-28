@@ -21,7 +21,10 @@ from signposter.review import (
     execute_pr_review,
     format_review_gate,
     format_review_plan,
+    format_review_submit_plan,
     plan_review_for_pr,
+    plan_review_submit,
+    submit_review,
     write_review_prompt_artifact,
 )
 from signposter.runner import cli_main as runner_cli_main
@@ -329,6 +332,20 @@ def main() -> None:
     gate_parser.add_argument("--repo", required=True)
     gate_parser.add_argument("--pr", type=int, required=True)
     gate_parser.set_defaults(func=run_review_gate)
+
+    # submit subcommand (HARDENING-018 — GitHub review submission)
+    submit_parser = review_subparsers.add_parser(
+        "submit",
+        help="Plan or apply a GitHub PR review based on reviewer gate (dry-run by default)",
+    )
+    submit_parser.add_argument("--repo", required=True)
+    submit_parser.add_argument("--pr", type=int, required=True)
+    submit_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually submit the review to GitHub (default is dry-run)",
+    )
+    submit_parser.set_defaults(func=run_review_submit)
 
     # report subcommand (for posting runner summaries back to GitHub)
     report_parser = subparsers.add_parser(
@@ -775,5 +792,46 @@ def run_review_gate(args: argparse.Namespace) -> int:
         return 0 if result.gate_pass else 1
     except Exception as e:
         print(f"Review gate failed: {e}", file=sys.stderr)
+        return 2
+
+
+def run_review_submit(args: argparse.Namespace) -> int:
+    """Handler for `signposter review submit --repo ... --pr N [--apply]` (HARDENING-018)."""
+    repo = getattr(args, "repo", None)
+    pr = getattr(args, "pr", None)
+    do_apply = getattr(args, "apply", False)
+
+    if not repo or pr is None:
+        print("Error: --repo and --pr are required", file=sys.stderr)
+        return 1
+
+    try:
+        if not do_apply:
+            # Dry-run path (default)
+            plan = plan_review_submit(repo, pr)
+            print(format_review_submit_plan(plan))
+            return 0 if plan.status in ("ready", "ready-for-request-changes") else 1
+        else:
+            # Mutation path
+            result = submit_review(repo, pr, apply=True)
+            plan = result.get("plan")
+            if result.get("mode") == "apply":
+                success = result.get("success", False)
+                print(f"Signposter Review Submit — PR #{pr}")
+                print("")
+                print("GitHub review:")
+                print(f"  action: {plan.action if plan else 'unknown'}")
+                print(f"  status: {'submitted' if success else 'failed'}")
+                print("")
+                print("Notes:")
+                print("  No merge was performed.")
+                print("  No issue was closed.")
+                return 0 if success else 1
+            else:
+                err = result.get("error") or (plan.status if plan else "unknown")
+                print(f"Submit blocked: {err}", file=sys.stderr)
+                return 1
+    except Exception as e:
+        print(f"Review submit failed: {e}", file=sys.stderr)
         return 2
 
