@@ -1,0 +1,112 @@
+"""Tests for PR planning (HARDENING-013)."""
+
+from signposter.handoff import HandoffPlan
+from signposter.pr import format_pr_plan, plan_pr_for_issue
+
+
+def _handoff_plan(
+    *,
+    has_changes: bool,
+    changed_files: list[str] | None = None,
+    workflow_state: str = "done",
+    current_branch: str = "work/issue-4-test-task",
+    worktree_exists: bool = True,
+) -> HandoffPlan:
+    return HandoffPlan(
+        issue_number=4,
+        title="Test task",
+        workflow_state=workflow_state,
+        github_issue_state="OPEN",
+        worktree_path="../signposter-work/4",
+        branch="work/issue-4-test-task",
+        worktree_exists=worktree_exists,
+        current_branch_in_worktree=current_branch,
+        status_lines=["M README.md"] if has_changes else [],
+        changed_files=changed_files or [],
+        has_changes=has_changes,
+        suggested_commit_message="docs: test-task",
+        suggested_next_commands=["git commit ...", "git push ..."],
+        status="ready" if has_changes else "blocked — no changes found in worktree",
+        notes=["No commit, push, PR, merge, or issue close was performed."],
+    )
+
+
+def test_pr_plan_blocks_when_worktree_has_uncommitted_changes(monkeypatch):
+    monkeypatch.setattr(
+        "signposter.pr.plan_handoff_for_issue",
+        lambda repo, issue: _handoff_plan(
+            has_changes=True,
+            changed_files=["README.md"],
+        ),
+    )
+
+    plan = plan_pr_for_issue("test/repo", 4)
+
+    assert plan.status.startswith("blocked — worktree has uncommitted changes")
+    assert plan.has_uncommitted_changes is True
+    assert plan.changed_files == ["README.md"]
+
+
+def test_pr_plan_ready_for_clean_branch_with_committed_changes(monkeypatch):
+    monkeypatch.setattr(
+        "signposter.pr.plan_handoff_for_issue",
+        lambda repo, issue: _handoff_plan(has_changes=False),
+    )
+    monkeypatch.setattr(
+        "signposter.pr._get_branch_changed_files",
+        lambda worktree, base, source: ["README.md"],
+    )
+
+    plan = plan_pr_for_issue("test/repo", 4)
+
+    assert plan.status == "ready"
+    assert plan.base_branch == "main"
+    assert plan.source_branch == "work/issue-4-test-task"
+    assert plan.changed_files == ["README.md"]
+    assert "Related issue: #4" in plan.suggested_pr_body
+    assert "Closes" not in plan.suggested_pr_body
+
+
+def test_pr_plan_blocks_when_not_state_done(monkeypatch):
+    monkeypatch.setattr(
+        "signposter.pr.plan_handoff_for_issue",
+        lambda repo, issue: _handoff_plan(
+            has_changes=False,
+            workflow_state="active",
+        ),
+    )
+
+    plan = plan_pr_for_issue("test/repo", 4)
+
+    assert plan.status == "blocked — issue is not state:done (current: active)"
+
+
+def test_format_pr_plan_contains_key_sections():
+    plan = _handoff_plan(has_changes=False)
+    pr_plan = plan_pr_for_issue_from_handoff_for_test(plan, ["README.md"])
+
+    output = format_pr_plan(pr_plan)
+
+    assert "Signposter PR Plan — Issue #4" in output
+    assert "base: main" in output
+    assert "head: work/issue-4-test-task" in output
+    assert "README.md" in output
+    assert "gh pr create" in output
+    assert "No PR, merge, push, close, or GitHub mutation was performed" in output
+
+
+def plan_pr_for_issue_from_handoff_for_test(
+    handoff: HandoffPlan,
+    branch_files: list[str],
+):
+    import signposter.pr as pr_module
+
+    original_handoff = pr_module.plan_handoff_for_issue
+    original_diff = pr_module._get_branch_changed_files
+    try:
+        pr_module.plan_handoff_for_issue = lambda repo, issue: handoff
+        pr_module._get_branch_changed_files = lambda worktree, base, source: branch_files
+        return pr_module.plan_pr_for_issue("test/repo", 4)
+    finally:
+        pr_module.plan_handoff_for_issue = original_handoff
+        pr_module._get_branch_changed_files = original_diff

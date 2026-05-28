@@ -14,6 +14,7 @@ from signposter.dispatch import cli_main as dispatch_cli_main
 from signposter.doctor import main as doctor_main
 from signposter.gate import format_gate_report, run_gate_dry_run
 from signposter.handoff import format_handoff_plan, plan_handoff_for_issue
+from signposter.pr import format_pr_plan, plan_pr_for_issue
 from signposter.report import report_main
 from signposter.runner import cli_main as runner_cli_main
 from signposter.scan import cli_main as scan_cli_main
@@ -253,6 +254,27 @@ def main() -> None:
     handoff_plan_parser.add_argument("--repo", required=True)
     handoff_plan_parser.add_argument("--issue", type=int, required=True)
     handoff_plan_parser.set_defaults(func=run_handoff_plan)
+
+    # pr subcommand group (planning only — HARDENING-013)
+    pr_parser = subparsers.add_parser(
+        "pr",
+        help="Pull request planning for isolated worker branches (dry-run only)",
+        description="Plan PR metadata and gh commands without creating a PR.",
+    )
+    pr_subparsers = pr_parser.add_subparsers(dest="pr_command")
+
+    pr_plan_parser = pr_subparsers.add_parser(
+        "plan",
+        help="Produce a dry-run PR plan for an issue's worker branch",
+    )
+    pr_plan_parser.add_argument("--repo", required=True)
+    pr_plan_parser.add_argument("--issue", type=int, required=True)
+    pr_plan_parser.add_argument(
+        "--base",
+        default="main",
+        help="Base branch for the pull request (default: main)",
+    )
+    pr_plan_parser.set_defaults(func=run_pr_plan)
 
     # report subcommand (for posting runner summaries back to GitHub)
     report_parser = subparsers.add_parser(
@@ -585,3 +607,9 @@ def run_handoff_plan(args: argparse.Namespace) -> int:
     except Exception as e:
         print(f"Handoff plan failed: {e}", file=sys.stderr)
         return 2
+
+def run_pr_plan(args: argparse.Namespace) -> None:
+    """Run PR planning for an issue."""
+    plan = plan_pr_for_issue(args.repo, args.issue, base_branch=args.base)
+    print(format_pr_plan(plan))
+
