@@ -14,7 +14,12 @@ from signposter.dispatch import cli_main as dispatch_cli_main
 from signposter.doctor import main as doctor_main
 from signposter.gate import format_gate_report, run_gate_dry_run
 from signposter.handoff import format_handoff_plan, plan_handoff_for_issue
-from signposter.merge import format_merge_plan, plan_merge_for_pr
+from signposter.merge import (
+    apply_merge,
+    format_merge_apply_dry_run,
+    format_merge_plan,
+    plan_merge_for_pr,
+)
 from signposter.pr import format_pr_plan, plan_pr_for_issue
 from signposter.report import report_main
 from signposter.review import (
@@ -363,6 +368,20 @@ def main() -> None:
     merge_plan_parser.add_argument("--repo", required=True)
     merge_plan_parser.add_argument("--pr", type=int, required=True)
     merge_plan_parser.set_defaults(func=run_merge_plan)
+
+    # apply subcommand (HARDENING-020)
+    merge_apply_parser = merge_subparsers.add_parser(
+        "apply",
+        help="Guarded PR merge (dry-run by default; use --apply to execute)",
+    )
+    merge_apply_parser.add_argument("--repo", required=True)
+    merge_apply_parser.add_argument("--pr", type=int, required=True)
+    merge_apply_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually perform the merge (default is dry-run)",
+    )
+    merge_apply_parser.set_defaults(func=run_merge_apply)
 
     # report subcommand (for posting runner summaries back to GitHub)
     report_parser = subparsers.add_parser(
@@ -881,5 +900,59 @@ def run_merge_plan(args: argparse.Namespace) -> int:
         return 0 if plan.status == "ready" else 1
     except Exception as e:
         print(f"Merge plan failed: {e}", file=sys.stderr)
+        return 2
+
+
+def run_merge_apply(args: argparse.Namespace) -> int:
+    """Handler for `signposter merge apply --repo ... --pr N [--apply]` (HARDENING-020)."""
+    repo = getattr(args, "repo", None)
+    pr = getattr(args, "pr", None)
+    do_apply = getattr(args, "apply", False)
+
+    if not repo or pr is None:
+        print("Error: --repo and --pr are required", file=sys.stderr)
+        return 1
+
+    try:
+        result = apply_merge(repo, pr, apply=do_apply)
+        plan = result.get("plan")
+
+        if result.get("mode") == "dry_run":
+            print(format_merge_apply_dry_run(plan))
+            return 0
+        elif result.get("mode") == "apply":
+            success = result.get("success", False)
+            print(f"Signposter Merge Apply — PR #{pr}")
+            print("")
+            print("Merge:")
+            print(f"  method: {plan.merge_method if plan else 'squash'}")
+            del_b = 'yes' if plan and plan.delete_branch_after_merge else 'yes'
+            print(f"  delete branch after merge: {del_b}")
+            print(f"  status: {'merged' if success else 'failed'}")
+            if not success and result.get("stderr"):
+                print(f"  stderr: {result['stderr'].strip()[:300]}")
+            print("")
+            print("Notes:")
+            print("  No issue was closed by Signposter.")
+            print("  No local worktree was removed.")
+            print(
+                "  Remote branch deletion was requested via gh pr merge --delete-branch."
+            )
+            return 0 if success else 1
+        else:
+            # apply_blocked
+            err = result.get("error", plan.status if plan else "unknown")
+            print(f"Signposter Merge Apply — PR #{pr}")
+            print("")
+            print("Merge status: blocked")
+            print(f"  reason: {err}")
+            print("")
+            print("Notes:")
+            print("  No merge was performed.")
+            print("  No issue was closed.")
+            print("  No local worktree was removed.")
+            return 1
+    except Exception as e:
+        print(f"Merge apply failed: {e}", file=sys.stderr)
         return 2
 

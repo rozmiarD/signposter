@@ -168,3 +168,262 @@ def test_format_merge_plan_contains_key_sections():
     assert "No merge was performed" in output
     assert "delete branch after merge: yes" in output
     assert "AlphaExatron" in output or "non-author approval" in output
+
+
+# =============================================================================
+# HARDENING-020 tests: guarded merge apply
+# =============================================================================
+
+
+def test_merge_apply_dry_run_does_not_call_subprocess():
+    from signposter.merge import apply_merge
+
+    with patch("signposter.merge.plan_merge_for_pr") as mock_plan, \
+         patch("subprocess.run") as mock_sub:
+
+        fake_plan = MergePlan(
+            pr_number=5, title="test", state="OPEN", base_branch="main",
+            head_branch="work/issue-4-xxx", mergeable="MERGEABLE",
+            review_decision="APPROVED", checks_status="pass",
+            successful_checks=1, failing_checks=0, pending_checks=0,
+            github_approved=True, approving_reviewers=["AlphaExatron"],
+            has_non_author_approval=True, pr_author="ExatronOmega",
+            reviewer_gate_pass=True, reviewer_verdict="APPROVE",
+            reviewer_confidence=0.95, reviewer_risk="low",
+            associated_issue=4, has_auto_close_keywords=False,
+            files_changed=1, additions=8, deletions=0,
+            risk_level="low", size="small",
+            merge_method="squash", delete_branch_after_merge=True,
+            command_preview="gh pr merge 5 -R test/repo --squash --delete-branch",
+            status="ready", notes=[],
+        )
+        mock_plan.return_value = fake_plan
+
+        result = apply_merge("test/repo", 5, apply=False)
+
+        mock_sub.assert_not_called()
+        assert result["mode"] == "dry_run"
+        assert "gh pr merge" in result["command"]
+
+
+def test_merge_apply_refuses_when_plan_not_ready():
+    from signposter.merge import apply_merge
+
+    with patch("signposter.merge.plan_merge_for_pr") as mock_plan:
+        fake_plan = MergePlan(
+            pr_number=5, title="test", state="OPEN", base_branch="main",
+            head_branch="work/issue-4-xxx", mergeable="MERGEABLE",
+            review_decision="APPROVED", checks_status="pass",
+            successful_checks=1, failing_checks=0, pending_checks=0,
+            github_approved=True, approving_reviewers=["AlphaExatron"],
+            has_non_author_approval=True, pr_author="ExatronOmega",
+            reviewer_gate_pass=True, reviewer_verdict="APPROVE",
+            reviewer_confidence=0.95, reviewer_risk="low",
+            associated_issue=4, has_auto_close_keywords=False,
+            files_changed=1, additions=8, deletions=0,
+            risk_level="low", size="small",
+            merge_method="squash", delete_branch_after_merge=True,
+            command_preview="gh ...",
+            status="blocked — checks are failing",
+            notes=[],
+        )
+        mock_plan.return_value = fake_plan
+
+        result = apply_merge("test/repo", 5, apply=True)
+
+        assert result["mode"] == "apply_blocked"
+        assert "Refusing to merge" in result.get("error", "")
+
+
+def test_merge_apply_with_apply_calls_gh_correctly(monkeypatch):
+    from signposter.merge import apply_merge
+
+    class FakeProc:
+        returncode = 0
+        stdout = "Merge successful."
+        stderr = ""
+
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return FakeProc()
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    with patch("signposter.merge.plan_merge_for_pr") as mock_plan:
+        fake_plan = MergePlan(
+            pr_number=5, title="test", state="OPEN", base_branch="main",
+            head_branch="work/issue-4-xxx", mergeable="MERGEABLE",
+            review_decision="APPROVED", checks_status="pass",
+            successful_checks=1, failing_checks=0, pending_checks=0,
+            github_approved=True, approving_reviewers=["AlphaExatron"],
+            has_non_author_approval=True, pr_author="ExatronOmega",
+            reviewer_gate_pass=True, reviewer_verdict="APPROVE",
+            reviewer_confidence=0.95, reviewer_risk="low",
+            associated_issue=4, has_auto_close_keywords=False,
+            files_changed=1, additions=8, deletions=0,
+            risk_level="low", size="small",
+            merge_method="squash", delete_branch_after_merge=True,
+            command_preview="gh pr merge 5 -R test/repo --squash --delete-branch",
+            status="ready", notes=[],
+        )
+        mock_plan.return_value = fake_plan
+
+        result = apply_merge("test/repo", 5, apply=True)
+
+    assert result["mode"] == "apply"
+    assert result["success"] is True
+    assert any("--squash" in str(c) and "--delete-branch" in str(c) for c in calls)
+
+
+def test_merge_apply_failed_gh_includes_stderr():
+    from signposter.merge import apply_merge
+
+    class FakeProc:
+        returncode = 1
+        stdout = ""
+        stderr = "GraphQL error: something went wrong"
+
+    with patch("subprocess.run", return_value=FakeProc()):
+        with patch("signposter.merge.plan_merge_for_pr") as mock_plan:
+            fake_plan = MergePlan(
+                pr_number=5, title="test", state="OPEN", base_branch="main",
+                head_branch="work/issue-4-xxx", mergeable="MERGEABLE",
+                review_decision="APPROVED", checks_status="pass",
+                successful_checks=1, failing_checks=0, pending_checks=0,
+                github_approved=True, approving_reviewers=["AlphaExatron"],
+                has_non_author_approval=True, pr_author="ExatronOmega",
+                reviewer_gate_pass=True, reviewer_verdict="APPROVE",
+                reviewer_confidence=0.95, reviewer_risk="low",
+                associated_issue=4, has_auto_close_keywords=False,
+                files_changed=1, additions=8, deletions=0,
+                risk_level="low", size="small",
+                merge_method="squash", delete_branch_after_merge=True,
+                command_preview="gh ...",
+                status="ready", notes=[],
+            )
+            mock_plan.return_value = fake_plan
+
+            result = apply_merge("test/repo", 5, apply=True)
+
+    assert result["success"] is False
+    assert "something went wrong" in result.get("error", "") or result.get("stderr", "")
+
+
+def test_format_merge_apply_dry_run_contains_safety_notes():
+    from signposter.merge import format_merge_apply_dry_run
+
+    fake_plan = MergePlan(
+        pr_number=5, title="test", state="OPEN", base_branch="main",
+        head_branch="work/issue-4-xxx", mergeable="MERGEABLE",
+        review_decision="APPROVED", checks_status="pass",
+        successful_checks=1, failing_checks=0, pending_checks=0,
+        github_approved=True, approving_reviewers=["AlphaExatron"],
+        has_non_author_approval=True, pr_author="ExatronOmega",
+        reviewer_gate_pass=True, reviewer_verdict="APPROVE",
+        reviewer_confidence=0.95, reviewer_risk="low",
+        associated_issue=4, has_auto_close_keywords=False,
+        files_changed=1, additions=8, deletions=0,
+        risk_level="low", size="small",
+        merge_method="squash", delete_branch_after_merge=True,
+        command_preview="gh pr merge 5 -R test/repo --squash --delete-branch",
+        status="ready", notes=[],
+    )
+
+    output = format_merge_apply_dry_run(fake_plan)
+
+    assert "DRY RUN: no merge was performed" in output
+    assert "No issue was closed" in output
+    assert "No local worktree was removed" in output
+    assert "--delete-branch" in output
+
+
+# =============================================================================
+# HARDENING-020A regression tests: dry-run must accurately reflect plan readiness
+# =============================================================================
+
+
+def test_format_merge_apply_dry_run_shows_ready_only_when_plan_ready():
+    from signposter.merge import format_merge_apply_dry_run
+
+    ready_plan = MergePlan(
+        pr_number=5, title="test", state="OPEN", base_branch="main",
+        head_branch="work/issue-4-xxx", mergeable="MERGEABLE",
+        review_decision="APPROVED", checks_status="pass",
+        successful_checks=1, failing_checks=0, pending_checks=0,
+        github_approved=True, approving_reviewers=["AlphaExatron"],
+        has_non_author_approval=True, pr_author="ExatronOmega",
+        reviewer_gate_pass=True, reviewer_verdict="APPROVE",
+        reviewer_confidence=0.95, reviewer_risk="low",
+        associated_issue=4, has_auto_close_keywords=False,
+        files_changed=1, additions=8, deletions=0,
+        risk_level="low", size="small",
+        merge_method="squash", delete_branch_after_merge=True,
+        command_preview="gh pr merge 5 ... --squash --delete-branch",
+        status="ready", notes=[],
+    )
+
+    output = format_merge_apply_dry_run(ready_plan)
+    assert "Status:\n  ready" in output or "Status: ready" in output
+
+
+def test_format_merge_apply_dry_run_shows_blocked_when_plan_blocked():
+    from signposter.merge import format_merge_apply_dry_run
+
+    blocked_plan = MergePlan(
+        pr_number=5, title="test", state="OPEN", base_branch="main",
+        head_branch="work/issue-4-xxx", mergeable="UNKNOWN",
+        review_decision="APPROVED", checks_status="pass",
+        successful_checks=1, failing_checks=0, pending_checks=0,
+        github_approved=True, approving_reviewers=["AlphaExatron"],
+        has_non_author_approval=True, pr_author="ExatronOmega",
+        reviewer_gate_pass=True, reviewer_verdict="APPROVE",
+        reviewer_confidence=0.95, reviewer_risk="low",
+        associated_issue=4, has_auto_close_keywords=False,
+        files_changed=1, additions=8, deletions=0,
+        risk_level="low", size="small",
+        merge_method="squash", delete_branch_after_merge=True,
+        command_preview="gh pr merge 5 ... --squash --delete-branch",
+        status="blocked — PR is not mergeable (UNKNOWN)",
+        notes=[],
+    )
+
+    output = format_merge_apply_dry_run(blocked_plan)
+
+    assert "blocked — merge plan is not ready" in output
+    assert (
+        "blocked — PR is not mergeable (UNKNOWN)" in output
+        or "blocked — merge plan is not ready" in output
+    )
+    assert "Status:\n  ready" not in output  # must not falsely claim ready
+
+
+def test_apply_refuses_when_plan_blocked_even_with_apply_flag():
+    from signposter.merge import apply_merge
+
+    with patch("signposter.merge.plan_merge_for_pr") as mock_plan:
+        blocked_plan = MergePlan(
+            pr_number=5, title="test", state="OPEN", base_branch="main",
+            head_branch="work/issue-4-xxx", mergeable="UNKNOWN",
+            review_decision="APPROVED", checks_status="pass",
+            successful_checks=1, failing_checks=0, pending_checks=0,
+            github_approved=True, approving_reviewers=["AlphaExatron"],
+            has_non_author_approval=True, pr_author="ExatronOmega",
+            reviewer_gate_pass=True, reviewer_verdict="APPROVE",
+            reviewer_confidence=0.95, reviewer_risk="low",
+            associated_issue=4, has_auto_close_keywords=False,
+            files_changed=1, additions=8, deletions=0,
+            risk_level="low", size="small",
+            merge_method="squash", delete_branch_after_merge=True,
+            command_preview="gh ...",
+            status="blocked — PR is not mergeable (UNKNOWN)",
+            notes=[],
+        )
+        mock_plan.return_value = blocked_plan
+
+        result = apply_merge("test/repo", 5, apply=True)
+
+    assert result["mode"] == "apply_blocked"
+    assert "Refusing to merge" in result.get("error", "")
+
