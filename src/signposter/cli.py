@@ -16,7 +16,11 @@ from signposter.gate import format_gate_report, run_gate_dry_run
 from signposter.handoff import format_handoff_plan, plan_handoff_for_issue
 from signposter.pr import format_pr_plan, plan_pr_for_issue
 from signposter.report import report_main
-from signposter.review import format_review_plan, plan_review_for_pr
+from signposter.review import (
+    format_review_plan,
+    plan_review_for_pr,
+    write_review_prompt_artifact,
+)
 from signposter.runner import cli_main as runner_cli_main
 from signposter.scan import cli_main as scan_cli_main
 from signposter.transitions import (
@@ -292,6 +296,15 @@ def main() -> None:
     review_plan_parser.add_argument("--repo", required=True)
     review_plan_parser.add_argument("--pr", type=int, required=True)
     review_plan_parser.set_defaults(func=run_review_plan)
+
+    # write-prompt subcommand (HARDENING-015)
+    write_prompt_parser = review_subparsers.add_parser(
+        "write-prompt",
+        help="Write the reviewer prompt artifact for a PR (dry-run planning only)",
+    )
+    write_prompt_parser.add_argument("--repo", required=True)
+    write_prompt_parser.add_argument("--pr", type=int, required=True)
+    write_prompt_parser.set_defaults(func=run_review_write_prompt)
 
     # report subcommand (for posting runner summaries back to GitHub)
     report_parser = subparsers.add_parser(
@@ -646,5 +659,39 @@ def run_review_plan(args: argparse.Namespace) -> int:
         return 0 if plan.status == "ready" else 1
     except Exception as e:
         print(f"Review plan failed: {e}", file=sys.stderr)
+        return 2
+
+
+def run_review_write_prompt(args: argparse.Namespace) -> int:
+    """Handler for `signposter review write-prompt --repo ... --pr N` (HARDENING-015)."""
+    repo = getattr(args, "repo", None)
+    pr = getattr(args, "pr", None)
+
+    if not repo or pr is None:
+        print("Error: --repo and --pr are required", file=sys.stderr)
+        return 1
+
+    try:
+        path = write_review_prompt_artifact(repo, pr)
+        print(f"Signposter Review Prompt — PR #{pr}")
+        print("")
+        print("Prompt:")
+        print(f"  path: {path}")
+        print("  reviewer: reviewer")
+        print(f"  source: PR #{pr}")
+        print("  status: written")
+        print("")
+        print("Notes:")
+        print("  No review was executed.")
+        print("  No GitHub review was submitted.")
+        print("  No merge was performed.")
+        print("  No issue was closed.")
+        return 0
+    except RuntimeError as e:
+        # Expected: plan not ready
+        print(str(e), file=sys.stderr)
+        return 1
+    except Exception as e:
+        print(f"Write prompt failed: {e}", file=sys.stderr)
         return 2
 
