@@ -98,6 +98,45 @@ def plan_runner(repo: str, *, limit: int = 1) -> list[RunnerPlan]:
     return plans
 
 
+def plan_runner_for_issue(repo: str, issue: int) -> RunnerPlan | None:
+    """Build a RunnerPlan for one specific issue by number.
+
+    Works for state:ready, state:active, etc. Does not filter by claimability.
+    Returns None if the issue cannot be fetched.
+    """
+    item = fetch_issue_by_number(repo, issue)
+    if not item:
+        return None
+
+    dispatch = classify_candidate(item)
+    runner, profile = _select_runner_and_profile(dispatch)
+
+    working_dir = f"~/projects/signposter-work/{item.number}"
+    prompt_path = f"artifacts/prompts/issue-{item.number}.md"
+
+    command_shape = (
+        f"openclaw agent --agent {profile} "
+        f"--session-key signposter-issue-{item.number}-{profile} "
+        f"--message \"$(cat {prompt_path})\" --local"
+    )
+
+    reason = (
+        f"Explicit target via --issue for route='{dispatch.proposed_route}' "
+        f"(role={dispatch.role}, phase={dispatch.phase}, state={dispatch.state})"
+    )
+
+    return RunnerPlan(
+        item=item,
+        dispatch=dispatch,
+        proposed_runner=runner,
+        proposed_profile=profile,
+        proposed_working_dir=working_dir,
+        proposed_prompt_path=prompt_path,
+        proposed_command_shape=command_shape,
+        reason=reason,
+    )
+
+
 def _prompt_issue_number(prompt_path: Path) -> int | None:
     """Extract issue number from artifacts/prompts/issue-N.md."""
     stem = prompt_path.stem
@@ -237,13 +276,26 @@ def main() -> int:
         default=1,
         help="Maximum number of items to plan (default: 1)",
     )
+    parser.add_argument(
+        "--issue",
+        type=int,
+        help="Target a specific issue number explicitly (bypasses claim planner)",
+    )
     args = parser.parse_args()
 
     write_prompt = args.write_prompt
     claim = args.claim
     execute = args.execute
+    issue = getattr(args, "issue", None)
 
-    return cli_main(args.repo, limit=args.limit, write_prompt=write_prompt, claim=claim, execute=execute)  # noqa: E501
+    return cli_main(
+        args.repo,
+        limit=args.limit,
+        write_prompt=write_prompt,
+        claim=claim,
+        execute=execute,
+        issue=issue,
+    )  # noqa: E501
 
 
 # --- Prompt Artifact Generation ---
@@ -555,11 +607,87 @@ def write_prompt_artifact(plan: RunnerPlan, repo: str) -> str:
     return path
 
 
-def cli_main(repo: str, limit: int = 1, *, write_prompt: bool = False, claim: bool = False, execute: bool = False) -> int:  # noqa: E501
-    """Entry point for the run command."""
+def cli_main(
+    repo: str,
+    limit: int = 1,
+    *,
+    write_prompt: bool = False,
+    claim: bool = False,
+    execute: bool = False,
+    issue: int | None = None,
+) -> int:  # noqa: E501
+    """Entry point for the run command.
+
+    If `issue` is provided, operates on that specific issue only (explicit targeting).
+    Otherwise falls back to the normal claim-planner path.
+    """
     try:
-        plans = plan_runner(repo, limit=limit)
-        print(format_runner_plan(plans))
+        if issue is not None:
+            # Explicit single-issue targeting path (HARDENING-004)
+            plan = plan_runner_for_issue(repo, issue)
+            plans = [plan] if plan else []
+            if not plans:
+                print(f"Error: Could not fetch issue #{issue} from {repo}.")
+                return 1
+
+            print(f"Signposter Run Plan — Explicit target issue #{issue}")
+            print(format_runner_plan(plans))
+
+            # HARDENING-004 micro-adjustment: explicit status for terminal states
+            if plans:
+                st = (plans[0].dispatch.state or "").lower()
+                if st in ("done", "failed"):
+                    print(f"Execution status: blocked — state:{st}")
+
+            # Handle explicit single-issue actions
+            plan = plans[0]
+            item_number = plan.item.number
+            current_state = (plan.dispatch.state or "").lower()
+
+            if claim:
+                if current_state == "ready":
+                    print("\n=== APPLYING CLAIM MUTATION (explicit --issue) ===\n")
+                    # Use the normal claim planner but limited to this issue conceptually.
+                    # For safety we still go through plan_claims + filter (conservative).
+                    claim_result = plan_claims(repo, limit=1)
+                    for claim_plan in claim_result.selected:
+                        if claim_plan.item.number == item_number:
+                            print(f"Claiming issue #{item_number}...")
+                            commands = perform_claim_mutation(claim_plan, repo, dry_run=False)
+                            for cmd in commands:
+                                print(f"  Executed: {cmd}")
+                    print("Claim mutation complete.")
+                else:
+                    msg = f"  Note: issue #{item_number} already {current_state}. Skipping claim."
+                    print(msg)
+
+            final_plans = plans
+
+            if write_prompt and final_plans:
+                print("\n=== Writing Prompt Artifact(s) ===\n")
+                for p in final_plans:
+                    path = write_prompt_artifact(p, repo)
+                    print(f"Wrote: {path}")
+
+            if execute and final_plans:
+                print("\n=== EXECUTING RUNNER (OpenClaw) ===\n")
+                for p in final_plans:
+                    st = (p.dispatch.state or "").lower()
+                    if st != "active":
+                        msg = f"  Refusing to execute issue #{p.item.number}: state={st}"
+                        print(msg + " (requires state:active)")
+                        continue
+                    result = execute_plan(p, repo)
+                    print(f"Execution completed for issue #{p.item.number}")
+                    print(f"  Exit code: {result.get('exit_code')}")
+                    print(f"  Raw output: {result.get('raw_path')}")
+                    print(f"  Summary:   {result.get('summary_path')}")
+
+            return 0
+
+        else:
+            plans = plan_runner(repo, limit=limit)
+            print(format_runner_plan(plans))
 
         claimed_numbers: list[int] = []
         if claim and plans:
