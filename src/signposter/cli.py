@@ -176,6 +176,11 @@ def main() -> None:
         action="store_true",
         help="Run OpenClaw agent locally for already-active item (explicit)",
     )
+    run_parser.add_argument(
+        "--issue",
+        type=int,
+        help="Target a specific issue number explicitly (bypasses claim planner)",
+    )
     run_parser.set_defaults(func=run_runner)
 
     # report subcommand (for posting runner summaries back to GitHub)
@@ -381,7 +386,10 @@ def run_runner(args: argparse.Namespace) -> int:
     if not repo:
         print("Error: --repo is required for run command", file=sys.stderr)
         return 1
-    return runner_cli_main(repo, limit=limit, write_prompt=write_prompt, claim=claim, execute=execute)  # noqa: E501
+    issue = getattr(args, "issue", None)
+    return runner_cli_main(
+        repo, limit=limit, write_prompt=write_prompt, claim=claim, execute=execute, issue=issue
+    )  # noqa: E501
 
 
 def run_report(args: argparse.Namespace) -> int:
