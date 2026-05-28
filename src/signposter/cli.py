@@ -16,6 +16,7 @@ from signposter.gate import format_gate_report, run_gate_dry_run
 from signposter.handoff import format_handoff_plan, plan_handoff_for_issue
 from signposter.pr import format_pr_plan, plan_pr_for_issue
 from signposter.report import report_main
+from signposter.review import format_review_plan, plan_review_for_pr
 from signposter.runner import cli_main as runner_cli_main
 from signposter.scan import cli_main as scan_cli_main
 from signposter.transitions import (
@@ -275,6 +276,22 @@ def main() -> None:
         help="Base branch for the pull request (default: main)",
     )
     pr_plan_parser.set_defaults(func=run_pr_plan)
+
+    # review subcommand group (HARDENING-014 — reviewer-agent PR review planning)
+    review_parser = subparsers.add_parser(
+        "review",
+        help="Reviewer-agent PR review planning (dry-run only)",
+        description="Plan OpenClaw reviewer inspection of a pull request.",
+    )
+    review_subparsers = review_parser.add_subparsers(dest="review_command")
+
+    review_plan_parser = review_subparsers.add_parser(
+        "plan",
+        help="Produce a dry-run review plan for a PR",
+    )
+    review_plan_parser.add_argument("--repo", required=True)
+    review_plan_parser.add_argument("--pr", type=int, required=True)
+    review_plan_parser.set_defaults(func=run_review_plan)
 
     # report subcommand (for posting runner summaries back to GitHub)
     report_parser = subparsers.add_parser(
@@ -612,4 +629,22 @@ def run_pr_plan(args: argparse.Namespace) -> None:
     """Run PR planning for an issue."""
     plan = plan_pr_for_issue(args.repo, args.issue, base_branch=args.base)
     print(format_pr_plan(plan))
+
+
+def run_review_plan(args: argparse.Namespace) -> int:
+    """Handler for `signposter review plan --repo ... --pr N`."""
+    repo = getattr(args, "repo", None)
+    pr = getattr(args, "pr", None)
+
+    if not repo or pr is None:
+        print("Error: --repo and --pr are required", file=sys.stderr)
+        return 1
+
+    try:
+        plan = plan_review_for_pr(repo, pr)
+        print(format_review_plan(plan))
+        return 0 if plan.status == "ready" else 1
+    except Exception as e:
+        print(f"Review plan failed: {e}", file=sys.stderr)
+        return 2
 
