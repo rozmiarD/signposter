@@ -13,6 +13,14 @@ Signposter is a local GitHub / OpenClaw workflow dispatcher designed to stay com
 - Worker agent is now configured for low-risk build/docs tasks.
 - This is still an experimental local orchestrator.
 
+## Isolated Worker Execution
+
+Signposter now supports isolated worker execution via guarded worktrees:
+
+- worktree planning is available
+- guarded worktree creation is available
+- worker execution can explicitly run from an existing worktree
+
 ## Current State
 
 Only the following exists:
