@@ -97,3 +97,11 @@ def test_format_handoff_plan_contains_key_sections():
     assert "M README.md" in output or "README.md" in output
     assert "No commit, push, PR, merge, or issue close was performed" in output
     assert "docs: add isolated worker note" in output
+
+
+def test_handoff_commit_prefix_accepts_github_label_dicts():
+    from signposter.handoff import _infer_commit_prefix
+
+    labels = [{"name": "area:docs"}, {"name": "state:done"}]
+
+    assert _infer_commit_prefix(labels) == "docs:"
