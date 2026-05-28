@@ -815,6 +815,7 @@ def run_review_submit(args: argparse.Namespace) -> int:
             # Mutation path
             result = submit_review(repo, pr, apply=True)
             plan = result.get("plan")
+
             if result.get("mode") == "apply":
                 success = result.get("success", False)
                 print(f"Signposter Review Submit — PR #{pr}")
@@ -822,14 +823,26 @@ def run_review_submit(args: argparse.Namespace) -> int:
                 print("GitHub review:")
                 print(f"  action: {plan.action if plan else 'unknown'}")
                 print(f"  status: {'submitted' if success else 'failed'}")
+                if not success and result.get("stderr"):
+                    print(f"  stderr: {result['stderr'].strip()[:300]}")
                 print("")
                 print("Notes:")
                 print("  No merge was performed.")
                 print("  No issue was closed.")
                 return 0 if success else 1
             else:
-                err = result.get("error") or (plan.status if plan else "unknown")
-                print(f"Submit blocked: {err}", file=sys.stderr)
+                # Blocked (including self-review guard from 018A)
+                print(f"Signposter Review Submit — PR #{pr}")
+                print("")
+                print("GitHub review:")
+                print(f"  action: {plan.action if plan else 'blocked'}")
+                print("  status: refused")
+                if plan and plan.failure_reason:
+                    print(f"  reason: {plan.failure_reason}")
+                print("")
+                print("Notes:")
+                print("  No merge was performed.")
+                print("  No issue was closed.")
                 return 1
     except Exception as e:
         print(f"Review submit failed: {e}", file=sys.stderr)

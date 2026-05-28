@@ -768,3 +768,144 @@ def test_submit_apply_refuses_when_not_ready():
 
     assert result["mode"] == "apply_blocked"
     assert "Refusing to submit" in result.get("error", "")
+
+
+# =============================================================================
+# HARDENING-018A tests: identity guard + reviewer token support
+# =============================================================================
+
+
+def test_submit_plan_blocks_self_review_when_no_token():
+    from signposter.review import plan_review_submit
+
+    with patch("signposter.review.evaluate_review_gate") as mock_gate, \
+         patch("signposter.review._fetch_current_gh_user") as mock_user, \
+         patch("signposter.review._fetch_pr_author") as mock_author, \
+         patch("signposter.review._get_reviewer_token") as mock_token:
+
+        from signposter.review import ReviewerOpinion, ReviewGateResult
+        op = ReviewerOpinion(
+            verdict="APPROVE", confidence=0.95, risk="low",
+            scope_match="yes", ci_considered="yes",
+            merge_recommendation="yes", automerge_eligible="yes",
+            findings=[], reasoning=None, raw_text=""
+        )
+        mock_gate.return_value = ReviewGateResult(
+            pr_number=5, status="pass", reason="good", opinion=op,
+            gate_pass=True, merge_eligible=True, automerge_eligible=True,
+            summary_path=None, notes=[] 
+        )
+        mock_user.return_value = "ExatronOmega"
+        mock_author.return_value = "ExatronOmega"
+        mock_token.return_value = None   # no dedicated token
+
+        plan = plan_review_submit("test/repo", 5)
+
+    assert plan.action == "blocked"
+    assert plan.self_review_blocked is True
+    assert "cannot approve own" in plan.status
+    assert plan.current_user == "ExatronOmega"
+    assert plan.pr_author == "ExatronOmega"
+    assert plan.reviewer_token_configured is False
+
+
+def test_submit_apply_refuses_self_review_without_calling_gh(monkeypatch):
+    from signposter.review import submit_review
+
+    with patch("signposter.review.plan_review_submit") as mock_plan:
+        from signposter.review import ReviewSubmitPlan
+        fake_plan = ReviewSubmitPlan(
+            pr_number=5, action="blocked", body="", gate_pass=True,
+            gate_reason="good", status="blocked — cannot approve own pull request",
+            gh_preview="", notes=[],
+            current_user="ExatronOmega", pr_author="ExatronOmega",
+            reviewer_token_configured=False, self_review_blocked=True,
+            failure_reason="current GitHub identity is the PR author"
+        )
+        mock_plan.return_value = fake_plan
+
+        with patch("subprocess.run") as mock_sub:
+            result = submit_review("test/repo", 5, apply=True)
+            mock_sub.assert_not_called()
+
+    assert result["mode"] == "apply_blocked"
+    assert "current GitHub identity is the PR author" in result.get("error", "")
+
+
+def test_submit_plan_allows_approval_when_users_differ():
+    from signposter.review import plan_review_submit
+
+    with patch("signposter.review.evaluate_review_gate") as mock_gate, \
+         patch("signposter.review._fetch_current_gh_user") as mock_user, \
+         patch("signposter.review._fetch_pr_author") as mock_author, \
+         patch("signposter.review._get_reviewer_token") as mock_token:
+
+        from signposter.review import ReviewerOpinion, ReviewGateResult
+        op = ReviewerOpinion(
+            verdict="APPROVE", confidence=0.95, risk="low",
+            scope_match="yes", ci_considered="yes",
+            merge_recommendation="yes", automerge_eligible="yes",
+            findings=[], reasoning=None, raw_text=""
+        )
+        mock_gate.return_value = ReviewGateResult(
+            pr_number=5, status="pass", reason="good", opinion=op,
+            gate_pass=True, merge_eligible=True, automerge_eligible=True,
+            summary_path=None, notes=[] 
+        )
+        mock_user.return_value = "signposter-reviewer-bot"
+        mock_author.return_value = "ExatronOmega"
+        mock_token.return_value = None
+
+        plan = plan_review_submit("test/repo", 5)
+
+    assert plan.action == "approve"
+    assert plan.self_review_blocked is False
+    assert plan.status == "ready"
+
+
+def test_reviewer_token_is_passed_as_gh_token(monkeypatch):
+    """Verify that SIGNPOSTER_REVIEWER_GH_TOKEN is injected as GH_TOKEN."""
+    from signposter.review import _get_gh_env
+
+    monkeypatch.setenv("SIGNPOSTER_REVIEWER_GH_TOKEN", "ghp_fake_reviewer_token_123")
+
+    env = _get_gh_env("ghp_fake_reviewer_token_123")
+    assert env.get("GH_TOKEN") == "ghp_fake_reviewer_token_123"
+    # Normal env vars should still be present
+    assert "PATH" in env
+
+    # The production code never prints the raw token value in user-facing output.
+    # (The test dict itself naturally contains it; we only care about real CLI output.)
+
+
+def test_failed_gh_review_includes_stderr_in_result():
+    from signposter.review import submit_review
+
+    with patch("signposter.review.plan_review_submit") as mock_plan:
+        from signposter.review import ReviewSubmitPlan
+        fake_plan = ReviewSubmitPlan(5, "approve", "body text", True, "good", "ready", "gh ...", [])
+        mock_plan.return_value = fake_plan
+
+        class FakeProc:
+            returncode = 1
+            stdout = ""
+            stderr = "GraphQL: Review Can not approve your own pull request"
+
+        with patch("subprocess.run", return_value=FakeProc()):
+            result = submit_review("test/repo", 5, apply=True)
+
+    assert result.get("success") is False
+    assert "Can not approve your own" in result.get("error", "") or result.get("stderr", "")
+
+
+def test_dry_run_still_does_not_call_subprocess():
+    from signposter.review import submit_review
+
+    with patch("subprocess.run") as mock_sub:
+        with patch("signposter.review.plan_review_submit") as mock_plan:
+            from signposter.review import ReviewSubmitPlan
+            fake_plan = ReviewSubmitPlan(5, "approve", "body", True, "good", "ready", "gh ...", [])
+            mock_plan.return_value = fake_plan
+
+            submit_review("test/repo", 5, apply=False)
+            mock_sub.assert_not_called()
