@@ -14,7 +14,12 @@ from signposter.dispatch import cli_main as dispatch_cli_main
 from signposter.doctor import main as doctor_main
 from signposter.gate import format_gate_report, run_gate_dry_run
 from signposter.handoff import format_handoff_plan, plan_handoff_for_issue
-from signposter.integration import format_integration_plan, plan_integration_for_pr
+from signposter.integration import (
+    apply_integration,
+    format_integration_apply_dry_run,
+    format_integration_plan,
+    plan_integration_for_pr,
+)
 from signposter.merge import (
     apply_merge,
     format_merge_apply_dry_run,
@@ -399,6 +404,20 @@ def main() -> None:
     integration_plan_parser.add_argument("--repo", required=True)
     integration_plan_parser.add_argument("--pr", type=int, required=True)
     integration_plan_parser.set_defaults(func=run_integration_plan)
+
+    # apply subcommand (HARDENING-021B)
+    integration_apply_parser = integration_subparsers.add_parser(
+        "apply",
+        help="Apply post-merge issue integration (dry-run by default; --apply to execute)",
+    )
+    integration_apply_parser.add_argument("--repo", required=True)
+    integration_apply_parser.add_argument("--pr", type=int, required=True)
+    integration_apply_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually perform label transition, comment, and issue close",
+    )
+    integration_apply_parser.set_defaults(func=run_integration_apply)
 
     # report subcommand (for posting runner summaries back to GitHub)
     report_parser = subparsers.add_parser(
@@ -989,5 +1008,65 @@ def run_integration_plan(args: argparse.Namespace) -> int:
         return 0 if plan.status == "ready" else 1
     except Exception as e:
         print(f"Integration plan failed: {e}", file=sys.stderr)
+        return 2
+
+
+def run_integration_apply(args: argparse.Namespace) -> int:
+    """Handler for `signposter integration apply --repo ... --pr N [--apply]`."""
+    repo = getattr(args, "repo", None)
+    pr = getattr(args, "pr", None)
+    do_apply = getattr(args, "apply", False)
+
+    if not repo or pr is None:
+        print("Error: --repo and --pr are required", file=sys.stderr)
+        return 1
+
+    try:
+        result = apply_integration(repo, pr, apply=do_apply)
+        plan = result.get("plan")
+
+        if result.get("mode") == "dry_run":
+            print(format_integration_apply_dry_run(plan))
+            return 0
+        elif result.get("mode") == "apply":
+            success = result.get("success", False)
+            print(f"Signposter Integration Apply — PR #{pr}")
+            print("")
+            print("Issue:")
+            if plan and plan.associated_issue:
+                print(f"  issue: #{plan.associated_issue}")
+            if success:
+                print("  removed label: state:done")
+                print("  added label: state:merged")
+                print(f"  close reason: {plan.close_reason if plan else 'completed'}")
+                print("  state: CLOSED")
+            else:
+                print("  status: failed")
+                if result.get("errors"):
+                    for err in result["errors"]:
+                        print(f"    {err}")
+            print("")
+            print("Status:")
+            print(f"  {'completed' if success else 'failed'}")
+            print("")
+            print("Notes:")
+            print("  No local worktree was removed.")
+            print("  No PR merge was performed.")
+            return 0 if success else 1
+        else:
+            # apply_blocked
+            err = result.get("error", plan.status if plan else "unknown")
+            print(f"Signposter Integration Apply — PR #{pr}")
+            print("")
+            print("Status: blocked")
+            print(f"  reason: {err}")
+            print("")
+            print("Notes:")
+            print("  No issue was closed.")
+            print("  No labels were changed.")
+            print("  No local worktree was removed.")
+            return 1
+    except Exception as e:
+        print(f"Integration apply failed: {e}", file=sys.stderr)
         return 2
 
