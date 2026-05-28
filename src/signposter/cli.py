@@ -181,6 +181,11 @@ def main() -> None:
         type=int,
         help="Target a specific issue number explicitly (bypasses claim planner)",
     )
+    run_parser.add_argument(
+        "--allow-dirty",
+        action="store_true",
+        help="Allow execution even if the working tree has uncommitted changes (use with caution)",
+    )
     run_parser.set_defaults(func=run_runner)
 
     # report subcommand (for posting runner summaries back to GitHub)
@@ -387,8 +392,15 @@ def run_runner(args: argparse.Namespace) -> int:
         print("Error: --repo is required for run command", file=sys.stderr)
         return 1
     issue = getattr(args, "issue", None)
+    allow_dirty = getattr(args, "allow_dirty", False)
     return runner_cli_main(
-        repo, limit=limit, write_prompt=write_prompt, claim=claim, execute=execute, issue=issue
+        repo,
+        limit=limit,
+        write_prompt=write_prompt,
+        claim=claim,
+        execute=execute,
+        issue=issue,
+        allow_dirty=allow_dirty,
     )  # noqa: E501
 
 

@@ -406,3 +406,166 @@ def test_cli_main_explicit_issue_refuses_execute_on_done_and_failed(capsys):
         assert f"state={state}" in output
         assert "requires state:active" in output
 
+
+# --- HARDENING-006: worker isolation / dirty tree guard ---
+
+
+def test_execute_plan_refuses_worker_on_dirty_tree():
+    """Worker profile must refuse execution when there are blocking dirty changes."""
+    from unittest.mock import patch
+
+    from signposter.runner import execute_plan
+
+    plan = make_runner_plan_for_test("worker", "build", number=42)
+
+    with patch(
+        "signposter.runner.find_uncommitted_repo_changes",
+        return_value=["README.md", "src/foo.py"],
+    ):
+        result = execute_plan(plan, "test/repo", allow_dirty=False)
+
+    assert result["exit_code"] == 1
+    assert result.get("error") == "dirty working tree"
+
+
+def test_execute_plan_allows_worker_when_clean(monkeypatch):
+    """Clean tree should allow the execution path to proceed (mocked OpenClaw)."""
+    from unittest.mock import patch
+
+    from signposter.runner import execute_plan
+
+    plan = make_runner_plan_for_test("worker", "build", number=43)
+
+    with patch("signposter.runner.find_uncommitted_repo_changes", return_value=[]), \
+         patch("signposter.runner.subprocess.run") as mock_run, \
+         patch("builtins.open", create=True) as mock_open:
+        mock_open.return_value.__enter__.return_value.read.return_value = "mock prompt"
+        mock_run.return_value = type("proc", (), {"stdout": "", "stderr": "", "returncode": 0})()
+        result = execute_plan(plan, "test/repo", allow_dirty=False)
+
+    # It should have tried to run openclaw (or at least not returned the dirty error)
+    assert result.get("error") != "dirty working tree"
+
+
+def test_execute_plan_reviewer_does_not_block_on_dirty(monkeypatch):
+    """Reviewer profile should not be blocked by dirty tree (read-only intent)."""
+    from unittest.mock import patch
+
+    from signposter.runner import execute_plan
+
+    plan = make_runner_plan_for_test("reviewer", "review", number=44)
+
+    with patch("signposter.runner.find_uncommitted_repo_changes", return_value=["some-file.py"]), \
+         patch("signposter.runner.subprocess.run") as mock_run, \
+         patch("builtins.open", create=True) as mock_open:
+        mock_open.return_value.__enter__.return_value.read.return_value = "mock prompt"
+        mock_run.return_value = type("proc", (), {"stdout": "ok", "stderr": "", "returncode": 0})()
+        result = execute_plan(plan, "test/repo", allow_dirty=False)
+
+    # Should not have returned the worker dirty guard error
+    assert result.get("error") != "dirty working tree"
+
+
+# --- HARDENING-006 micro-adjustment: dirty guard in summary ---
+
+
+def test_generate_execution_summary_records_dirty_bypass_for_worker():
+    """When allow_dirty=True for worker, the summary must record the bypass."""
+    from signposter.dispatch import DispatchDecision
+    from signposter.runner import RunnerPlan, _generate_execution_summary
+    from signposter.scan import LabeledItem
+
+    fake_item = LabeledItem(99, "Test", "url", ["state:active"], "issue")
+    fake_dispatch = DispatchDecision(
+        item=fake_item, phase="build", state="active", role="worker",
+        risk="low", area=None, proposed_route="worker", proposed_gate="ci", reason="test"
+    )
+    plan = RunnerPlan(
+        item=fake_item, dispatch=fake_dispatch,
+        proposed_runner="openclaw", proposed_profile="worker",
+        proposed_working_dir="~/work/99", proposed_prompt_path="artifacts/prompts/issue-99.md",
+        proposed_command_shape="test", reason="test"
+    )
+
+    summary = _generate_execution_summary(
+        repo="test/repo",
+        plan=plan,
+        session_key="signposter-issue-99-worker",
+        exit_code=0,
+        raw_path="artifacts/runs/issue-99-worker.raw.txt",
+        stdout="some output",
+        stderr="",
+        start_time=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+        allow_dirty=True,
+    )
+
+    assert "**Dirty Guard:** bypassed by --allow-dirty" in summary
+    assert "**Dirty Guard:** clean" not in summary
+
+
+def test_generate_execution_summary_records_clean_for_worker_when_not_bypassed():
+    """Normal clean worker execution should record clean, not bypassed."""
+    from signposter.dispatch import DispatchDecision
+    from signposter.runner import RunnerPlan, _generate_execution_summary
+    from signposter.scan import LabeledItem
+
+    fake_item = LabeledItem(100, "Test", "url", ["state:active"], "issue")
+    fake_dispatch = DispatchDecision(
+        item=fake_item, phase="build", state="active", role="worker",
+        risk="low", area=None, proposed_route="worker", proposed_gate="ci", reason="test"
+    )
+    plan = RunnerPlan(
+        item=fake_item, dispatch=fake_dispatch,
+        proposed_runner="openclaw", proposed_profile="worker",
+        proposed_working_dir="~/work/100", proposed_prompt_path="artifacts/prompts/issue-100.md",
+        proposed_command_shape="test", reason="test"
+    )
+
+    summary = _generate_execution_summary(
+        repo="test/repo",
+        plan=plan,
+        session_key="signposter-issue-100-worker",
+        exit_code=0,
+        raw_path="artifacts/runs/issue-100-worker.raw.txt",
+        stdout="output",
+        stderr="",
+        start_time=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+        allow_dirty=False,
+    )
+
+    assert "**Dirty Guard:** clean" in summary
+    assert "bypassed by --allow-dirty" not in summary
+
+
+def test_generate_execution_summary_omits_dirty_guard_for_reviewer():
+    """Reviewer executions should not include dirty guard lines (less invasive)."""
+    from signposter.dispatch import DispatchDecision
+    from signposter.runner import RunnerPlan, _generate_execution_summary
+    from signposter.scan import LabeledItem
+
+    fake_item = LabeledItem(101, "Test", "url", ["state:active"], "issue")
+    fake_dispatch = DispatchDecision(
+        item=fake_item, phase="review", state="active", role="reviewer",
+        risk=None, area=None, proposed_route="reviewer", proposed_gate="review", reason="test"
+    )
+    plan = RunnerPlan(
+        item=fake_item, dispatch=fake_dispatch,
+        proposed_runner="openclaw", proposed_profile="reviewer",
+        proposed_working_dir="~/work/101", proposed_prompt_path="artifacts/prompts/issue-101.md",
+        proposed_command_shape="test", reason="test"
+    )
+
+    summary = _generate_execution_summary(
+        repo="test/repo",
+        plan=plan,
+        session_key="signposter-issue-101-reviewer",
+        exit_code=0,
+        raw_path="artifacts/runs/issue-101-reviewer.raw.txt",
+        stdout="review output",
+        stderr="",
+        start_time=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+        allow_dirty=False,
+    )
+
+    assert "Dirty Guard" not in summary
+

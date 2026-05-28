@@ -13,6 +13,7 @@ from pathlib import Path
 from signposter.claim import perform_claim_mutation, plan_claims
 from signposter.dependencies import is_dependency_blocked
 from signposter.dispatch import DispatchDecision, classify_candidate
+from signposter.git_utils import find_uncommitted_repo_changes
 from signposter.scan import LabeledItem, fetch_issue_by_number, fetch_issue_context
 
 
@@ -288,6 +289,7 @@ def main() -> int:
     claim = args.claim
     execute = args.execute
     issue = getattr(args, "issue", None)
+    allow_dirty = getattr(args, "allow_dirty", False)
 
     return cli_main(
         args.repo,
@@ -296,6 +298,7 @@ def main() -> int:
         claim=claim,
         execute=execute,
         issue=issue,
+        allow_dirty=allow_dirty,
     )  # noqa: E501
 
 
@@ -616,6 +619,7 @@ def cli_main(
     claim: bool = False,
     execute: bool = False,
     issue: int | None = None,
+    allow_dirty: bool = False,
 ) -> int:  # noqa: E501
     """Entry point for the run command.
 
@@ -691,7 +695,7 @@ def cli_main(
                         msg = f"  Refusing to execute issue #{p.item.number}: state={st}"
                         print(msg + " (requires state:active)")
                         continue
-                    result = execute_plan(p, repo)
+                    result = execute_plan(p, repo, allow_dirty=allow_dirty)
                     print(f"Execution completed for issue #{p.item.number}")
                     print(f"  Exit code: {result.get('exit_code')}")
                     print(f"  Raw output: {result.get('raw_path')}")
@@ -761,7 +765,7 @@ def cli_main(
                     print(f"  Refusing to execute issue #{plan.item.number}: state=ready without --claim. Use --claim --execute to claim + run.")  # noqa: E501
                     continue
 
-                result = execute_plan(plan, repo)
+                result = execute_plan(plan, repo, allow_dirty=allow_dirty)
                 print(f"Execution completed for issue #{plan.item.number}")
                 print(f"  Exit code: {result.get('exit_code')}")
                 print(f"  Raw output: {result.get('raw_path')}")
@@ -775,7 +779,7 @@ def cli_main(
                 if not active_plans:
                     print("No active items with prompt artifacts found.")
                 for plan in active_plans:
-                    result = execute_plan(plan, repo)
+                    result = execute_plan(plan, repo, allow_dirty=allow_dirty)
                     print(f"Execution completed for issue #{plan.item.number} (active fallback)")
                     print(f"  Exit code: {result.get('exit_code')}")
                     print(f"  Raw output: {result.get('raw_path')}")
@@ -791,11 +795,14 @@ def cli_main(
 
 # --- Execution Layer (for --execute) ---
 
-def execute_plan(plan: RunnerPlan, repo: str) -> dict:
+def execute_plan(plan: RunnerPlan, repo: str, *, allow_dirty: bool = False) -> dict:
     """Execute the runner plan using OpenClaw (local only).
 
     Safety: This function assumes the item is already in an executable state
     (e.g. state:active). It does not perform claims.
+
+    For worker profiles, the working tree must be clean (outside of allowed
+    runtime artifact directories) unless allow_dirty=True.
     """
     import datetime
 
@@ -803,6 +810,24 @@ def execute_plan(plan: RunnerPlan, repo: str) -> dict:
     profile = plan.proposed_profile or "worker"
     prompt_path = plan.proposed_prompt_path
     session_key = f"signposter-issue-{item.number}-{profile}"
+
+    # HARDENING-006: Worker isolation guard
+    if profile == "worker" and not allow_dirty:
+        dirty_paths = find_uncommitted_repo_changes()
+        if dirty_paths:
+            shown = ", ".join(dirty_paths[:5])
+            extra = "..." if len(dirty_paths) > 5 else ""
+            print(
+                f"Refusing worker execution: working tree has uncommitted changes. "
+                f"Commit/stash first or run in isolated worktree. "
+                f"Dirty paths: {shown}{extra}"
+            )
+            return {
+                "exit_code": 1,
+                "raw_path": None,
+                "summary_path": None,
+                "error": "dirty working tree",
+            }
 
     # Read the prompt content (we pass it properly, not via shell substitution)
     try:
@@ -860,6 +885,7 @@ def execute_plan(plan: RunnerPlan, repo: str) -> dict:
             stdout=stdout,
             stderr=stderr,
             start_time=start_time,
+            allow_dirty=allow_dirty,
         )
         summary_path.write_text(summary, encoding="utf-8")
 
@@ -881,6 +907,7 @@ def execute_plan(plan: RunnerPlan, repo: str) -> dict:
 def _generate_execution_summary(
     *, repo: str, plan: RunnerPlan, session_key: str, exit_code: int,
     raw_path: str, stdout: str, stderr: str, start_time,
+    allow_dirty: bool = False,
 ) -> str:
     """Generate a mechanical summary for the execution run."""
     item = plan.item
@@ -897,6 +924,13 @@ def _generate_execution_summary(
         f"**Raw Output:** {raw_path}",
         "",
     ]
+
+    # HARDENING-006 micro-adjustment: record dirty tree guard status
+    if plan.proposed_profile == "worker":
+        if allow_dirty:
+            lines.append("**Dirty Guard:** bypassed by --allow-dirty")
+        else:
+            lines.append("**Dirty Guard:** clean")
 
     # Basic stats
     raw_text = stdout + ("\n" + stderr if stderr else "")
