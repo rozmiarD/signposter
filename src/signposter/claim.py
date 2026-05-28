@@ -10,8 +10,9 @@ import subprocess
 from dataclasses import dataclass
 
 from signposter.comments import format_claim_comment
+from signposter.dependencies import is_dependency_blocked
 from signposter.dispatch import DispatchDecision, run_dry_run
-from signposter.scan import LabeledItem
+from signposter.scan import LabeledItem, fetch_issue_context
 
 
 @dataclass(frozen=True)
@@ -106,6 +107,16 @@ def plan_claims(repo: str, *, limit: int | None = 1) -> ClaimDryRunResult:
 
     for decision in decisions:
         if decision.state != "ready":
+            continue
+
+        # HARDENING-005: dependency awareness (computed)
+        item = decision.item
+        context = fetch_issue_context(repo, item.number) or {}
+        body = context.get("body", "")
+        blocked, block_reason = is_dependency_blocked(repo, body)
+
+        if blocked:
+            # Skip dependency-blocked ready items (do not claim)
             continue
 
         lease_owner = "local-dry-run-worker"

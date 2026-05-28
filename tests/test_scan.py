@@ -165,3 +165,37 @@ def test_format_scan_uses_workflow_items():
     assert "Candidate Items" not in report
     assert "claimable: no" in report
     assert "already claimed / active" in report
+
+
+def test_format_scan_compact_dependency_block_reason():
+    """Compact dep block reason in scan (no duplication)."""
+    from unittest.mock import patch
+
+    from signposter.scan import format_scan_report
+
+    item = make_item(42, ["state:ready", "phase:build", "role:worker"])
+
+    result = {
+        "repo": "test/repo",
+        "open_issues": 1,
+        "open_prs": 0,
+        "recent_runs": 0,
+        "candidates": [item],
+        "issues": [],
+        "prs": [],
+        "runs": [],
+    }
+
+    def fake_fetch_context(repo, number):
+        return {"body": "Depends-On: #7"}
+
+    with patch("signposter.scan.fetch_issue_context", side_effect=fake_fetch_context), patch(
+        "signposter.scan.is_dependency_blocked", return_value=(True, "blocked by #7 → state:active")
+    ):
+        report = format_scan_report(result)
+
+    assert "claimable: no" in report
+    # Must use the compact form, not the old duplicated version
+    assert "(blocked by #7 → state:active)" in report
+    assert "state:ready but" not in report
+    assert "(deps: blocked" not in report

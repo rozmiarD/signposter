@@ -12,6 +12,8 @@ import sys
 from dataclasses import dataclass
 from typing import Any
 
+from signposter.dependencies import is_dependency_blocked
+
 # Neutral labels that indicate a work item is potentially ready for processing
 CANDIDATE_LABELS = frozenset(
     {
@@ -308,9 +310,27 @@ def format_scan_report(scan_result: dict[str, Any]) -> str:
             label_str = ", ".join(item.labels)
             claimable, reason = get_claimability(item)
             claim_str = "yes" if claimable else "no"
+
+            dep_reason = ""
+            # HARDENING-005: show computed dependency status for ready items
+            if "state:ready" in item.labels:
+                try:
+                    ctx = fetch_issue_context(repo, item.number) or {}
+                    body = ctx.get("body", "")
+                    blocked, d_reason = is_dependency_blocked(repo, body)
+                    if blocked:
+                        # Clean compact form: avoid duplicating the block reason
+                        claim_str = "no"
+                        reason = d_reason  # e.g. "blocked by #7 → state:active"
+                        dep_reason = ""
+                    else:
+                        dep_reason = "  (deps: clear)"
+                except Exception:
+                    dep_reason = "  (deps: check failed)"
+
             lines.append(f"  [{item.item_type.upper()}] #{item.number} — {item.title}")
             lines.append(f"    Labels: {label_str}")
-            lines.append(f"    claimable: {claim_str}  ({reason})")
+            lines.append(f"    claimable: {claim_str}  ({reason}){dep_reason}")
             lines.append(f"    {item.html_url}")
             lines.append("")
     else:
