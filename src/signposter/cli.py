@@ -14,6 +14,7 @@ from signposter.dispatch import cli_main as dispatch_cli_main
 from signposter.doctor import main as doctor_main
 from signposter.gate import format_gate_report, run_gate_dry_run
 from signposter.handoff import format_handoff_plan, plan_handoff_for_issue
+from signposter.integration import format_integration_plan, plan_integration_for_pr
 from signposter.merge import (
     apply_merge,
     format_merge_apply_dry_run,
@@ -382,6 +383,22 @@ def main() -> None:
         help="Actually perform the merge (default is dry-run)",
     )
     merge_apply_parser.set_defaults(func=run_merge_apply)
+
+    # integration subcommand group (HARDENING-021A — post-merge integration planning, dry-run only)
+    integration_parser = subparsers.add_parser(
+        "integration",
+        help="Post-merge integration planning (dry-run only)",
+        description="Verify merged PR and plan issue integration / close.",
+    )
+    integration_subparsers = integration_parser.add_subparsers(dest="integration_command")
+
+    integration_plan_parser = integration_subparsers.add_parser(
+        "plan",
+        help="Produce a dry-run post-merge integration plan for a PR",
+    )
+    integration_plan_parser.add_argument("--repo", required=True)
+    integration_plan_parser.add_argument("--pr", type=int, required=True)
+    integration_plan_parser.set_defaults(func=run_integration_plan)
 
     # report subcommand (for posting runner summaries back to GitHub)
     report_parser = subparsers.add_parser(
@@ -954,5 +971,23 @@ def run_merge_apply(args: argparse.Namespace) -> int:
             return 1
     except Exception as e:
         print(f"Merge apply failed: {e}", file=sys.stderr)
+        return 2
+
+
+def run_integration_plan(args: argparse.Namespace) -> int:
+    """Handler for `signposter integration plan --repo ... --pr N` (HARDENING-021A)."""
+    repo = getattr(args, "repo", None)
+    pr = getattr(args, "pr", None)
+
+    if not repo or pr is None:
+        print("Error: --repo and --pr are required", file=sys.stderr)
+        return 1
+
+    try:
+        plan = plan_integration_for_pr(repo, pr)
+        print(format_integration_plan(plan))
+        return 0 if plan.status == "ready" else 1
+    except Exception as e:
+        print(f"Integration plan failed: {e}", file=sys.stderr)
         return 2
 
