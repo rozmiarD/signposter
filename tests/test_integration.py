@@ -106,3 +106,302 @@ def test_format_integration_plan_contains_key_sections():
     assert "No issue was closed" in output
     assert "Status:" in output
     assert "ready" in output
+
+
+# =============================================================================
+# HARDENING-021B tests: guarded integration apply
+# =============================================================================
+
+
+def test_integration_apply_dry_run_does_not_mutate(monkeypatch):
+    from signposter.integration import apply_integration
+
+    with patch("signposter.integration.plan_integration_for_pr") as mock_plan:
+        fake_plan = IntegrationPlan(
+            pr_number=5, pr_title="test", pr_state="MERGED",
+            merge_commit="abc123", base_branch="main", head_branch="work/issue-4-xxx",
+            associated_issue=4, issue_state="OPEN",
+            current_workflow_state="state:done",
+            proposed_workflow_state="state:merged",
+            close_issue=True, close_reason="completed",
+            main_ci_status="pass",
+            status="ready", notes=[],
+        )
+        mock_plan.return_value = fake_plan
+
+        with patch("subprocess.run") as mock_sub:
+            result = apply_integration("test/repo", 5, apply=False)
+            mock_sub.assert_not_called()
+
+        assert result["mode"] == "dry_run"
+
+
+def test_integration_apply_refuses_when_plan_not_ready():
+    from signposter.integration import apply_integration
+
+    with patch("signposter.integration.plan_integration_for_pr") as mock_plan:
+        fake_plan = IntegrationPlan(
+            pr_number=5, pr_title="test", pr_state="MERGED",
+            merge_commit="abc123", base_branch="main", head_branch="work/issue-4-xxx",
+            associated_issue=4, issue_state="OPEN",
+            current_workflow_state="state:done",
+            proposed_workflow_state="state:merged",
+            close_issue=True, close_reason="completed",
+            main_ci_status="pass",
+            status="blocked — something",
+            notes=[],
+        )
+        mock_plan.return_value = fake_plan
+
+        result = apply_integration("test/repo", 5, apply=True)
+
+    assert result["mode"] == "apply_blocked"
+    assert "Refusing integration apply" in result.get("error", "")
+
+
+def test_integration_apply_refuses_when_not_state_done():
+    from signposter.integration import apply_integration
+
+    with patch("signposter.integration.plan_integration_for_pr") as mock_plan:
+        fake_plan = IntegrationPlan(
+            pr_number=5, pr_title="test", pr_state="MERGED",
+            merge_commit="abc123", base_branch="main", head_branch="work/issue-4-xxx",
+            associated_issue=4, issue_state="OPEN",
+            current_workflow_state="state:active",  # wrong
+            proposed_workflow_state="state:merged",
+            close_issue=True, close_reason="completed",
+            main_ci_status="pass",
+            status="ready",
+            notes=[],
+        )
+        mock_plan.return_value = fake_plan
+
+        result = apply_integration("test/repo", 5, apply=True)
+
+    assert result["mode"] == "apply_blocked"
+    assert "state:done" in result.get("error", "")
+
+
+def test_integration_apply_with_apply_calls_expected_commands(monkeypatch):
+    from signposter.integration import apply_integration
+
+    class FakeProc:
+        returncode = 0
+        stdout = "success"
+        stderr = ""
+
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(" ".join(cmd))
+        return FakeProc()
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    with patch("signposter.integration.plan_integration_for_pr") as mock_plan, \
+         patch(
+             "signposter.integration._fetch_repo_label_names",
+             return_value={"state:done", "state:merged"},
+         ):
+        fake_plan = IntegrationPlan(
+            pr_number=5, pr_title="test", pr_state="MERGED",
+            merge_commit="abc123", base_branch="main", head_branch="work/issue-4-xxx",
+            associated_issue=4, issue_state="OPEN",
+            current_workflow_state="state:done",
+            proposed_workflow_state="state:merged",
+            close_issue=True, close_reason="completed",
+            main_ci_status="pass",
+            status="ready",
+            notes=[],
+        )
+        mock_plan.return_value = fake_plan
+
+        result = apply_integration("test/repo", 5, apply=True)
+
+    assert result["success"] is True
+    # Check that we tried to do label edit, comment, and close
+    assert any("issue edit" in c and "state:merged" in c for c in calls)
+    assert any("issue comment" in c for c in calls)
+    assert any("issue close" in c and "completed" in c for c in calls)
+
+
+def test_integration_apply_failed_mutation_includes_stderr(monkeypatch):
+    from signposter.integration import apply_integration
+
+    class FakeProc:
+        returncode = 1
+        stdout = ""
+        stderr = "GraphQL error: rate limit"
+
+    monkeypatch.setattr("subprocess.run", lambda *a, **k: FakeProc())
+
+    with patch("signposter.integration.plan_integration_for_pr") as mock_plan, \
+         patch(
+             "signposter.integration._fetch_repo_label_names",
+             return_value={"state:done", "state:merged"},
+         ):
+        fake_plan = IntegrationPlan(
+            pr_number=5, pr_title="test", pr_state="MERGED",
+            merge_commit="abc123", base_branch="main", head_branch="work/issue-4-xxx",
+            associated_issue=4, issue_state="OPEN",
+            current_workflow_state="state:done",
+            proposed_workflow_state="state:merged",
+            close_issue=True, close_reason="completed",
+            main_ci_status="pass",
+            status="ready",
+            notes=[],
+        )
+        mock_plan.return_value = fake_plan
+
+        result = apply_integration("test/repo", 5, apply=True)
+
+    assert result.get("success") is False
+    assert "rate limit" in str(result.get("errors", []))
+
+
+def test_integration_apply_dry_run_blocks_when_main_ci_unknown():
+    from signposter.integration import IntegrationPlan, format_integration_apply_dry_run
+
+    plan = IntegrationPlan(
+        pr_number=5,
+        pr_title="test",
+        pr_state="MERGED",
+        merge_commit="abc123",
+        base_branch="main",
+        head_branch="work/issue-4-xxx",
+        associated_issue=4,
+        issue_state="OPEN",
+        current_workflow_state="state:done",
+        proposed_workflow_state="state:merged",
+        close_issue=True,
+        close_reason="completed",
+        main_ci_status="unknown",
+        status="ready",
+        notes=[],
+    )
+
+    output = format_integration_apply_dry_run(plan)
+
+    assert "main CI: unknown" in output
+    assert "blocked — main CI is not confirmed pass (got unknown)" in output
+    assert "Status:\n  ready" not in output
+
+
+def test_integration_apply_dry_run_ready_when_main_ci_pass():
+    from signposter.integration import IntegrationPlan, format_integration_apply_dry_run
+
+    plan = IntegrationPlan(
+        pr_number=5,
+        pr_title="test",
+        pr_state="MERGED",
+        merge_commit="abc123",
+        base_branch="main",
+        head_branch="work/issue-4-xxx",
+        associated_issue=4,
+        issue_state="OPEN",
+        current_workflow_state="state:done",
+        proposed_workflow_state="state:merged",
+        close_issue=True,
+        close_reason="completed",
+        main_ci_status="pass",
+        status="ready",
+        notes=[],
+    )
+
+    output = format_integration_apply_dry_run(plan)
+
+    assert "main CI: pass" in output
+    assert "Status:\n  ready" in output
+
+
+def test_fetch_main_ci_status_passes_on_latest_success(monkeypatch):
+    from signposter.integration import _fetch_main_ci_status
+
+    class FakeProc:
+        returncode = 0
+        stdout = (
+            '[{"status":"completed","conclusion":"success",'
+            '"workflowName":"CI","headBranch":"main"}]'
+        )
+        stderr = ""
+
+    monkeypatch.setattr("subprocess.run", lambda *a, **k: FakeProc())
+
+    assert _fetch_main_ci_status("test/repo") == "pass"
+
+
+def test_fetch_main_ci_status_failing_on_latest_failure(monkeypatch):
+    from signposter.integration import _fetch_main_ci_status
+
+    class FakeProc:
+        returncode = 0
+        stdout = (
+            '[{"status":"completed","conclusion":"failure",'
+            '"workflowName":"CI","headBranch":"main"}]'
+        )
+        stderr = ""
+
+    monkeypatch.setattr("subprocess.run", lambda *a, **k: FakeProc())
+
+    assert _fetch_main_ci_status("test/repo") == "failing"
+
+
+def test_fetch_main_ci_status_pending_on_in_progress(monkeypatch):
+    from signposter.integration import _fetch_main_ci_status
+
+    class FakeProc:
+        returncode = 0
+        stdout = (
+            '[{"status":"in_progress","conclusion":"",'
+            '"workflowName":"CI","headBranch":"main"}]'
+        )
+        stderr = ""
+
+    monkeypatch.setattr("subprocess.run", lambda *a, **k: FakeProc())
+
+    assert _fetch_main_ci_status("test/repo") == "pending"
+
+
+def test_fetch_main_ci_status_unknown_on_gh_failure(monkeypatch):
+    from signposter.integration import _fetch_main_ci_status
+
+    class FakeProc:
+        returncode = 1
+        stdout = ""
+        stderr = "boom"
+
+    monkeypatch.setattr("subprocess.run", lambda *a, **k: FakeProc())
+
+    assert _fetch_main_ci_status("test/repo") == "unknown"
+
+
+def test_integration_apply_refuses_when_required_labels_missing(monkeypatch):
+    from signposter.integration import IntegrationPlan, apply_integration
+
+    with patch("signposter.integration.plan_integration_for_pr") as mock_plan, \
+         patch("signposter.integration._fetch_repo_label_names", return_value={"state:done"}), \
+         patch("subprocess.run") as mock_sub:
+        fake_plan = IntegrationPlan(
+            pr_number=5,
+            pr_title="test",
+            pr_state="MERGED",
+            merge_commit="abc123",
+            base_branch="main",
+            head_branch="work/issue-4-xxx",
+            associated_issue=4,
+            issue_state="OPEN",
+            current_workflow_state="state:done",
+            proposed_workflow_state="state:merged",
+            close_issue=True,
+            close_reason="completed",
+            main_ci_status="pass",
+            status="ready",
+            notes=[],
+        )
+        mock_plan.return_value = fake_plan
+
+        result = apply_integration("test/repo", 5, apply=True)
+
+    assert result["mode"] == "apply_blocked"
+    assert "state:merged" in result.get("error", "")
+    mock_sub.assert_not_called()

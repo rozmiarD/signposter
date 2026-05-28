@@ -6,7 +6,9 @@ No GitHub mutations of any kind.
 
 from __future__ import annotations
 
+import json
 import re
+import subprocess
 from dataclasses import dataclass
 from typing import Any
 
@@ -81,6 +83,71 @@ def _fetch_pr_merge_details(repo: str, pr_number: int) -> dict[str, Any]:
     )
 
 
+def _fetch_main_ci_status(repo: str) -> str:
+    """Return latest main CI status using gh run list.
+
+    Conservative mapping:
+    - pass: latest main CI run is completed with success
+    - failing: latest main CI run completed with a non-success conclusion
+    - pending: latest main CI run is queued/in_progress/waiting/etc.
+    - unknown: gh failed, no runs found, or payload shape is unexpected
+    """
+    try:
+        result = subprocess.run(
+            [
+                "gh",
+                "run",
+                "list",
+                "-R",
+                repo,
+                "--branch",
+                "main",
+                "--workflow",
+                "CI",
+                "--limit",
+                "1",
+                "--json",
+                "status,conclusion,workflowName,headBranch,headSha,databaseId",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except Exception:
+        return "unknown"
+
+    if result.returncode != 0:
+        return "unknown"
+
+    try:
+        runs = json.loads(result.stdout or "[]")
+    except json.JSONDecodeError:
+        return "unknown"
+
+    if not isinstance(runs, list) or not runs:
+        return "unknown"
+
+    run = runs[0]
+    if not isinstance(run, dict):
+        return "unknown"
+
+    status = str(run.get("status") or "").lower()
+    conclusion = str(run.get("conclusion") or "").lower()
+
+    if status == "completed":
+        if conclusion == "success":
+            return "pass"
+        if conclusion in {"failure", "cancelled", "timed_out", "action_required"}:
+            return "failing"
+        return "unknown"
+
+    if status in {"queued", "in_progress", "waiting", "requested", "pending"}:
+        return "pending"
+
+    return "unknown"
+
+
+
 def plan_integration_for_pr(repo: str, pr_number: int) -> IntegrationPlan:
     """Produce a dry-run post-merge integration plan."""
     notes = [
@@ -140,9 +207,8 @@ def plan_integration_for_pr(repo: str, pr_number: int) -> IntegrationPlan:
         except Exception:
             pass
 
-    # Main CI status - conservative: we don't have a reliable cheap check here yet.
-    # For now we leave it "unknown" unless we add a specific check later.
-    # (Future work could query the merge commit status on main.)
+    # Main CI status — required before integration apply can close the issue.
+    main_ci_status = _fetch_main_ci_status(repo)
 
     # Eligibility
     status = "ready"
@@ -206,5 +272,269 @@ def format_integration_plan(plan: IntegrationPlan) -> str:
         lines.append("\nNotes:")
         for n in plan.notes:
             lines.append(f"  {n}")
+
+    return "\n".join(lines)
+
+
+# =============================================================================
+# HARDENING-021B: Guarded post-merge integration apply (dry-run by default)
+# =============================================================================
+
+
+def _fetch_repo_label_names(repo: str) -> set[str]:
+    """Fetch repository label names for integration preflight."""
+    try:
+        result = subprocess.run(
+            [
+                "gh",
+                "label",
+                "list",
+                "-R",
+                repo,
+                "--limit",
+                "200",
+                "--json",
+                "name",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except Exception:
+        return set()
+
+    if result.returncode != 0:
+        return set()
+
+    try:
+        labels = json.loads(result.stdout or "[]")
+    except json.JSONDecodeError:
+        return set()
+
+    names: set[str] = set()
+    if isinstance(labels, list):
+        for label in labels:
+            if isinstance(label, dict) and isinstance(label.get("name"), str):
+                names.add(label["name"])
+    return names
+
+
+def _build_integration_comment(plan: IntegrationPlan) -> str:
+    """Build the compact integration comment to post on the issue."""
+    sha = plan.merge_commit or "unknown"
+    comment = f"""Signposter integration complete
+
+PR: #{plan.pr_number}
+Merge commit: {sha}
+Workflow transition: {plan.current_workflow_state or 'unknown'} -> {plan.proposed_workflow_state}
+Issue close reason: {plan.close_reason}
+Review gate: pass
+GitHub review: approved
+CI: {plan.main_ci_status}
+
+No local worktree cleanup was performed.
+"""
+    return comment.strip()
+
+
+def _integration_apply_status(plan: IntegrationPlan) -> str:
+    """Return effective readiness for integration apply."""
+    if plan.status != "ready":
+        return f"blocked — integration plan is not ready ({plan.status})"
+    if plan.associated_issue is None:
+        return "blocked — associated issue missing"
+    if plan.issue_state is not None and plan.issue_state.upper() != "OPEN":
+        return f"blocked — associated issue is not OPEN ({plan.issue_state})"
+    if plan.current_workflow_state != "state:done":
+        return (
+            "blocked — current workflow state is not state:done "
+            f"(got {plan.current_workflow_state})"
+        )
+    if plan.main_ci_status != "pass":
+        return f"blocked — main CI is not confirmed pass (got {plan.main_ci_status})"
+    return "ready"
+
+
+def apply_integration(
+    repo: str, pr_number: int, *, apply: bool = False
+) -> dict:
+    """Dry-run or execute the post-merge issue integration.
+
+    Only mutates when apply=True and the integration plan is 'ready' plus all guards pass.
+    """
+    plan = plan_integration_for_pr(repo, pr_number)
+
+    if not apply:
+        return {
+            "mode": "dry_run",
+            "plan": plan,
+        }
+
+    # Mutation path - very strictly guarded
+    if plan.status != "ready":
+        return {
+            "mode": "apply_blocked",
+            "plan": plan,
+            "error": f"Refusing integration apply: {plan.status}",
+        }
+
+    if plan.pr_state != "MERGED" or not plan.merge_commit:
+        return {
+            "mode": "apply_blocked",
+            "plan": plan,
+            "error": "PR is not merged or merge commit missing",
+        }
+
+    if plan.associated_issue is None:
+        return {
+            "mode": "apply_blocked",
+            "plan": plan,
+            "error": "No associated issue detected",
+        }
+
+    if plan.issue_state is not None and plan.issue_state.upper() != "OPEN":
+        return {
+            "mode": "apply_blocked",
+            "plan": plan,
+            "error": f"Issue #{plan.associated_issue} is not OPEN",
+        }
+
+    if plan.current_workflow_state != "state:done":
+        return {
+            "mode": "apply_blocked",
+            "plan": plan,
+            "error": (
+                f"Current workflow state is not state:done "
+                f"(got {plan.current_workflow_state})"
+            ),
+        }
+
+    if plan.main_ci_status != "pass":
+        return {
+            "mode": "apply_blocked",
+            "plan": plan,
+            "error": f"Main CI is not confirmed pass (got {plan.main_ci_status})",
+        }
+
+    label_names = _fetch_repo_label_names(repo)
+    missing_labels = [
+        label for label in ("state:done", "state:merged") if label not in label_names
+    ]
+    if missing_labels:
+        return {
+            "mode": "apply_blocked",
+            "plan": plan,
+            "error": "Required integration label(s) missing: " + ", ".join(missing_labels),
+        }
+
+    issue = plan.associated_issue
+
+    # Perform mutations
+    results = []
+    errors = []
+
+    # 1. Label transition: remove state:done, add state:merged
+    label_error = None
+    try:
+        cmd = [
+            "gh", "issue", "edit", str(issue),
+            "-R", repo,
+            "--remove-label", "state:done",
+            "--add-label", "state:merged",
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if proc.returncode != 0:
+            label_error = f"label transition failed: {proc.stderr.strip()[:300]}"
+        else:
+            results.append("label transition")
+    except Exception as e:
+        label_error = f"label transition error: {str(e)}"
+
+    if label_error:
+        return {
+            "mode": "apply",
+            "plan": plan,
+            "success": False,
+            "results": results,
+            "errors": [label_error],
+        }
+
+    # 2. Post integration comment
+    try:
+        comment = _build_integration_comment(plan)
+        cmd = [
+            "gh", "issue", "comment", str(issue),
+            "-R", repo,
+            "--body", comment,
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if proc.returncode != 0:
+            errors.append(f"comment failed: {proc.stderr.strip()[:300]}")
+        else:
+            results.append("comment posted")
+    except Exception as e:
+        errors.append(f"comment error: {str(e)}")
+
+    # 3. Close the issue
+    try:
+        cmd = [
+            "gh", "issue", "close", str(issue),
+            "-R", repo,
+            "--reason", "completed",
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if proc.returncode != 0:
+            errors.append(f"close failed: {proc.stderr.strip()[:300]}")
+        else:
+            results.append("issue closed")
+    except Exception as e:
+        errors.append(f"close error: {str(e)}")
+
+    if errors:
+        return {
+            "mode": "apply",
+            "plan": plan,
+            "success": False,
+            "results": results,
+            "errors": errors,
+        }
+
+    return {
+        "mode": "apply",
+        "plan": plan,
+        "success": True,
+        "results": results,
+    }
+
+
+def format_integration_apply_dry_run(plan: IntegrationPlan) -> str:
+    """Dry-run output for integration apply."""
+    apply_status = _integration_apply_status(plan)
+
+    lines = [f"Signposter Integration Apply Plan — PR #{plan.pr_number}\n"]
+
+    lines.append("Integration plan:")
+    lines.append(f"  status: {plan.status}")
+    if plan.associated_issue:
+        lines.append(f"  associated issue: #{plan.associated_issue}")
+    lines.append(f"  current workflow state: {plan.current_workflow_state or 'unknown'}")
+    lines.append(f"  proposed workflow state: {plan.proposed_workflow_state}")
+    lines.append(f"  close issue: {'yes' if plan.close_issue else 'no'}")
+    lines.append(f"  close reason: {plan.close_reason}")
+    lines.append(f"  main CI: {plan.main_ci_status}")
+
+    lines.append("\nPlanned GitHub mutations:")
+    lines.append("  remove label: state:done")
+    lines.append("  add label: state:merged")
+    lines.append(f"  close issue: #{plan.associated_issue} as completed")
+    lines.append("  post integration comment: yes")
+
+    lines.append("\nStatus:")
+    lines.append(f"  {apply_status}")
+
+    lines.append("\nNotes:")
+    lines.append("  DRY RUN: no issue was closed.")
+    lines.append("  No labels were changed.")
+    lines.append("  No local worktree was removed.")
 
     return "\n".join(lines)
