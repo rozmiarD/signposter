@@ -192,6 +192,14 @@ def main() -> None:
         action="store_true",
         help="Allow execution even if the working tree has uncommitted changes (use with caution)",
     )
+    run_parser.add_argument(
+        "--worktree",
+        action="store_true",
+        help=(
+            "Execute from the isolated worktree for the given --issue "
+            "(requires --issue + --execute, worker profile only)"
+        ),
+    )
     run_parser.set_defaults(func=run_runner)
 
     # worktree subcommand group (planning only — HARDENING-007)
@@ -434,6 +442,7 @@ def run_runner(args: argparse.Namespace) -> int:
         return 1
     issue = getattr(args, "issue", None)
     allow_dirty = getattr(args, "allow_dirty", False)
+    use_worktree = getattr(args, "worktree", False)
     return runner_cli_main(
         repo,
         limit=limit,
@@ -442,6 +451,7 @@ def run_runner(args: argparse.Namespace) -> int:
         execute=execute,
         issue=issue,
         allow_dirty=allow_dirty,
+        worktree=use_worktree,
     )  # noqa: E501
 
 
