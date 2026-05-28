@@ -22,6 +22,8 @@ from signposter.transitions import (
     run_transition_dry_run,
 )
 from signposter.worktree import (
+    apply_worktree_plan,
+    format_worktree_apply_plan,
     format_worktree_plan,
     plan_worktree_for_issue,
 )
@@ -207,6 +209,25 @@ def main() -> None:
     worktree_plan_parser.add_argument("--repo", required=True)
     worktree_plan_parser.add_argument("--issue", type=int, required=True)
     worktree_plan_parser.set_defaults(func=run_worktree_plan)
+
+    # worktree apply subcommand (guarded creation — HARDENING-008)
+    worktree_apply_parser = worktree_subparsers.add_parser(
+        "apply",
+        help="Create the planned branch and worktree (dry-run by default, --apply to execute)",
+    )
+    worktree_apply_parser.add_argument("--repo", required=True)
+    worktree_apply_parser.add_argument("--issue", type=int, required=True)
+    worktree_apply_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be done (default behavior)",
+    )
+    worktree_apply_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually create the branch and worktree (requires explicit use)",
+    )
+    worktree_apply_parser.set_defaults(func=run_worktree_apply)
 
     # report subcommand (for posting runner summaries back to GitHub)
     report_parser = subparsers.add_parser(
@@ -485,4 +506,37 @@ def run_worktree_plan(args: argparse.Namespace) -> int:
         return 0 if plan.status == "ready" else 1
     except Exception as e:
         print(f"Worktree plan failed: {e}", file=sys.stderr)
+        return 2
+
+
+def run_worktree_apply(args: argparse.Namespace) -> int:
+    """Handler for `signposter worktree apply --repo ... --issue N [--apply]`."""
+    repo = getattr(args, "repo", None)
+    issue = getattr(args, "issue", None)
+    apply_flag = getattr(args, "apply", False)
+
+    if not repo or not issue:
+        print("Error: --repo and --issue are required", file=sys.stderr)
+        return 1
+
+    dry_run = not apply_flag
+
+    try:
+        plan = plan_worktree_for_issue(repo, issue)
+        print(format_worktree_apply_plan(plan, dry_run=dry_run))
+
+        if apply_flag:
+            if plan.status == "ready":
+                commands = apply_worktree_plan(plan, dry_run=False)
+                print("\nCreated:")
+                print(f"  branch: {plan.proposed_branch}")
+                print(f"  worktree: {plan.proposed_worktree}")
+                for cmd in commands:
+                    print(f"  Executed: {cmd}")
+            else:
+                print("\nRefusing to create worktree (plan not ready).")
+
+        return 0 if plan.status == "ready" else 1
+    except Exception as e:
+        print(f"Worktree apply failed: {e}", file=sys.stderr)
         return 2
