@@ -76,4 +76,21 @@ def test_perform_transition_mutation_returns_commands():
     assert "--remove-label state:active,gate:ci" in commands[0]
     assert "--add-label state:ready" in commands[0]
     assert "gh issue comment 42" in commands[1]
-    assert "Signposter released this item: state=ready." in commands[1]
+    assert "**Signposter:** released task back to queue." in commands[1]
+    assert "`state:active → state:ready`" in commands[1]
+
+
+def test_perform_transition_mutation_fail_comment_includes_removed_gate():
+    """Fail mutation comment must show 'removed gate:*' when gates are present."""
+    from signposter.transitions import perform_transition_mutation, plan_fail
+
+    labels = ["state:active", "gate:ci", "gate:review", "phase:build"]
+    plan = plan_fail(labels, 99)
+
+    commands = perform_transition_mutation(plan, "ExatronOmega/signposter", dry_run=True)
+
+    assert len(commands) == 2
+    assert "gh issue comment 99" in commands[1]
+    assert "**Signposter:** marked task as failed." in commands[1]
+    assert "`state:active → state:failed`" in commands[1]
+    assert "removed gate:*" in commands[1]

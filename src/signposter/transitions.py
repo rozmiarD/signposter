@@ -9,6 +9,12 @@ import json
 import subprocess
 from dataclasses import dataclass
 
+from signposter.comments import (
+    format_complete_comment,
+    format_fail_comment,
+    format_release_comment,
+)
+
 
 @dataclass(frozen=True)
 class TransitionPlan:
@@ -199,18 +205,6 @@ def run_transition_dry_run(repo: str, issue: int, action: str) -> TransitionPlan
     return plan
 
 
-def _get_transition_comment(action: str, new_state: str) -> str:
-    """Return the exact comment text for a given transition action."""
-    if action == "release":
-        return "Signposter released this item: state=ready."
-    elif action == "complete":
-        return "Signposter completed this item: state=done."
-    elif action == "fail":
-        return "Signposter marked this item as failed: state=failed."
-    else:
-        return f"Signposter performed transition to {new_state}."
-
-
 def perform_transition_mutation(
     plan: TransitionPlan, repo: str, *, dry_run: bool = True
 ) -> list[str]:
@@ -239,8 +233,17 @@ def perform_transition_mutation(
     if not dry_run:
         subprocess.run(edit_cmd, check=True, capture_output=True, text=True)
 
-    # Build comment command
-    comment_body = _get_transition_comment(plan.action, plan.new_state)
+    # Build comment command using plan data for gate removal awareness
+    if plan.action == "release":
+        comment_body = format_release_comment()
+    elif plan.action == "complete":
+        comment_body = format_complete_comment()
+    elif plan.action == "fail":
+        removed_gates = any(lbl.startswith("gate:") for lbl in plan.labels_to_remove)
+        comment_body = format_fail_comment(removed_gates=removed_gates)
+    else:
+        comment_body = f"**Signposter:** performed transition to `{plan.new_state}`."
+
     comment_cmd = [
         "gh", "issue", "comment", issue_num,
         "-R", repo,
