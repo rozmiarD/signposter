@@ -937,6 +937,14 @@ class ReviewSubmitPlan:
     gh_preview: str
     notes: list[str]
 
+    # HARDENING-018A identity fields
+    current_user: str | None = None
+    pr_author: str | None = None
+    reviewer_token_configured: bool = False
+    self_review_blocked: bool = False
+    failure_reason: str | None = None
+
+
 
 def build_review_body(opinion: ReviewerOpinion, gate: ReviewGateResult) -> str:
     """Build a compact, safe review body for GitHub."""
@@ -963,7 +971,10 @@ No merge or issue close is implied by this review.
 
 
 def plan_review_submit(repo: str, pr_number: int) -> ReviewSubmitPlan:
-    """Produce a dry-run plan for submitting a GitHub PR review."""
+    """Produce a dry-run plan for submitting a GitHub PR review.
+
+    HARDENING-018A: Includes GitHub identity checks and self-review guard.
+    """
     gate = evaluate_review_gate(repo, pr_number)
 
     notes = [
@@ -972,15 +983,38 @@ def plan_review_submit(repo: str, pr_number: int) -> ReviewSubmitPlan:
         "No issue was closed.",
     ]
 
+    reviewer_token = _get_reviewer_token()
+    token_configured = bool(reviewer_token)
+
+    current_user = _fetch_current_gh_user(repo, reviewer_token)
+    pr_author = _fetch_pr_author(repo, pr_number, reviewer_token)
+
+    self_review_blocked = False
+    failure_reason = None
+
     if not gate.gate_pass:
-        # For blocked gates we do not approve
         action = "blocked"
         status = gate.status
         body = ""
         gh_preview = f"gh pr review {pr_number} -R {repo} --comment  # (blocked — no approval)"
     else:
         verdict = (gate.opinion.verdict or "").upper()
-        if verdict == "APPROVE":
+
+        # HARDENING-018A: Self-review guard (core of this hardening)
+        if (
+            verdict == "APPROVE"
+            and current_user
+            and pr_author
+            and current_user == pr_author
+            and not token_configured
+        ):
+            self_review_blocked = True
+            action = "blocked"
+            status = "blocked — cannot approve own pull request with current GitHub identity"
+            failure_reason = "current GitHub identity is the PR author and cannot approve own PR"
+            body = ""
+            gh_preview = f"gh pr review {pr_number} -R {repo} --approve  # BLOCKED: self-review"
+        elif verdict == "APPROVE":
             action = "approve"
             status = "ready"
             body = build_review_body(gate.opinion, gate)
@@ -1005,6 +1039,11 @@ def plan_review_submit(repo: str, pr_number: int) -> ReviewSubmitPlan:
         status=status,
         gh_preview=gh_preview,
         notes=notes,
+        current_user=current_user,
+        pr_author=pr_author,
+        reviewer_token_configured=token_configured,
+        self_review_blocked=self_review_blocked,
+        failure_reason=failure_reason,
     )
 
 
@@ -1016,14 +1055,28 @@ def format_review_submit_plan(plan: ReviewSubmitPlan) -> str:
     lines.append(f"  status: {'pass' if plan.gate_pass else 'blocked'}")
     lines.append(f"  reason: {plan.gate_reason}")
 
+    # HARDENING-018A identity section
+    lines.append("\nGitHub identity:")
+    lines.append(f"  current user: {plan.current_user or 'unknown'}")
+    lines.append(f"  PR author: {plan.pr_author or 'unknown'}")
+    token_label = 'configured' if plan.reviewer_token_configured else 'not configured'
+    lines.append(f"  reviewer token: {token_label}")
+
     lines.append("\nGitHub review:")
     lines.append(f"  action: {plan.action}")
+    if plan.failure_reason:
+        lines.append(f"  reason: {plan.failure_reason}")
     if plan.body:
         lines.append(f"  body length: {len(plan.body)} chars")
     lines.append(f"  command preview: {plan.gh_preview}")
 
     lines.append("\nStatus:")
     lines.append(f"  {plan.status}")
+
+    if plan.self_review_blocked:
+        lines.append("")
+        lines.append("Hint: Configure SIGNPOSTER_REVIEWER_GH_TOKEN with a bot/review account")
+        lines.append("      to submit formal reviews when the current user is the PR author.")
 
     if plan.notes:
         lines.append("\nNotes:")
@@ -1036,6 +1089,7 @@ def format_review_submit_plan(plan: ReviewSubmitPlan) -> str:
 def submit_review(repo: str, pr_number: int, *, apply: bool = False) -> dict:
     """Execute (or dry-run) the GitHub PR review submission.
 
+    HARDENING-018A: Respects self-review identity guard.
     Only performs the gh mutation when apply=True and the plan is ready for approval.
     """
     plan = plan_review_submit(repo, pr_number)
@@ -1047,11 +1101,11 @@ def submit_review(repo: str, pr_number: int, *, apply: bool = False) -> dict:
         }
 
     # Mutation path — extremely guarded
-    if plan.status != "ready" or plan.action != "approve":
+    if plan.self_review_blocked or plan.action != "approve" or plan.status != "ready":
         return {
             "mode": "apply_blocked",
             "plan": plan,
-            "error": f"Refusing to submit review: {plan.status}",
+            "error": plan.failure_reason or f"Refusing to submit review: {plan.status}",
         }
 
     if not plan.body:
@@ -1060,6 +1114,8 @@ def submit_review(repo: str, pr_number: int, *, apply: bool = False) -> dict:
             "plan": plan,
             "error": "Empty review body",
         }
+
+    reviewer_token = _get_reviewer_token()
 
     # Write a temporary body file for safe quoting
     import tempfile
@@ -1074,8 +1130,22 @@ def submit_review(repo: str, pr_number: int, *, apply: bool = False) -> dict:
             "--approve",
             "--body-file", body_file,
         ]
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        proc = _run_gh_with_token(cmd, reviewer_token)
+
         success = proc.returncode == 0
+
+        # Improved diagnostics on failure (HARDENING-018A)
+        if not success:
+            return {
+                "mode": "apply",
+                "plan": plan,
+                "success": False,
+                "stdout": proc.stdout,
+                "stderr": proc.stderr,
+                "command": " ".join(cmd),
+                "error": f"gh pr review failed: {proc.stderr.strip()[:400]}",
+            }
+
         return {
             "mode": "apply",
             "plan": plan,
@@ -1090,3 +1160,74 @@ def submit_review(repo: str, pr_number: int, *, apply: bool = False) -> dict:
         except Exception:
             pass
 
+
+# =============================================================================
+# HARDENING-018A: Identity guard + SIGNPOSTER_REVIEWER_GH_TOKEN support
+# =============================================================================
+
+
+def _get_gh_env(token: str | None = None) -> dict:
+    """Return env dict with GH_TOKEN injected if provided."""
+    env = os.environ.copy()
+    if token:
+        env["GH_TOKEN"] = token
+    return env
+
+
+def _fetch_current_gh_user(repo: str | None = None, token: str | None = None) -> str | None:
+    """Fetch the login of the current authenticated gh user (or token)."""
+    try:
+        result = subprocess.run(
+            ["gh", "api", "user", "--jq", ".login"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            env=_get_gh_env(token),
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
+def _fetch_pr_author(repo: str, pr_number: int, token: str | None = None) -> str | None:
+    """Fetch the login of the PR author."""
+    try:
+        result = subprocess.run(
+            [
+                "gh", "pr", "view", str(pr_number),
+                "-R", repo,
+                "--json", "author",
+                "--jq", ".author.login",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            env=_get_gh_env(token),
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
+def _get_reviewer_token() -> str | None:
+    """Return the dedicated reviewer token from env, if configured."""
+    return os.environ.get("SIGNPOSTER_REVIEWER_GH_TOKEN")
+
+
+def _is_reviewer_token_configured() -> bool:
+    return bool(_get_reviewer_token())
+
+
+def _run_gh_with_token(cmd: list[str], token: str | None) -> subprocess.CompletedProcess:
+    """Run a gh command with optional dedicated token."""
+    return subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env=_get_gh_env(token),
+    )
