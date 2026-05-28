@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from signposter.claim import cli_main as claim_cli_main
 from signposter.dispatch import cli_main as dispatch_cli_main
@@ -187,8 +188,11 @@ def main() -> None:
     report_parser.add_argument("--issue", type=int, required=True)
     report_parser.add_argument(
         "--summary",
-        default="artifacts/runs/issue-2-reviewer.summary.md",
-        help="Path to the local summary artifact to post",
+        default=None,
+        help=(
+            "Path to the local summary artifact to post. "
+            "If omitted, the newest issue-specific summary is used."
+        ),
     )
     report_parser.add_argument(
         "--dry-run",
@@ -212,8 +216,11 @@ def main() -> None:
     gate_parser.add_argument("--issue", type=int, required=True)
     gate_parser.add_argument(
         "--summary",
-        default="artifacts/runs/issue-2-reviewer.summary.md",
-        help="Path to runner summary artifact",
+        default=None,
+        help=(
+            "Path to runner summary artifact. "
+            "If omitted, the newest issue-specific summary is used."
+        ),
     )
     gate_parser.add_argument(
         "--dry-run",
@@ -234,6 +241,24 @@ def main() -> None:
     else:
         parser.print_help()
         sys.exit(1)
+
+
+def _find_latest_summary_for_issue(issue: int) -> str | None:
+    """Find the newest runner summary artifact for a specific issue.
+
+    Never falls back to another issue. This prevents report/gate commands from
+    accidentally using stale bootstrap artifacts such as issue-2-reviewer.
+    """
+    runs_dir = Path("artifacts/runs")
+    if not runs_dir.exists():
+        return None
+
+    candidates = list(runs_dir.glob(f"issue-{issue}-*.summary.md"))
+    if not candidates:
+        return None
+
+    newest = max(candidates, key=lambda p: p.stat().st_mtime)
+    return str(newest)
 
 
 def run_doctor(_args: argparse.Namespace) -> int:
@@ -360,40 +385,46 @@ def run_runner(args: argparse.Namespace) -> int:
 
 
 def run_report(args: argparse.Namespace) -> int:
-    """Execute the report command (dry-run by default, --apply for mutation)."""
-    repo = getattr(args, "repo", None)
-    issue = getattr(args, "issue", None)
+    """Run report command."""
+    repo = args.repo
+    issue = args.issue
     summary = getattr(args, "summary", None)
     apply = getattr(args, "apply", False)
 
-    if not repo or issue is None:
-        print("Error: --repo and --issue are required", file=sys.stderr)
-        return 1
     if not summary:
-        print("Error: --summary is required", file=sys.stderr)
-        return 1
+        summary = _find_latest_summary_for_issue(issue)
+        if not summary:
+            print(
+                f"Error: no summary artifact found for issue #{issue} "
+                f"(expected artifacts/runs/issue-{issue}-*.summary.md)",
+                file=sys.stderr,
+            )
+            return 2
 
     return report_main(repo, issue, summary, apply=apply)
 
 
 def run_gate(args: argparse.Namespace) -> int:
-    """Execute the gate command (currently dry-run only)."""
-    repo = getattr(args, "repo", None)
-    issue = getattr(args, "issue", None)
+    """Run gate command."""
+    repo = args.repo
+    issue = args.issue
     summary = getattr(args, "summary", None)
 
-    if not repo or issue is None:
-        print("Error: --repo and --issue are required", file=sys.stderr)
-        return 1
+    if not summary:
+        summary = _find_latest_summary_for_issue(issue)
+        if not summary:
+            print(
+                f"Error: no summary artifact found for issue #{issue} "
+                f"(expected artifacts/runs/issue-{issue}-*.summary.md)",
+                file=sys.stderr,
+            )
+            return 2
 
     try:
         result = run_gate_dry_run(repo, issue, summary_path=summary)
-        print(format_gate_report(result))
-        return 0
     except Exception as e:
-        print(f"Gate evaluation failed: {e}", file=sys.stderr)
+        print(f"Gate failed: {e}", file=sys.stderr)
         return 1
 
-
-if __name__ == "__main__":
-    main()
+    print(format_gate_report(result))
+    return 0

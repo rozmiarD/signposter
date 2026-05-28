@@ -50,3 +50,35 @@ def test_evaluate_needs_work_when_unclear():
     decision = evaluate_gate(0, summary)
     assert decision.decision == "needs-work"
     assert decision.confidence == "low"
+
+
+def test_evaluate_ci_gate_pass_on_worker_execution_complete():
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+**Exit Code:** 0
+**Agent:** worker
+
+**Execution complete.**
+
+### 1. Files changed
+- `README.md` (only file edited for this task)
+
+### 2. Summary of README change
+Added MVP Status section.
+
+### 3. Evidence: `git diff -- README.md`
+
+Code behavior was unchanged.
+"""
+    decision = evaluate_ci_gate(0, summary)
+    assert decision.decision == "pass"
+    assert decision.proposed_transition == "state:active → state:done"
+
+
+def test_evaluate_ci_gate_needs_work_when_worker_output_unclear():
+    from signposter.gate import evaluate_ci_gate
+
+    decision = evaluate_ci_gate(0, "**Exit Code:** 0\nGeneric output only.")
+    assert decision.decision == "needs-work"
+    assert decision.confidence == "low"

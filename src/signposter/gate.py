@@ -95,6 +95,80 @@ def evaluate_gate(
     )
 
 
+def evaluate_ci_gate(
+    exit_code: int,
+    summary_text: str,
+    raw_text: str | None = None,
+) -> GateDecision:
+    """Decision function for worker/CI gates.
+
+    This is intentionally conservative but distinct from review gates:
+    worker tasks are allowed to pass when execution completed cleanly and
+    the artifact shows scoped changes/evidence.
+    """
+    text = ((summary_text or "") + "\n" + (raw_text or "")).lower()
+
+    if exit_code != 0:
+        return GateDecision(
+            decision="fail",
+            reason=f"Non-zero exit code from worker: {exit_code}",
+            confidence="high",
+            proposed_transition="state:failed",
+            proposed_command=None,
+        )
+
+    negative_signals = [
+        "critical blocker",
+        "cannot proceed",
+        "missing required evidence",
+        "execution failed",
+        "error:",
+        "traceback",
+    ]
+    for signal in negative_signals:
+        if signal in text:
+            return GateDecision(
+                decision="needs-work",
+                reason=f"Worker output mentioned: '{signal}'",
+                confidence="medium",
+                proposed_transition="state:active (worker should be re-run)",
+                proposed_command=None,
+            )
+
+    positive_signals = [
+        "execution complete",
+        "files changed",
+        "readme.md",
+        "only file edited",
+        "git diff -- readme.md",
+        "code behavior",
+    ]
+    positive_count = sum(1 for signal in positive_signals if signal in text)
+
+    if positive_count >= 3:
+        return GateDecision(
+            decision="pass",
+            reason=(
+                "Worker completed successfully (exit 0) with scoped change "
+                "evidence and no blocker signals."
+            ),
+            confidence="medium",
+            proposed_transition="state:active → state:done",
+            proposed_command="signposter complete --repo {repo} --issue {issue} --apply",
+        )
+
+    return GateDecision(
+        decision="needs-work",
+        reason=(
+            "Worker exited 0 but did not provide enough scoped completion "
+            "evidence for the CI gate."
+        ),
+        confidence="low",
+        proposed_transition="state:active (worker should be re-run with more evidence)",
+        proposed_command=None,
+    )
+
+
 def fetch_issue_state(repo: str, issue: int) -> dict:
     """Fetch current labels and state for the issue (read-only)."""
     result = subprocess.run(
@@ -138,7 +212,7 @@ def load_raw_if_exists(raw_path: str | Path) -> str | None:
 def run_gate_dry_run(
     repo: str,
     issue: int,
-    summary_path: str | Path = "artifacts/runs/issue-2-reviewer.summary.md",
+    summary_path: str | Path,
 ) -> dict:
     """Main dry-run gate evaluation."""
     issue_state = fetch_issue_state(repo, issue)
@@ -146,6 +220,14 @@ def run_gate_dry_run(
 
     has_active = "state:active" in labels
     has_gate_review = "gate:review" in labels
+    has_gate_ci = "gate:ci" in labels
+
+    if has_gate_review:
+        gate_type = "review"
+    elif has_gate_ci:
+        gate_type = "ci"
+    else:
+        gate_type = "unknown"
 
     summary_text = load_summary(summary_path)
 
@@ -165,7 +247,18 @@ def run_gate_dry_run(
                 pass
             break
 
-    decision = evaluate_gate(exit_code, summary_text, raw_text)
+    if gate_type == "ci":
+        decision = evaluate_ci_gate(exit_code, summary_text, raw_text)
+    elif gate_type == "review":
+        decision = evaluate_gate(exit_code, summary_text, raw_text)
+    else:
+        decision = GateDecision(
+            decision="needs-work",
+            reason="Issue has no supported gate label (expected gate:ci or gate:review).",
+            confidence="high",
+            proposed_transition=None,
+            proposed_command=None,
+        )
 
     # Fill in repo/issue in proposed command if present
     proposed_cmd = None
@@ -180,6 +273,8 @@ def run_gate_dry_run(
         "labels": labels,
         "has_state_active": has_active,
         "has_gate_review": has_gate_review,
+        "has_gate_ci": has_gate_ci,
+        "gate_type": gate_type,
         "summary_path": str(summary_path),
         "raw_path": str(raw_path) if raw_path.exists() else None,
         "exit_code": exit_code,
@@ -188,7 +283,7 @@ def run_gate_dry_run(
         "confidence": decision.confidence,
         "proposed_transition": decision.proposed_transition,
         "proposed_command": proposed_cmd,
-        "valid_for_gate": has_active and has_gate_review,
+        "valid_for_gate": has_active and gate_type in {"review", "ci"},
     }
 
 
@@ -216,7 +311,9 @@ def format_gate_report(result: dict) -> str:
             "",
             "Gate Validation:",
             f"  state:active present: {result['has_state_active']}",
+            f"  gate type:            {result.get('gate_type', 'unknown')}",
             f"  gate:review present:  {result['has_gate_review']}",
+            f"  gate:ci present:      {result.get('has_gate_ci', False)}",
             "",
             "Decision:",
             f"  {result['decision'].upper()}",
@@ -235,6 +332,6 @@ def format_gate_report(result: dict) -> str:
 
     if not result["valid_for_gate"]:
         lines.append("")
-        lines.append("WARNING: This issue does not appear ready for a review gate decision.")
+        lines.append("WARNING: This issue does not appear ready for a supported gate decision.")
 
     return "\n".join(lines)
