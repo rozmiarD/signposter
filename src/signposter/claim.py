@@ -9,6 +9,7 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass
 
+from signposter.comments import format_claim_comment
 from signposter.dispatch import DispatchDecision, run_dry_run
 from signposter.scan import LabeledItem
 
@@ -58,11 +59,10 @@ def perform_claim_mutation(plan: ClaimPlan, repo: str, *, dry_run: bool = True) 
         subprocess.run(edit_cmd, check=True, capture_output=True, text=True)
 
     # 2. Add comment
-    comment_body = (
-        f"Signposter claimed this item: "
-        f"route={plan.dispatch.proposed_route}, "
-        f"gate={plan.dispatch.proposed_gate or 'none'}, "
-        f"lease_owner={plan.lease_owner}."
+    comment_body = format_claim_comment(
+        route=plan.dispatch.proposed_route,
+        gate=plan.dispatch.proposed_gate,
+        lease_owner=plan.lease_owner,
     )
 
     comment_cmd = [
