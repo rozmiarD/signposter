@@ -6,6 +6,13 @@
 
 Signposter is a local GitHub / OpenClaw workflow dispatcher designed to stay completely separate from the Neutral Agent Pack.
 
+## MVP Status
+
+- GitHub issue workflow is supported.
+- Signposter can claim, generate prompts, run OpenClaw reviewer, capture artifacts, report results, and complete review tasks.
+- Worker agent is now configured for low-risk build/docs tasks.
+- This is still an experimental local orchestrator.
+
 ## Current State
 
 Only the following exists:
