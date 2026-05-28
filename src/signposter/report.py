@@ -8,8 +8,23 @@ Safety-first design:
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
+
+# Regex to strip ANSI escape sequences (colors, cursor moves, etc.)
+_ANSI_ESCAPE_RE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+
+
+def strip_ansi(text: str) -> str:
+    """Remove ANSI escape sequences from text.
+
+    Used to sanitize raw runner output before including excerpts in GitHub comments.
+    Does not modify source artifacts on disk.
+    """
+    if not text:
+        return text
+    return _ANSI_ESCAPE_RE.sub("", text)
 
 
 def load_summary(summary_path: str | Path) -> str:
@@ -114,10 +129,15 @@ def format_comment(
 
 
 def _make_bounded_excerpt(text: str, max_lines: int = 20, max_chars: int = 1500) -> str:
-    """Return a safe, bounded excerpt from raw or summary output."""
+    """Return a safe, bounded excerpt from raw or summary output.
+
+    ANSI escape codes are stripped so they do not appear in GitHub comments.
+    """
     if not text:
         return "(no output captured)"
 
+    # Sanitize ANSI before any excerpt processing (GitHub comments must be clean)
+    text = strip_ansi(text)
     lines = text.splitlines()
     # Take first N lines, but also respect total char budget
     selected = []
