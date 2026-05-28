@@ -7,6 +7,7 @@ to inspect pull requests created from Signposter worker branches.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from dataclasses import dataclass
 from typing import Any
@@ -368,3 +369,137 @@ def format_review_plan(plan: ReviewPlan) -> str:
             lines.append(f"  {n}")
 
     return "\n".join(lines)
+
+
+# =============================================================================
+# HARDENING-015: Prompt artifact writing (planning only)
+# =============================================================================
+
+
+def get_pr_diff(repo: str, pr_number: int, max_lines: int = 150) -> str:
+    """Fetch a bounded PR diff using gh CLI."""
+    result = subprocess.run(
+        ["gh", "pr", "diff", str(pr_number), "-R", repo],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if result.returncode != 0:
+        return f"<diff fetch failed: {result.stderr.strip()[:200]}>"
+
+    diff = result.stdout.strip()
+    lines = diff.splitlines()
+    if len(lines) > max_lines:
+        diff = "\n".join(lines[:max_lines]) + f"\n... (truncated, {len(lines)} total lines)"
+    return diff or "<no diff content>"
+
+
+def build_review_prompt(plan: ReviewPlan, pr_body: str, diff: str) -> str:
+    """Render the complete reviewer prompt with structured output contract."""
+    issue_line = (
+        f"Issue #{plan.associated_issue}"
+        if plan.associated_issue
+        else "No associated issue detected via branch convention"
+    )
+
+    content = f"""You are an expert code reviewer acting as the Signposter reviewer agent.
+
+## PR Under Review
+- PR: #{plan.pr_number}
+- Title: {plan.title}
+- State: {plan.state}
+- Base branch: {plan.base_branch}
+- Head branch: {plan.head_branch}
+- Mergeable: {plan.mergeable}
+- Current review decision: {plan.review_decision or "none"}
+
+## Signposter Workflow Context
+- Associated issue: {issue_line}
+- Branch follows worker convention (work/issue-N-...): {plan.branch_matches_convention}
+
+## CI / Checks Status
+- Overall status: {plan.checks_status}
+- Successful checks: {plan.successful_checks}
+- Failing checks: {plan.failing_checks}
+- Pending checks: {plan.pending_checks}
+
+## Change Scope
+- Files changed: {plan.files_changed}
+- Additions: {plan.additions}
+- Deletions: {plan.deletions}
+- Risk classification: {plan.risk_level}
+- Size classification: {plan.size}
+
+## PR Body
+{pr_body or "<no body provided>"}
+
+## Diff (bounded excerpt)
+```diff
+{diff}
+```
+
+## Your Task
+Perform a careful, evidence-based review of this pull request.
+
+You **must** return a structured review opinion using exactly this format:
+
+Verdict: APPROVE | NEEDS_CHANGES | BLOCK
+Confidence: 0.00-1.00
+Risk: low | medium | high
+Scope match: yes | no
+CI considered: yes | no
+Findings:
+  - <one-line finding>
+  - ...
+Merge recommendation: yes | no
+Automerge eligible: yes | no
+Reasoning summary:
+  <1-3 sentences of evidence-based reasoning>
+
+## Strict Rules (do not violate)
+- Confidence MUST be a number between 0.00 and 1.00 (two decimal places preferred).
+- Confidence >= 0.85 + low risk + small scope + green CI + clear scope match MAY be considered
+  for future low-risk automerge.
+- Confidence < 0.85 blocks any automerge consideration.
+- High-risk findings or uncertainty about files/scope/CI/issue mapping blocks automerge.
+- You MUST NOT claim that you submitted a GitHub review, merged the PR, or closed any issue.
+- Base your verdict only on the metadata, body, and diff provided above.
+- For docs-only low-risk small green-CI changes that match the issue,
+  APPROVE is usually appropriate.
+- When in doubt, prefer NEEDS_CHANGES or BLOCK and document the specific concern in Findings.
+
+Begin your structured review now.
+"""
+    return content
+
+
+def write_review_prompt_artifact(repo: str, pr_number: int) -> str:
+    """Generate the review plan, then write the reviewer prompt artifact if ready.
+
+    Returns the absolute path of the written file.
+    Raises RuntimeError if the review plan status is not "ready".
+    """
+    plan = plan_review_for_pr(repo, pr_number)
+
+    if plan.status != "ready":
+        raise RuntimeError(f"Refusing to write prompt artifact: {plan.status}")
+
+    # Fetch fresh body (plan may have truncated or partial)
+    try:
+        pr_data = _run_gh_pr_view(repo, pr_number, ["body"])
+        pr_body = pr_data.get("body", "") or ""
+    except Exception:
+        pr_body = ""
+
+    diff = get_pr_diff(repo, pr_number, max_lines=120)
+
+    content = build_review_prompt(plan, pr_body, diff)
+
+    path = plan.prompt_artifact_path
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+    return path
+
