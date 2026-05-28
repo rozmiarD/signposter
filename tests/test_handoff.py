@@ -105,3 +105,20 @@ def test_handoff_commit_prefix_accepts_github_label_dicts():
     labels = [{"name": "area:docs"}, {"name": "state:done"}]
 
     assert _infer_commit_prefix(labels) == "docs:"
+
+def test_handoff_parse_status_path_preserves_file_name_for_trimmed_modified_status():
+    from signposter.handoff import _parse_status_path
+
+    assert _parse_status_path("M README.md") == "README.md"
+
+
+def test_handoff_parse_status_path_preserves_file_name_for_raw_porcelain_modified_status():
+    from signposter.handoff import _parse_status_path
+
+    assert _parse_status_path(" M README.md") == "README.md"
+
+
+def test_handoff_parse_status_path_handles_untracked_file():
+    from signposter.handoff import _parse_status_path
+
+    assert _parse_status_path("?? notes/new.md") == "notes/new.md"
