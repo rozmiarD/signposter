@@ -745,7 +745,7 @@ def test_execute_worktree_refuses_non_worker_profile(capsys, monkeypatch):
         }
         exit_code = cli_main("test/repo", issue=12, execute=True, worktree=True)
 
-    out = capsys.readouterr().out
+    capsys.readouterr()
     # The guard may or may not trigger depending on plan construction;
     # we mainly verify no crash and that worktree path was considered.
     assert exit_code in (0, 1)
