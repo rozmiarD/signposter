@@ -918,3 +918,175 @@ def format_review_gate(result: ReviewGateResult) -> str:
             lines.append(f"  {n}")
 
     return "\n".join(lines)
+
+
+# =============================================================================
+# HARDENING-018: GitHub PR review submission (plan + guarded --apply)
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class ReviewSubmitPlan:
+    """Plan for submitting a GitHub review based on reviewer gate."""
+    pr_number: int
+    action: str  # "approve" | "request_changes" | "comment" | "blocked"
+    body: str
+    gate_pass: bool
+    gate_reason: str
+    status: str  # "ready" | "blocked — ..." | "ready-for-request-changes"
+    gh_preview: str
+    notes: list[str]
+
+
+def build_review_body(opinion: ReviewerOpinion, gate: ReviewGateResult) -> str:
+    """Build a compact, safe review body for GitHub."""
+    findings = "\n".join(f"- {f}" for f in opinion.findings[:5]) or "- No specific findings listed."
+
+    body = f"""Signposter reviewer gate: {opinion.verdict or "UNKNOWN"}
+
+Confidence: {opinion.confidence if opinion.confidence is not None else "unknown"}
+Risk: {opinion.risk or "unknown"}
+Scope match: {opinion.scope_match or "unknown"}
+CI considered: {opinion.ci_considered or "unknown"}
+Merge recommendation: {opinion.merge_recommendation or "unknown"}
+Automerge eligible: {opinion.automerge_eligible or "unknown"}
+
+Findings:
+{findings}
+
+Summary:
+Reviewer { 'approved' if (opinion.verdict or '').upper() == 'APPROVE' else 'reviewed' } this change.
+
+No merge or issue close is implied by this review.
+"""
+    return body.strip()
+
+
+def plan_review_submit(repo: str, pr_number: int) -> ReviewSubmitPlan:
+    """Produce a dry-run plan for submitting a GitHub PR review."""
+    gate = evaluate_review_gate(repo, pr_number)
+
+    notes = [
+        "No GitHub review was submitted.",
+        "No merge was performed.",
+        "No issue was closed.",
+    ]
+
+    if not gate.gate_pass:
+        # For blocked gates we do not approve
+        action = "blocked"
+        status = gate.status
+        body = ""
+        gh_preview = f"gh pr review {pr_number} -R {repo} --comment  # (blocked — no approval)"
+    else:
+        verdict = (gate.opinion.verdict or "").upper()
+        if verdict == "APPROVE":
+            action = "approve"
+            status = "ready"
+            body = build_review_body(gate.opinion, gate)
+            gh_preview = f"gh pr review {pr_number} -R {repo} --approve --body \"...\"" 
+        elif verdict == "NEEDS_CHANGES":
+            action = "request_changes"
+            status = "ready-for-request-changes"
+            body = build_review_body(gate.opinion, gate)
+            gh_preview = f"gh pr review {pr_number} -R {repo} --request-changes --body \"...\"" 
+        else:
+            action = "comment"
+            status = "blocked"
+            body = build_review_body(gate.opinion, gate)
+            gh_preview = f"gh pr review {pr_number} -R {repo} --comment --body \"...\"" 
+
+    return ReviewSubmitPlan(
+        pr_number=pr_number,
+        action=action,
+        body=body,
+        gate_pass=gate.gate_pass,
+        gate_reason=gate.reason,
+        status=status,
+        gh_preview=gh_preview,
+        notes=notes,
+    )
+
+
+def format_review_submit_plan(plan: ReviewSubmitPlan) -> str:
+    """Compact output for the submit plan (dry-run)."""
+    lines = [f"Signposter Review Submit Plan — PR #{plan.pr_number}\n"]
+
+    lines.append("Reviewer gate:")
+    lines.append(f"  status: {'pass' if plan.gate_pass else 'blocked'}")
+    lines.append(f"  reason: {plan.gate_reason}")
+
+    lines.append("\nGitHub review:")
+    lines.append(f"  action: {plan.action}")
+    if plan.body:
+        lines.append(f"  body length: {len(plan.body)} chars")
+    lines.append(f"  command preview: {plan.gh_preview}")
+
+    lines.append("\nStatus:")
+    lines.append(f"  {plan.status}")
+
+    if plan.notes:
+        lines.append("\nNotes:")
+        for n in plan.notes:
+            lines.append(f"  {n}")
+
+    return "\n".join(lines)
+
+
+def submit_review(repo: str, pr_number: int, *, apply: bool = False) -> dict:
+    """Execute (or dry-run) the GitHub PR review submission.
+
+    Only performs the gh mutation when apply=True and the plan is ready for approval.
+    """
+    plan = plan_review_submit(repo, pr_number)
+
+    if not apply:
+        return {
+            "mode": "dry_run",
+            "plan": plan,
+        }
+
+    # Mutation path — extremely guarded
+    if plan.status != "ready" or plan.action != "approve":
+        return {
+            "mode": "apply_blocked",
+            "plan": plan,
+            "error": f"Refusing to submit review: {plan.status}",
+        }
+
+    if not plan.body:
+        return {
+            "mode": "apply_blocked",
+            "plan": plan,
+            "error": "Empty review body",
+        }
+
+    # Write a temporary body file for safe quoting
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as tf:
+        tf.write(plan.body)
+        body_file = tf.name
+
+    try:
+        cmd = [
+            "gh", "pr", "review", str(pr_number),
+            "-R", repo,
+            "--approve",
+            "--body-file", body_file,
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        success = proc.returncode == 0
+        return {
+            "mode": "apply",
+            "plan": plan,
+            "success": success,
+            "stdout": proc.stdout,
+            "stderr": proc.stderr,
+            "command": " ".join(cmd),
+        }
+    finally:
+        try:
+            os.unlink(body_file)
+        except Exception:
+            pass
+

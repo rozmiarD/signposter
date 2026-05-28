@@ -641,3 +641,130 @@ def test_format_review_gate_contains_safety_notes():
     assert "No GitHub review was submitted" in output
     assert "No merge was performed" in output
     assert "merge eligible: yes" in output
+
+
+# =============================================================================
+# HARDENING-018 tests: GitHub PR review submit plan + apply guard
+# =============================================================================
+
+
+def test_submit_plan_approve_when_gate_passes():
+    from signposter.review import plan_review_submit
+
+    good_gate = """Verdict: APPROVE
+Confidence: 0.95
+Risk: low
+Scope match: yes
+CI considered: yes
+Merge recommendation: yes
+Automerge eligible: yes"""
+
+    with patch("signposter.review.evaluate_review_gate") as mock_gate:
+        from signposter.review import ReviewerOpinion, ReviewGateResult
+        op = ReviewerOpinion(
+            verdict="APPROVE", confidence=0.95, risk="low",
+            scope_match="yes", ci_considered="yes",
+            merge_recommendation="yes", automerge_eligible="yes",
+            findings=["Docs only"],
+            reasoning="Good", raw_text=good_gate
+        )
+        mock_gate.return_value = ReviewGateResult(
+            pr_number=5, status="pass", reason="good",
+            opinion=op, gate_pass=True, merge_eligible=True, automerge_eligible=True,
+            summary_path="artifacts/runs/pr-5-reviewer.summary.md",
+            notes=[] 
+        )
+
+        plan = plan_review_submit("test/repo", 5)
+
+    assert plan.action == "approve"
+    assert plan.status == "ready"
+    assert "APPROVE" in plan.body
+    assert "No merge or issue close" in plan.body
+
+
+def test_submit_plan_blocks_on_failed_gate():
+    from signposter.review import plan_review_submit
+
+    with patch("signposter.review.evaluate_review_gate") as mock_gate:
+        from signposter.review import ReviewerOpinion, ReviewGateResult
+        op = ReviewerOpinion("BLOCK", 0.5, "high", "no", "no", "no", "no", [], None, "")
+        mock_gate.return_value = ReviewGateResult(
+            pr_number=5, status="blocked — high risk", reason="high risk",
+            opinion=op, gate_pass=False, merge_eligible=False, automerge_eligible=False,
+            summary_path=None, notes=[] 
+        )
+
+        plan = plan_review_submit("test/repo", 5)
+
+    assert plan.action == "blocked"
+    assert "blocked" in plan.status
+
+
+def test_submit_dry_run_does_not_call_subprocess():
+    from signposter.review import submit_review
+
+    with patch("subprocess.run") as mock_sub:
+        with patch("signposter.review.plan_review_submit") as mock_plan:
+            from signposter.review import ReviewSubmitPlan
+            fake_plan = ReviewSubmitPlan(5, "approve", "body", True, "good", "ready", "gh ...", [])
+            mock_plan.return_value = fake_plan
+
+            result = submit_review("test/repo", 5, apply=False)
+
+            mock_sub.assert_not_called()
+            assert result["mode"] == "dry_run"
+
+
+def test_submit_apply_calls_gh_when_ready(monkeypatch):
+    """Verify that --apply actually invokes gh pr review --approve."""
+    from signposter.review import submit_review
+
+    class FakeProc:
+        returncode = 0
+        stdout = "Review submitted."
+        stderr = ""
+
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return FakeProc()
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    with patch("signposter.review.plan_review_submit") as mock_plan:
+        from signposter.review import ReviewSubmitPlan
+        fake_plan = ReviewSubmitPlan(
+            pr_number=5,
+            action="approve",
+            body="Signposter reviewer gate: APPROVE...",
+            gate_pass=True,
+            gate_reason="good",
+            status="ready",
+            gh_preview="gh ...",
+            notes=[] 
+        )
+        mock_plan.return_value = fake_plan
+
+        result = submit_review("test/repo", 5, apply=True)
+
+    assert result["mode"] == "apply"
+    assert result["success"] is True
+    assert any("--approve" in str(c) for c in calls)
+
+
+def test_submit_apply_refuses_when_not_ready():
+    from signposter.review import submit_review
+
+    with patch("signposter.review.plan_review_submit") as mock_plan:
+        from signposter.review import ReviewSubmitPlan
+        fake_plan = ReviewSubmitPlan(
+            5, "blocked", "", False, "bad", "blocked — high risk", "gh ...", []
+        )
+        mock_plan.return_value = fake_plan
+
+        result = submit_review("test/repo", 5, apply=True)
+
+    assert result["mode"] == "apply_blocked"
+    assert "Refusing to submit" in result.get("error", "")
