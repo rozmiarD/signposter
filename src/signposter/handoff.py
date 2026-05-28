@@ -71,6 +71,31 @@ def _infer_commit_prefix(labels: list[object]) -> str:
     return "work:"
 
 
+def _parse_status_path(line: str) -> str:
+    """Return file path from git status --short style output.
+
+    Handles both raw porcelain lines, e.g. " M README.md",
+    and normalized/trimmed lines, e.g. "M README.md".
+    """
+    if not line.strip():
+        return ""
+
+    if line.startswith("?? "):
+        return line[3:].strip()
+
+    # Raw porcelain v1 uses two status columns followed by a space:
+    # " M README.md", "M  README.md", "MM README.md".
+    if len(line) >= 4 and line[2] == " ":
+        return line[3:].strip()
+
+    # Some helpers normalize/strip the leading blank status column,
+    # producing "M README.md" instead of " M README.md".
+    if len(line) >= 3 and line[1] == " ":
+        return line[2:].strip()
+
+    return line.strip()
+
+
 def plan_handoff_for_issue(repo: str, issue_number: int) -> HandoffPlan:
     """Produce a HandoffPlan (read-only, no mutations)."""
     from signposter.dispatch import classify_candidate
@@ -136,11 +161,9 @@ def plan_handoff_for_issue(repo: str, issue_number: int) -> HandoffPlan:
     status_lines = get_git_status_short(cwd=worktree_path)
     changed_files = []
     for line in status_lines:
-        # Parse short status
-        if len(line) > 2:
-            path = line[3:].strip() if line[:2].strip() else line[2:].strip()
-            if path:
-                changed_files.append(path)
+        path = _parse_status_path(line)
+        if path:
+            changed_files.append(path)
 
     has_changes = len(changed_files) > 0
 
