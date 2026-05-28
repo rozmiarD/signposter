@@ -465,7 +465,7 @@ def test_execute_writes_artifacts_on_success(monkeypatch, tmp_path):
          patch("os.path.isfile", return_value=True), \
          patch("subprocess.run", side_effect=fake_subprocess_run):
 
-        result = execute_pr_review("test/repo", 5)
+        result = execute_pr_review("test/repo", 5, runs_dir=tmp_path / "runs")
 
     assert result["success"] is True
     assert result["raw_path"] is not None
@@ -481,3 +481,163 @@ def test_execute_output_contains_safety_notes():
     # This is a structural test; real handler tested via integration in real runs
     assert "No GitHub review was submitted"  # marker for later handler verification
     assert "No merge was performed"
+
+
+# =============================================================================
+# HARDENING-017 tests: reviewer opinion parsing + review gate
+# =============================================================================
+
+
+def test_parse_reviewer_opinion_approve():
+    from signposter.review import parse_reviewer_opinion
+
+    text = """Verdict: APPROVE
+Confidence: 0.95
+Risk: low
+Scope match: yes
+CI considered: yes
+Merge recommendation: yes
+Automerge eligible: yes
+Findings:
+  - Docs only
+Reasoning summary:
+  Looks good and matches scope."""
+
+    op = parse_reviewer_opinion(text)
+    assert op.verdict == "APPROVE"
+    assert op.confidence == 0.95
+    assert op.risk == "low"
+    assert op.scope_match == "yes"
+    assert op.ci_considered == "yes"
+    assert op.merge_recommendation == "yes"
+    assert op.automerge_eligible == "yes"
+    assert len(op.findings) == 1
+
+
+def test_parse_confidence_as_float():
+    from signposter.review import parse_reviewer_opinion
+
+    op = parse_reviewer_opinion("Confidence: 0.87")
+    assert op.confidence == 0.87
+
+
+def test_gate_passes_for_good_approve():
+    from signposter.review import evaluate_review_gate
+
+    good_text = """Verdict: APPROVE
+Confidence: 0.95
+Risk: low
+Scope match: yes
+CI considered: yes
+Merge recommendation: yes
+Automerge eligible: yes"""
+
+    with patch("os.path.isfile", return_value=True), \
+         patch("builtins.open", create=True) as mock_open:
+        mock_open.return_value.__enter__.return_value.read.return_value = good_text
+
+        result = evaluate_review_gate("test/repo", 5)
+        assert result.gate_pass is True
+        assert result.status == "pass"
+        assert result.merge_eligible is True
+        assert result.automerge_eligible is True
+
+
+def test_gate_blocked_for_needs_changes():
+    from signposter.review import evaluate_review_gate
+
+    text = "Verdict: NEEDS_CHANGES\nConfidence: 0.90"
+    with patch("os.path.isfile", return_value=True), patch("builtins.open", create=True) as m:
+        m.return_value.__enter__.return_value.read.return_value = text
+        result = evaluate_review_gate("test/repo", 5)
+        assert "blocked — reviewer verdict is NEEDS_CHANGES" in result.status
+
+
+def test_gate_blocked_for_block():
+    from signposter.review import evaluate_review_gate
+
+    text = "Verdict: BLOCK\nConfidence: 0.80"
+    with patch("os.path.isfile", return_value=True), patch("builtins.open", create=True) as m:
+        m.return_value.__enter__.return_value.read.return_value = text
+        result = evaluate_review_gate("test/repo", 5)
+        assert "blocked — reviewer verdict is BLOCK" in result.status
+
+
+def test_gate_blocked_for_low_confidence():
+    from signposter.review import evaluate_review_gate
+
+    text = "Verdict: APPROVE\nConfidence: 0.70\nRisk: low"
+    with patch("os.path.isfile", return_value=True), patch("builtins.open", create=True) as m:
+        m.return_value.__enter__.return_value.read.return_value = text
+        result = evaluate_review_gate("test/repo", 5)
+        assert "confidence below threshold" in result.status
+
+
+def test_gate_blocked_for_high_risk():
+    from signposter.review import evaluate_review_gate
+
+    text = "Verdict: APPROVE\nConfidence: 0.95\nRisk: high"
+    with patch("os.path.isfile", return_value=True), patch("builtins.open", create=True) as m:
+        m.return_value.__enter__.return_value.read.return_value = text
+        result = evaluate_review_gate("test/repo", 5)
+        assert "reviewer risk is high" in result.status
+
+
+def test_gate_blocked_for_scope_no():
+    from signposter.review import evaluate_review_gate
+
+    text = "Verdict: APPROVE\nConfidence: 0.95\nRisk: low\nScope match: no"
+    with patch("os.path.isfile", return_value=True), patch("builtins.open", create=True) as m:
+        m.return_value.__enter__.return_value.read.return_value = text
+        result = evaluate_review_gate("test/repo", 5)
+        assert "scope match is no" in result.status
+
+
+def test_gate_blocked_for_ci_not_considered():
+    from signposter.review import evaluate_review_gate
+
+    text = "Verdict: APPROVE\nConfidence: 0.95\nRisk: low\nScope match: yes\nCI considered: no"
+    with patch("os.path.isfile", return_value=True), patch("builtins.open", create=True) as m:
+        m.return_value.__enter__.return_value.read.return_value = text
+        result = evaluate_review_gate("test/repo", 5)
+        assert "CI was not considered" in result.status
+
+
+def test_gate_blocked_for_missing_artifact():
+    from signposter.review import evaluate_review_gate
+
+    with patch("os.path.isfile", return_value=False):
+        result = evaluate_review_gate("test/repo", 99)
+        assert "blocked — reviewer summary artifact missing" in result.status
+
+
+def test_gate_blocked_for_malformed_confidence():
+    from signposter.review import evaluate_review_gate
+
+    text = "Verdict: APPROVE\nConfidence: not-a-number"
+    with patch("os.path.isfile", return_value=True), patch("builtins.open", create=True) as m:
+        m.return_value.__enter__.return_value.read.return_value = text
+        result = evaluate_review_gate("test/repo", 5)
+        assert "confidence below threshold" in result.status
+
+
+def test_format_review_gate_contains_safety_notes():
+    from signposter.review import ReviewerOpinion, ReviewGateResult, format_review_gate
+
+    op = ReviewerOpinion(
+        verdict="APPROVE", confidence=0.95, risk="low",
+        scope_match="yes", ci_considered="yes",
+        merge_recommendation="yes", automerge_eligible="yes",
+        findings=[], reasoning=None, raw_text=""
+    )
+    result = ReviewGateResult(
+        pr_number=5, status="pass", reason="good",
+        opinion=op, gate_pass=True, merge_eligible=True, automerge_eligible=True,
+        summary_path="artifacts/runs/pr-5-reviewer.summary.md",
+        notes=["No GitHub review was submitted.", "No merge was performed."]
+    )
+
+    output = format_review_gate(result)
+    assert "No GitHub review was submitted" in output
+    assert "No merge was performed" in output
+    assert "merge eligible: yes" in output

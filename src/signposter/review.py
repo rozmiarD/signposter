@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -193,7 +194,6 @@ def _extract_issue_from_branch(branch: str) -> int | None:
     if not branch:
         return None
     # work/issue-4-...
-    import re
     m = re.search(r"work/issue-(\d+)", branch)
     if m:
         return int(m.group(1))
@@ -565,7 +565,13 @@ def _generate_pr_reviewer_summary(
     return "\n".join(lines)
 
 
-def execute_pr_review(repo: str, pr_number: int, *, profile: str = "reviewer") -> dict:
+def execute_pr_review(
+    repo: str,
+    pr_number: int,
+    *,
+    profile: str = "reviewer",
+    runs_dir: Path | str = "artifacts/runs",
+) -> dict:
     """Execute the reviewer agent locally against an existing PR review prompt artifact.
 
     Purely local execution. Writes raw + summary artifacts under artifacts/runs/.
@@ -620,7 +626,7 @@ def execute_pr_review(repo: str, pr_number: int, *, profile: str = "reviewer") -
     print(f"Running: openclaw agent --agent {profile} --session-key {session_key} --local")
     print(f"Using prompt: {prompt_path} (length: {len(prompt_content)} chars)")
 
-    runs_dir = Path("artifacts/runs")
+    runs_dir = Path(runs_dir)
     runs_dir.mkdir(parents=True, exist_ok=True)
 
     raw_path = runs_dir / f"pr-{pr_number}-reviewer.raw.txt"
@@ -672,3 +678,243 @@ def execute_pr_review(repo: str, pr_number: int, *, profile: str = "reviewer") -
         return {"exit_code": -1, "raw_path": str(raw_path), "success": False}
 
 
+# =============================================================================
+# HARDENING-017: Reviewer opinion parsing + conservative review gate
+# =============================================================================
+
+
+
+
+@dataclass(frozen=True)
+class ReviewerOpinion:
+    """Parsed structured opinion from the reviewer agent."""
+    verdict: str | None  # APPROVE | NEEDS_CHANGES | BLOCK
+    confidence: float | None
+    risk: str | None  # low | medium | high
+    scope_match: str | None  # yes | no
+    ci_considered: str | None  # yes | no
+    merge_recommendation: str | None  # yes | no
+    automerge_eligible: str | None  # yes | no
+    findings: list[str]
+    reasoning: str | None
+    raw_text: str
+
+
+@dataclass(frozen=True)
+class ReviewGateResult:
+    """Result of the conservative review gate."""
+    pr_number: int
+    status: str  # "pass" | "blocked — <reason>"
+    reason: str
+    opinion: ReviewerOpinion
+    gate_pass: bool
+    merge_eligible: bool
+    automerge_eligible: bool
+    summary_path: str | None
+    notes: list[str]
+
+
+def parse_reviewer_opinion(text: str) -> ReviewerOpinion:
+    """Parse the structured reviewer contract from raw or summary text.
+
+    Tolerant line-based parser. Looks for the expected fields.
+    """
+    verdict = None
+    confidence = None
+    risk = None
+    scope_match = None
+    ci_considered = None
+    merge_recommendation = None
+    automerge_eligible = None
+    findings: list[str] = []
+    reasoning_lines: list[str] = []
+    in_findings = False
+    in_reasoning = False
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        low = line.lower()
+
+        if line.startswith("Verdict:"):
+            verdict = line.split(":", 1)[1].strip().upper()
+            in_findings = False
+            in_reasoning = False
+        elif line.startswith("Confidence:"):
+            val = line.split(":", 1)[1].strip()
+            try:
+                confidence = float(val)
+            except ValueError:
+                confidence = None
+            in_findings = False
+            in_reasoning = False
+        elif low.startswith("risk:"):
+            risk = line.split(":", 1)[1].strip().lower()
+            in_findings = False
+            in_reasoning = False
+        elif low.startswith("scope match:"):
+            scope_match = line.split(":", 1)[1].strip().lower()
+            in_findings = False
+            in_reasoning = False
+        elif low.startswith("ci considered:"):
+            ci_considered = line.split(":", 1)[1].strip().lower()
+            in_findings = False
+            in_reasoning = False
+        elif low.startswith("merge recommendation:"):
+            merge_recommendation = line.split(":", 1)[1].strip().lower()
+            in_findings = False
+            in_reasoning = False
+        elif low.startswith("automerge eligible:"):
+            automerge_eligible = line.split(":", 1)[1].strip().lower()
+            in_findings = False
+            in_reasoning = False
+        elif line.startswith("Findings:"):
+            in_findings = True
+            in_reasoning = False
+            continue
+        elif line.startswith("Reasoning summary:") or line.startswith("Reasoning:"):
+            in_reasoning = True
+            in_findings = False
+            continue
+
+        if in_findings and line.startswith("-"):
+            findings.append(line[1:].strip())
+        elif in_reasoning and line and not line.startswith("-"):
+            reasoning_lines.append(line)
+
+    reasoning = " ".join(reasoning_lines).strip() if reasoning_lines else None
+
+    return ReviewerOpinion(
+        verdict=verdict,
+        confidence=confidence,
+        risk=risk,
+        scope_match=scope_match,
+        ci_considered=ci_considered,
+        merge_recommendation=merge_recommendation,
+        automerge_eligible=automerge_eligible,
+        findings=findings,
+        reasoning=reasoning,
+        raw_text=text,
+    )
+
+
+def evaluate_review_gate(
+    repo: str, pr_number: int, *, summary_path: str | None = None
+) -> ReviewGateResult:
+    """Read reviewer artifacts and produce a conservative gate decision."""
+    if summary_path is None:
+        summary_path = f"artifacts/runs/pr-{pr_number}-reviewer.summary.md"
+
+    notes = [
+        "No GitHub review was submitted.",
+        "No PR approval was submitted.",
+        "No merge was performed.",
+        "No issue was closed.",
+    ]
+
+    if not os.path.isfile(summary_path):
+        # Try raw as fallback for parsing
+        raw_path = f"artifacts/runs/pr-{pr_number}-reviewer.raw.txt"
+        if os.path.isfile(raw_path):
+            with open(raw_path, encoding="utf-8") as f:
+                text = f.read()
+            opinion = parse_reviewer_opinion(text)
+            return ReviewGateResult(
+                pr_number=pr_number,
+                status="blocked — reviewer summary artifact missing (raw fallback used for parse)",
+                reason="summary artifact not found",
+                opinion=opinion,
+                gate_pass=False,
+                merge_eligible=False,
+                automerge_eligible=False,
+                summary_path=raw_path,
+                notes=notes,
+            )
+        return ReviewGateResult(
+            pr_number=pr_number,
+            status="blocked — reviewer summary artifact missing",
+            reason="summary artifact not found",
+            opinion=ReviewerOpinion(
+                None, None, None, None, None, None, None, [], None, ""
+            ),
+            gate_pass=False,
+            merge_eligible=False,
+            automerge_eligible=False,
+            summary_path=None,
+            notes=notes,
+        )
+
+    with open(summary_path, encoding="utf-8") as f:
+        text = f.read()
+
+    # Prefer the structured section inside the summary (first 25 lines area)
+    # but also parse the whole thing
+    opinion = parse_reviewer_opinion(text)
+
+    # Conservative gate logic
+    gate_pass = False
+    reason = ""
+
+    if opinion.verdict != "APPROVE":
+        reason = f"reviewer verdict is {opinion.verdict or 'unknown'}"
+    elif opinion.confidence is None or opinion.confidence < 0.85:
+        reason = f"confidence below threshold (got {opinion.confidence})"
+    elif opinion.risk not in ("low", "LOW"):
+        reason = f"reviewer risk is {opinion.risk or 'unknown'}"
+    elif opinion.scope_match not in ("yes", "YES"):
+        reason = "scope match is no"
+    elif opinion.ci_considered not in ("yes", "YES"):
+        reason = "CI was not considered"
+    elif opinion.merge_recommendation not in ("yes", "YES"):
+        reason = "merge recommendation is no"
+    else:
+        gate_pass = True
+        reason = (
+            "reviewer approved with high confidence, low risk, green CI, "
+            "and matching scope"
+        )
+
+    automerge_ok = gate_pass and opinion.automerge_eligible in ("yes", "YES")
+
+    status = "pass" if gate_pass else f"blocked — {reason}"
+
+    return ReviewGateResult(
+        pr_number=pr_number,
+        status=status,
+        reason=reason,
+        opinion=opinion,
+        gate_pass=gate_pass,
+        merge_eligible=gate_pass,  # conservative: gate pass == merge eligible for now
+        automerge_eligible=automerge_ok,
+        summary_path=summary_path,
+        notes=notes,
+    )
+
+
+def format_review_gate(result: ReviewGateResult) -> str:
+    """Compact deterministic output for the review gate."""
+    o = result.opinion
+    lines = [f"Signposter Review Gate — PR #{result.pr_number}\n"]
+
+    lines.append("Reviewer opinion:")
+    lines.append(f"  verdict: {o.verdict or 'unknown'}")
+    lines.append(f"  confidence: {o.confidence if o.confidence is not None else 'unknown'}")
+    lines.append(f"  risk: {o.risk or 'unknown'}")
+    lines.append(f"  scope match: {o.scope_match or 'unknown'}")
+    lines.append(f"  ci considered: {o.ci_considered or 'unknown'}")
+    lines.append(f"  merge recommendation: {o.merge_recommendation or 'unknown'}")
+    lines.append(f"  automerge eligible: {o.automerge_eligible or 'unknown'}")
+
+    lines.append("\nGate:")
+    lines.append(f"  status: {result.status}")
+    lines.append(f"  reason: {result.reason}")
+
+    lines.append("\nNext:")
+    lines.append(f"  merge eligible: {'yes' if result.merge_eligible else 'no'}")
+    lines.append(f"  automerge eligible: {'yes' if result.automerge_eligible else 'no'}")
+
+    if result.notes:
+        lines.append("\nNotes:")
+        for n in result.notes:
+            lines.append(f"  {n}")
+
+    return "\n".join(lines)
