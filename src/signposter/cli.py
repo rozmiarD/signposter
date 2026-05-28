@@ -17,6 +17,7 @@ from signposter.handoff import format_handoff_plan, plan_handoff_for_issue
 from signposter.pr import format_pr_plan, plan_pr_for_issue
 from signposter.report import report_main
 from signposter.review import (
+    execute_pr_review,
     format_review_plan,
     plan_review_for_pr,
     write_review_prompt_artifact,
@@ -305,6 +306,18 @@ def main() -> None:
     write_prompt_parser.add_argument("--repo", required=True)
     write_prompt_parser.add_argument("--pr", type=int, required=True)
     write_prompt_parser.set_defaults(func=run_review_write_prompt)
+
+    # execute subcommand (HARDENING-016)
+    execute_parser = review_subparsers.add_parser(
+        "execute",
+        help=(
+            "Execute the reviewer agent locally against a PR review prompt "
+            "(dry-run local execution only)"
+        ),
+    )
+    execute_parser.add_argument("--repo", required=True)
+    execute_parser.add_argument("--pr", type=int, required=True)
+    execute_parser.set_defaults(func=run_review_execute)
 
     # report subcommand (for posting runner summaries back to GitHub)
     report_parser = subparsers.add_parser(
@@ -693,5 +706,45 @@ def run_review_write_prompt(args: argparse.Namespace) -> int:
         return 1
     except Exception as e:
         print(f"Write prompt failed: {e}", file=sys.stderr)
+        return 2
+
+
+def run_review_execute(args: argparse.Namespace) -> int:
+    """Handler for `signposter review execute --repo ... --pr N` (HARDENING-016)."""
+    repo = getattr(args, "repo", None)
+    pr = getattr(args, "pr", None)
+
+    if not repo or pr is None:
+        print("Error: --repo and --pr are required", file=sys.stderr)
+        return 1
+
+    try:
+        result = execute_pr_review(repo, pr)
+
+        print(f"Signposter Review Execute — PR #{pr}")
+        print("")
+        print("Reviewer:")
+        print("  agent: reviewer")
+        print(f"  prompt: artifacts/prompts/pr-{pr}-review.md")
+        print(f"  raw artifact: {result.get('raw_path') or 'none'}")
+        print(f"  summary artifact: {result.get('summary_path') or 'none'}")
+        print("")
+        status = (
+            "completed"
+            if result.get("success")
+            else f"failed (exit={result.get('exit_code')})"
+        )
+        print(f"Status:\n  {status}")
+        if result.get("error"):
+            print(f"  Error: {result['error']}")
+        print("")
+        print("Notes:")
+        print("  No GitHub review was submitted.")
+        print("  No PR approval was submitted.")
+        print("  No merge was performed.")
+        print("  No issue was closed.")
+        return 0 if result.get("success") else 1
+    except Exception as e:
+        print(f"Review execute failed: {e}", file=sys.stderr)
         return 2
 
