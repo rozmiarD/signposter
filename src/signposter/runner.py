@@ -300,6 +300,7 @@ def main() -> int:
     execute = args.execute
     issue = getattr(args, "issue", None)
     allow_dirty = getattr(args, "allow_dirty", False)
+    use_worktree = getattr(args, "worktree", False)
 
     return cli_main(
         args.repo,
@@ -309,6 +310,7 @@ def main() -> int:
         execute=execute,
         issue=issue,
         allow_dirty=allow_dirty,
+        worktree=use_worktree,
     )  # noqa: E501
 
 
@@ -630,6 +632,7 @@ def cli_main(
     execute: bool = False,
     issue: int | None = None,
     allow_dirty: bool = False,
+    worktree: bool = False,
 ) -> int:  # noqa: E501
     """Entry point for the run command.
 
@@ -724,8 +727,62 @@ def cli_main(
 
             if execute and final_plans:
                 print("\n=== EXECUTING RUNNER (OpenClaw) ===\n")
+
                 for p in final_plans:
                     st = (p.dispatch.state or "").lower()
+
+                    # HARDENING-010: explicit worktree execution path
+                    if worktree:
+                        if issue is None:
+                            print("Refusing --worktree execution: --issue is required.")
+                            return 1
+
+                        ws = get_worktree_status_for_issue(issue, p.item.title)
+                        if not ws.get("exists"):
+                            print("Refusing worktree execution: expected worktree is missing.")
+                            hint = (
+                                f"Hint: run `signposter worktree apply --repo {repo} "
+                                f"--issue {issue} --apply`"
+                            )
+                            print(hint)
+                            return 1
+
+                        if p.proposed_profile != "worker":
+                            msg = (
+                                f"Refusing --worktree: profile is '{p.proposed_profile}' "
+                                "(worker required)"
+                            )
+                            print(msg)
+                            return 1
+
+                        if st != "active":
+                            msg = f"Refusing worktree execution: state={st} (requires state:active)"
+                            print(msg)
+                            return 1
+
+                        worktree_path = ws["path"]
+
+                        # Dirty guard against the worktree itself
+                        if not allow_dirty:
+                            dirty = find_uncommitted_repo_changes(cwd=worktree_path)
+                            if dirty:
+                                shown = ", ".join(dirty[:3])
+                                print(
+                                "Refusing worktree execution: worktree has uncommitted changes: "
+                                f"{shown}"
+                            )
+                            return 1
+
+                        result = execute_plan(
+                            p, repo, allow_dirty=allow_dirty, worktree_cwd=worktree_path
+                        )
+                        print(f"Execution completed for issue #{p.item.number} (worktree)")
+                        print(f"  Exit code: {result.get('exit_code')}")
+                        print(f"  Raw output: {result.get('raw_path')}")
+                        print(f"  Summary:   {result.get('summary_path')}")
+                        continue  # handled
+
+                    # Normal (non-worktree) execution path
                     if st != "active":
                         msg = f"  Refusing to execute issue #{p.item.number}: state={st}"
                         print(msg + " (requires state:active)")
@@ -830,7 +887,13 @@ def cli_main(
 
 # --- Execution Layer (for --execute) ---
 
-def execute_plan(plan: RunnerPlan, repo: str, *, allow_dirty: bool = False) -> dict:
+def execute_plan(
+    plan: RunnerPlan,
+    repo: str,
+    *,
+    allow_dirty: bool = False,
+    worktree_cwd: str | None = None,
+) -> dict:
     """Execute the runner plan using OpenClaw (local only).
 
     Safety: This function assumes the item is already in an executable state
@@ -846,9 +909,11 @@ def execute_plan(plan: RunnerPlan, repo: str, *, allow_dirty: bool = False) -> d
     prompt_path = plan.proposed_prompt_path
     session_key = f"signposter-issue-{item.number}-{profile}"
 
-    # HARDENING-006: Worker isolation guard
+    # HARDENING-006 + HARDENING-010: Worker isolation guard (respects worktree cwd)
+    effective_cwd = worktree_cwd or "."
+
     if profile == "worker" and not allow_dirty:
-        dirty_paths = find_uncommitted_repo_changes()
+        dirty_paths = find_uncommitted_repo_changes(cwd=effective_cwd)
         if dirty_paths:
             shown = ", ".join(dirty_paths[:5])
             extra = "..." if len(dirty_paths) > 5 else ""
@@ -897,6 +962,7 @@ def execute_plan(plan: RunnerPlan, repo: str, *, allow_dirty: bool = False) -> d
             exec_cmd,
             capture_output=True,
             text=True,
+            cwd=effective_cwd,  # HARDENING-010: run inside worktree when provided
             timeout=600,  # 10 minute safety timeout
         )
         stdout = proc.stdout or ""
