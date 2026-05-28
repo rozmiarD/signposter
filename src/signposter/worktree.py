@@ -1,0 +1,179 @@
+"""Worktree / branch planning for isolated worker execution (dry-run only).
+
+This module produces plans for safe, isolated execution using git worktrees
+and branches. No mutations are performed.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from pathlib import Path
+
+from signposter.dependencies import is_dependency_blocked
+from signposter.dispatch import classify_candidate
+from signposter.git_utils import (
+    branch_exists,
+    get_current_branch,
+    has_blocking_dirty_changes,
+    worktree_path_exists,
+)
+from signposter.scan import LabeledItem, fetch_issue_by_number, fetch_issue_context
+
+
+@dataclass(frozen=True)
+class WorktreePlan:
+    """A dry-run plan for isolated execution of an issue."""
+
+    issue_number: int
+    title: str
+    state: str | None
+    route: str | None
+    gate: str | None
+
+    base_branch: str | None
+    proposed_branch: str
+    proposed_worktree: str
+
+    working_tree_clean: bool
+    branch_exists: bool
+    worktree_exists: bool
+    has_unresolved_dependencies: bool
+    dependency_block_reason: str | None
+
+    status: str  # "ready" | "blocked — <reason>"
+    notes: list[str]
+
+
+def _slugify_title(title: str, max_len: int = 50) -> str:
+    """Convert issue title to a safe, hyphenated slug."""
+    if not title:
+        return "untitled"
+
+    # Lowercase, replace non-alphanumeric with hyphens
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+    # Collapse multiple hyphens
+    slug = re.sub(r"-+", "-", slug)
+    # Truncate
+    if len(slug) > max_len:
+        slug = slug[:max_len].rstrip("-")
+    return slug or "untitled"
+
+
+def generate_proposed_branch(issue_number: int, title: str) -> str:
+    """Generate deterministic branch name like work/issue-12-implement-feature-x."""
+    slug = _slugify_title(title)
+    return f"work/issue-{issue_number}-{slug}"
+
+
+def generate_proposed_worktree(issue_number: int, base: str = "..") -> str:
+    """Generate proposed worktree path."""
+    return str(Path(base) / "signposter-work" / str(issue_number))
+
+
+def plan_worktree_for_issue(repo: str, issue_number: int) -> WorktreePlan:
+    """Produce a WorktreePlan for a specific issue (read-only)."""
+    item: LabeledItem | None = fetch_issue_by_number(repo, issue_number)
+
+    if item is None:
+        return WorktreePlan(
+            issue_number=issue_number,
+            title="unknown",
+            state=None,
+            route=None,
+            gate=None,
+            base_branch=None,
+            proposed_branch=f"work/issue-{issue_number}-unknown",
+            proposed_worktree=generate_proposed_worktree(issue_number),
+            working_tree_clean=False,
+            branch_exists=False,
+            worktree_exists=False,
+            has_unresolved_dependencies=False,
+            dependency_block_reason=None,
+            status=f"blocked — could not fetch issue #{issue_number}",
+            notes=["Issue not found or not accessible."],
+        )
+
+    dispatch = classify_candidate(item)
+    state = dispatch.state
+    route = dispatch.proposed_route
+    gate = dispatch.proposed_gate
+
+    # Git context
+    base_branch = get_current_branch() or "main"
+    proposed_branch = generate_proposed_branch(issue_number, item.title)
+    proposed_worktree = generate_proposed_worktree(issue_number)
+
+    tree_clean = not has_blocking_dirty_changes()
+    branch_exists_flag = branch_exists(proposed_branch)
+    worktree_exists_flag = worktree_path_exists(proposed_worktree)
+
+    # Dependency check
+    context = fetch_issue_context(repo, issue_number) or {}
+    body = context.get("body", "") or ""
+    blocked_by_deps, dep_reason = is_dependency_blocked(repo, body)
+
+    # Determine status
+    notes: list[str] = ["No branches or worktrees were created."]
+    status = "ready"
+
+    if state in ("done", "failed"):
+        status = f"blocked — issue is state:{state}"
+    elif blocked_by_deps:
+        status = f"blocked — {dep_reason}"
+    elif not tree_clean:
+        status = "blocked — working tree has uncommitted changes"
+    elif branch_exists_flag:
+        status = f"blocked — proposed branch already exists: {proposed_branch}"
+    elif worktree_exists_flag:
+        status = f"blocked — proposed worktree path already exists: {proposed_worktree}"
+    elif route != "worker":
+        status = f"blocked — route is '{route}' (worktree planning currently targets worker)"
+    else:
+        status = "ready"
+
+    return WorktreePlan(
+        issue_number=issue_number,
+        title=item.title,
+        state=state,
+        route=route,
+        gate=gate,
+        base_branch=base_branch,
+        proposed_branch=proposed_branch,
+        proposed_worktree=proposed_worktree,
+        working_tree_clean=tree_clean,
+        branch_exists=branch_exists_flag,
+        worktree_exists=worktree_exists_flag,
+        has_unresolved_dependencies=blocked_by_deps,
+        dependency_block_reason=dep_reason if blocked_by_deps else None,
+        status=status,
+        notes=notes,
+    )
+
+
+def format_worktree_plan(plan: WorktreePlan) -> str:
+    """Produce compact human-readable output for the plan."""
+    lines = [f"Signposter Worktree Plan — Issue #{plan.issue_number}\n"]
+
+    lines.append("Issue:")
+    lines.append(f"  title: {plan.title}")
+    lines.append(f"  state: {plan.state or 'unknown'}")
+    lines.append(f"  route: {plan.route or 'unknown'}")
+    if plan.gate:
+        lines.append(f"  gate: {plan.gate}")
+
+    lines.append("\nGit:")
+    lines.append(f"  base branch: {plan.base_branch or 'unknown'}")
+    lines.append(f"  proposed branch: {plan.proposed_branch}")
+    lines.append(f"  proposed worktree: {plan.proposed_worktree}")
+    lines.append(f"  working tree: {'clean' if plan.working_tree_clean else 'dirty'}")
+
+    lines.append("\nStatus:")
+    lines.append(f"  {plan.status}")
+
+    if plan.notes:
+        lines.append("\nNotes:")
+        for n in plan.notes:
+            lines.append(f"  {n}")
+
+    return "\n".join(lines)

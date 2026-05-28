@@ -21,6 +21,10 @@ from signposter.transitions import (
     perform_transition_mutation,
     run_transition_dry_run,
 )
+from signposter.worktree import (
+    format_worktree_plan,
+    plan_worktree_for_issue,
+)
 
 
 def main() -> None:
@@ -187,6 +191,22 @@ def main() -> None:
         help="Allow execution even if the working tree has uncommitted changes (use with caution)",
     )
     run_parser.set_defaults(func=run_runner)
+
+    # worktree subcommand group (planning only — HARDENING-007)
+    worktree_parser = subparsers.add_parser(
+        "worktree",
+        help="Isolated worktree and branch planning (dry-run only)",
+        description="Plan safe isolated execution using git worktrees and branches.",
+    )
+    worktree_subparsers = worktree_parser.add_subparsers(dest="worktree_command")
+
+    worktree_plan_parser = worktree_subparsers.add_parser(
+        "plan",
+        help="Produce a dry-run plan for isolated execution of an issue",
+    )
+    worktree_plan_parser.add_argument("--repo", required=True)
+    worktree_plan_parser.add_argument("--issue", type=int, required=True)
+    worktree_plan_parser.set_defaults(func=run_worktree_plan)
 
     # report subcommand (for posting runner summaries back to GitHub)
     report_parser = subparsers.add_parser(
@@ -448,3 +468,21 @@ def run_gate(args: argparse.Namespace) -> int:
 
     print(format_gate_report(result))
     return 0
+
+
+def run_worktree_plan(args: argparse.Namespace) -> int:
+    """Handler for `signposter worktree plan --repo ... --issue N`."""
+    repo = getattr(args, "repo", None)
+    issue = getattr(args, "issue", None)
+
+    if not repo or not issue:
+        print("Error: --repo and --issue are required", file=sys.stderr)
+        return 1
+
+    try:
+        plan = plan_worktree_for_issue(repo, issue)
+        print(format_worktree_plan(plan))
+        return 0 if plan.status == "ready" else 1
+    except Exception as e:
+        print(f"Worktree plan failed: {e}", file=sys.stderr)
+        return 2
