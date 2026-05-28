@@ -6,6 +6,7 @@ Pure dry-run planning only. No GitHub mutations, no merges, no issue closes.
 from __future__ import annotations
 
 import re
+import subprocess
 from dataclasses import dataclass
 from typing import Any
 
@@ -476,3 +477,106 @@ def _fetch_pr_checks_for_merge(repo: str, pr: int) -> dict[str, Any]:
         "failing": failing,
         "pending": pending,
     }
+
+
+# =============================================================================
+# HARDENING-020: Guarded PR merge apply (dry-run by default, --apply for mutation)
+# =============================================================================
+
+
+def apply_merge(
+    repo: str, pr_number: int, *, apply: bool = False
+) -> dict:
+    """Execute (or dry-run) a guarded merge of a PR.
+
+    Only performs the actual gh pr merge when apply=True AND the merge plan status is "ready".
+    Uses squash merge + --delete-branch for the remote branch.
+    Never closes issues, never touches local worktrees/branches.
+    """
+    plan = plan_merge_for_pr(repo, pr_number)
+
+    if not apply:
+        # Pure dry-run
+        return {
+            "mode": "dry_run",
+            "plan": plan,
+            "command": plan.command_preview,
+        }
+
+    # Mutation path - extremely guarded
+    if plan.status != "ready":
+        return {
+            "mode": "apply_blocked",
+            "plan": plan,
+            "error": f"Refusing to merge: {plan.status}",
+        }
+
+    # Execute the merge
+    cmd = [
+        "gh", "pr", "merge", str(pr_number),
+        "-R", repo,
+        "--squash",
+        "--delete-branch",
+    ]
+
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        success = proc.returncode == 0
+
+        result = {
+            "mode": "apply",
+            "plan": plan,
+            "success": success,
+            "command": " ".join(cmd),
+            "stdout": proc.stdout,
+            "stderr": proc.stderr,
+        }
+
+        if not success:
+            result["error"] = f"gh pr merge failed: {proc.stderr.strip()[:500]}"
+
+        return result
+
+    except Exception as e:
+        return {
+            "mode": "apply",
+            "plan": plan,
+            "success": False,
+            "command": " ".join(cmd),
+            "error": str(e),
+        }
+
+
+def format_merge_apply_dry_run(plan: MergePlan) -> str:
+    """Compact dry-run output for merge apply.
+
+    HARDENING-020A: Status must accurately reflect the underlying merge plan status.
+    Never hardcode 'ready'.
+    """
+    lines = [f"Signposter Merge Apply Plan — PR #{plan.pr_number}\n"]
+
+    lines.append("Merge plan:")
+    lines.append(f"  status: {plan.status}")
+    lines.append(f"  method: {plan.merge_method}")
+    del_branch = "yes" if plan.delete_branch_after_merge else "no"
+    lines.append(f"  delete branch after merge: {del_branch}")
+
+    lines.append("\nCommand:")
+    lines.append(f"  {plan.command_preview}")
+
+    lines.append("\nStatus:")
+    if plan.status == "ready":
+        lines.append("  ready")
+    else:
+        lines.append(f"  blocked — merge plan is not ready ({plan.status})")
+
+    lines.append("\nNotes:")
+    lines.append("  DRY RUN: no merge was performed.")
+    lines.append("  No issue was closed.")
+    lines.append("  No local worktree was removed.")
+    lines.append(
+        "  Remote branch deletion would only happen after successful merge via --delete-branch."
+    )
+
+    return "\n".join(lines)
+
