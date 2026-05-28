@@ -569,3 +569,99 @@ def test_generate_execution_summary_omits_dirty_guard_for_reviewer():
 
     assert "Dirty Guard" not in summary
 
+
+# --- HARDENING-009: worktree-aware runner planning (diagnostic) ---
+
+
+def test_plan_runner_for_issue_prefers_existing_worktree(monkeypatch):
+    """When the isolated worktree exists, proposed_working_dir should point to it."""
+    from unittest.mock import patch
+
+    from signposter.runner import plan_runner_for_issue
+
+    fake_item = make_item(55, ["state:active", "role:worker", "phase:build"])
+
+    with patch("signposter.runner.fetch_issue_by_number", return_value=fake_item), \
+         patch("signposter.runner.get_worktree_status_for_issue") as mock_ws:
+        mock_ws.return_value = {
+            "status": "available",
+            "path": "../signposter-work/55",
+            "branch": "work/issue-55-test",
+            "exists": True,
+        }
+        plan = plan_runner_for_issue("test/repo", 55)
+
+    assert plan is not None
+    assert plan.proposed_working_dir == "../signposter-work/55"
+
+
+def test_plan_runner_for_issue_falls_back_when_no_worktree(monkeypatch):
+    """When no worktree exists, fall back to the original ~/projects/... path."""
+    from unittest.mock import patch
+
+    from signposter.runner import plan_runner_for_issue
+
+    fake_item = make_item(56, ["state:ready", "role:worker"])
+
+    with patch("signposter.runner.fetch_issue_by_number", return_value=fake_item), \
+         patch("signposter.runner.get_worktree_status_for_issue") as mock_ws:
+        mock_ws.return_value = {
+            "status": "missing",
+            "path": "../signposter-work/56",
+            "exists": False,
+        }
+        plan = plan_runner_for_issue("test/repo", 56)
+
+    assert plan is not None
+    assert "~/projects/signposter-work/56" in plan.proposed_working_dir
+
+
+def test_cli_main_explicit_issue_shows_worktree_missing_hint(capsys, monkeypatch):
+    """Dry-run for explicit issue with no worktree should show the missing hint."""
+    from unittest.mock import patch
+
+    from signposter.runner import cli_main
+
+    fake_item = make_item(77, ["state:active", "role:worker"])
+
+    with patch("signposter.runner.fetch_issue_by_number", return_value=fake_item), \
+         patch("signposter.runner.get_worktree_status_for_issue") as mock_ws:
+        mock_ws.return_value = {
+            "status": "missing",
+            "path": "../signposter-work/77",
+            "branch": "work/issue-77-x",
+            "exists": False,
+        }
+        cli_main("test/repo", issue=77)
+
+    out = capsys.readouterr().out
+    assert "Worktree:" in out
+    assert "status: missing" in out
+    assert "signposter worktree apply" in out
+    assert "--issue 77 --apply" in out
+
+
+def test_cli_main_explicit_issue_shows_worktree_available(capsys, monkeypatch):
+    """Dry-run should report available worktree and the effective working_dir."""
+    from unittest.mock import patch
+
+    from signposter.runner import cli_main
+
+    fake_item = make_item(88, ["state:active", "role:worker"])
+
+    with patch("signposter.runner.fetch_issue_by_number", return_value=fake_item), \
+         patch("signposter.runner.get_worktree_status_for_issue") as mock_ws:
+        mock_ws.return_value = {
+            "status": "available",
+            "path": "../signposter-work/88",
+            "branch": "work/issue-88-y",
+            "exists": True,
+        }
+        cli_main("test/repo", issue=88)
+
+    out = capsys.readouterr().out
+    assert "Worktree:" in out
+    assert "status: available" in out
+    assert "../signposter-work/88" in out
+    assert "runner working_dir: ../signposter-work/88" in out
+

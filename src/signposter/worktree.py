@@ -238,3 +238,23 @@ def apply_worktree_plan(plan: WorktreePlan, *, dry_run: bool = True) -> list[str
             raise RuntimeError(f"git worktree add failed: {stderr.strip()}") from e
 
     return commands
+
+
+def get_worktree_status_for_issue(issue_number: int, title: str | None = None) -> dict:
+    """Lightweight diagnostic for runner integration (HARDENING-009).
+
+    Returns:
+      status: 'available' | 'missing'
+      path, branch, exists
+    """
+    expected_path = generate_proposed_worktree(issue_number)
+    branch_name = generate_proposed_branch(issue_number, title or "task")
+
+    exists = worktree_path_exists(expected_path)
+
+    return {
+        "status": "available" if exists else "missing",
+        "path": expected_path,
+        "branch": branch_name,
+        "exists": exists,
+    }
