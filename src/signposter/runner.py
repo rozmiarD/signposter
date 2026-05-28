@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from signposter.claim import perform_claim_mutation, plan_claims
+from signposter.dependencies import is_dependency_blocked
 from signposter.dispatch import DispatchDecision, classify_candidate
 from signposter.scan import LabeledItem, fetch_issue_by_number, fetch_issue_context
 
@@ -633,11 +634,24 @@ def cli_main(
             print(f"Signposter Run Plan — Explicit target issue #{issue}")
             print(format_runner_plan(plans))
 
-            # HARDENING-004 micro-adjustment: explicit status for terminal states
+            # HARDENING-004 micro-adjustment + HARDENING-005 deps
             if plans:
                 st = (plans[0].dispatch.state or "").lower()
                 if st in ("done", "failed"):
                     print(f"Execution status: blocked — state:{st}")
+
+                # Show dependency status for diagnostic purposes (even if not claimable)
+                if st == "ready":
+                    try:
+                        ctx = fetch_issue_context(repo, issue) or {}
+                        body = ctx.get("body", "")
+                        blocked, d_reason = is_dependency_blocked(repo, body)
+                        if blocked:
+                            print(f"Dependency status: blocked — {d_reason}")
+                        else:
+                            print("Dependency status: clear")
+                    except Exception:
+                        print("Dependency status: check failed")
 
             # Handle explicit single-issue actions
             plan = plans[0]
