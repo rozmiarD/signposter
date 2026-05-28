@@ -7,6 +7,7 @@ and branches. No mutations are performed.
 from __future__ import annotations
 
 import re
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -177,3 +178,63 @@ def format_worktree_plan(plan: WorktreePlan) -> str:
             lines.append(f"  {n}")
 
     return "\n".join(lines)
+
+
+def format_worktree_apply_plan(plan: WorktreePlan, *, dry_run: bool = True) -> str:
+    """Compact output for the apply command (dry-run or real apply)."""
+    lines = [f"Signposter Worktree Apply Plan — Issue #{plan.issue_number}\n"]
+
+    lines.append("Status:")
+    lines.append(f"  {plan.status}")
+
+    if plan.status == "ready":
+        base = plan.base_branch or "main"
+        cmd = [
+            "git", "worktree", "add", "-b",
+            plan.proposed_branch,
+            plan.proposed_worktree,
+            base,
+        ]
+        cmd_str = " ".join(cmd)
+
+        if dry_run:
+            lines.append("\nWould run:")
+            lines.append(f"  {cmd_str}")
+            lines.append("\nNote: This is a DRY RUN. No branches or worktrees were created.")
+        else:
+            lines.append("\nApplying:")
+            lines.append(f"  {cmd_str}")
+    else:
+        lines.append("\nRefusing to create worktree.")
+
+    return "\n".join(lines)
+
+
+def apply_worktree_plan(plan: WorktreePlan, *, dry_run: bool = True) -> list[str]:
+    """Execute (or simulate) the git worktree creation.
+
+    Returns list of shell-style command strings that were or would be run.
+    Only performs the mutation when dry_run=False and plan.status == 'ready'.
+    """
+    commands: list[str] = []
+
+    if plan.status != "ready":
+        return commands
+
+    base = plan.base_branch or "main"
+    cmd = [
+        "git", "worktree", "add", "-b",
+        plan.proposed_branch,
+        plan.proposed_worktree,
+        base,
+    ]
+    commands.append(" ".join(cmd))
+
+    if not dry_run:
+        try:
+            subprocess.run(cmd, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            stderr = e.stderr or ""
+            raise RuntimeError(f"git worktree add failed: {stderr.strip()}") from e
+
+    return commands
