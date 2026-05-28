@@ -98,6 +98,72 @@ def plan_runner(repo: str, *, limit: int = 1) -> list[RunnerPlan]:
     return plans
 
 
+def _prompt_issue_number(prompt_path: Path) -> int | None:
+    """Extract issue number from artifacts/prompts/issue-N.md."""
+    stem = prompt_path.stem
+    prefix = "issue-"
+    if not stem.startswith(prefix):
+        return None
+
+    try:
+        return int(stem[len(prefix):])
+    except ValueError:
+        return None
+
+
+def plan_active_runner_from_prompts(repo: str, *, limit: int = 1) -> list[RunnerPlan]:
+    """Produce runner plans for already-active items with existing prompt artifacts."""
+    prompt_dir = Path("artifacts/prompts")
+    if not prompt_dir.exists():
+        return []
+
+    prompt_candidates: list[tuple[int, Path]] = []
+    for prompt_path in prompt_dir.glob("issue-*.md"):
+        issue_number = _prompt_issue_number(prompt_path)
+        if issue_number is not None:
+            prompt_candidates.append((issue_number, prompt_path))
+
+    plans: list[RunnerPlan] = []
+
+    for issue_number, prompt_path in sorted(prompt_candidates, key=lambda x: x[0], reverse=True):
+        item = fetch_issue_by_number(repo, issue_number)
+        if not item:
+            continue
+
+        labels = {label.lower() for label in item.labels}
+        if "state:active" not in labels:
+            continue
+
+        dispatch = classify_candidate(item)
+        runner, profile = _select_runner_and_profile(dispatch)
+
+        working_dir = f"~/projects/signposter-work/{item.number}"
+        prompt_path_str = str(prompt_path)
+        command_shape = (
+            f"openclaw agent --agent {profile} "
+            f"--session-key signposter-issue-{item.number}-{profile} "
+            f'--message "$(cat {prompt_path_str})" --local'
+        )
+
+        plans.append(
+            RunnerPlan(
+                item=item,
+                dispatch=dispatch,
+                proposed_runner=runner,
+                proposed_profile=profile,
+                proposed_working_dir=working_dir,
+                proposed_prompt_path=prompt_path_str,
+                proposed_command_shape=command_shape,
+                reason="Already-active item with existing prompt artifact",
+            )
+        )
+
+        if len(plans) >= limit:
+            break
+
+    return plans
+
+
 def format_runner_plan(plans: list[RunnerPlan]) -> str:
     """Human-readable dry-run output for runner planning."""
     if not plans:
@@ -559,25 +625,16 @@ def cli_main(repo: str, limit: int = 1, *, write_prompt: bool = False, claim: bo
                 print(f"  Raw output: {result.get('raw_path')}")
                 print(f"  Summary:   {result.get('summary_path')}")
 
-        # Fallback for --execute on already-active items (e.g. Issue #2 in bootstrap)
+        # Fallback for --execute on already-active items with existing prompt artifacts.
         elif execute and not final_plans:
-            print("\n=== EXECUTING RUNNER (OpenClaw) - active item fallback ===\n")
+            print('\n=== EXECUTING RUNNER (OpenClaw) - active item fallback ===\n')
             try:
-                active_item = fetch_issue_by_number(repo, 2)
-                if active_item and any("state:active" in lbl for lbl in active_item.labels):
-                    dispatch = classify_candidate(active_item)
-                    active_plan = RunnerPlan(
-                        item=active_item,
-                        dispatch=dispatch,
-                        proposed_runner="openclaw",
-                        proposed_profile="reviewer",
-                        proposed_working_dir="~/projects/signposter-work/2",
-                        proposed_prompt_path="artifacts/prompts/issue-2.md",
-                        proposed_command_shape="openclaw agent --agent reviewer ...",
-                        reason="Active item execution (fallback)",
-                    )
-                    result = execute_plan(active_plan, repo)
-                    print("Execution completed for issue #2 (active fallback)")
+                active_plans = plan_active_runner_from_prompts(repo, limit=limit)
+                if not active_plans:
+                    print("No active items with prompt artifacts found.")
+                for plan in active_plans:
+                    result = execute_plan(plan, repo)
+                    print(f"Execution completed for issue #{plan.item.number} (active fallback)")
                     print(f"  Exit code: {result.get('exit_code')}")
                     print(f"  Raw output: {result.get('raw_path')}")
                     print(f"  Summary:   {result.get('summary_path')}")
