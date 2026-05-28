@@ -15,6 +15,7 @@ from signposter.dependencies import is_dependency_blocked
 from signposter.dispatch import DispatchDecision, classify_candidate
 from signposter.git_utils import find_uncommitted_repo_changes
 from signposter.scan import LabeledItem, fetch_issue_by_number, fetch_issue_context
+from signposter.worktree import get_worktree_status_for_issue
 
 
 @dataclass(frozen=True)
@@ -113,7 +114,16 @@ def plan_runner_for_issue(repo: str, issue: int) -> RunnerPlan | None:
     dispatch = classify_candidate(item)
     runner, profile = _select_runner_and_profile(dispatch)
 
-    working_dir = f"~/projects/signposter-work/{item.number}"
+    # HARDENING-009: prefer isolated worktree path if it exists
+    try:
+        ws = get_worktree_status_for_issue(issue, item.title)
+        if ws.get("exists"):
+            working_dir = ws["path"]
+        else:
+            working_dir = f"~/projects/signposter-work/{item.number}"
+    except Exception:
+        working_dir = f"~/projects/signposter-work/{item.number}"
+
     prompt_path = f"artifacts/prompts/issue-{item.number}.md"
 
     command_shape = (
@@ -656,6 +666,31 @@ def cli_main(
                             print("Dependency status: clear")
                     except Exception:
                         print("Dependency status: check failed")
+
+            # HARDENING-009: worktree awareness (diagnostic only in this phase)
+            if plans:
+                p = plans[0]
+                item_num = p.item.number
+                title = p.item.title
+                try:
+                    ws = get_worktree_status_for_issue(item_num, title)
+                    if ws["status"] == "available":
+                        print("\nWorktree:")
+                        print("  status: available")
+                        print(f"  path: {ws['path']}")
+                        print(f"  branch: {ws['branch']}")
+                        print(f"  runner working_dir: {ws['path']}")
+                    else:
+                        print("\nWorktree:")
+                        print("  status: missing")
+                        print(f"  expected path: {ws['path']}")
+                        hint = (
+                            f"  hint: run `signposter worktree apply --repo {repo} "
+                            f"--issue {item_num} --apply`"
+                        )
+                        print(hint)
+                except Exception:
+                    print("Worktree status: check failed")
 
             # Handle explicit single-issue actions
             plan = plans[0]
