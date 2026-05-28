@@ -309,7 +309,7 @@ def run_release(args: argparse.Namespace) -> int:
         return 1
 
     plan = run_transition_dry_run(repo, issue, "release")
-    print(format_transition_plan(plan))
+    print(format_transition_plan(plan, dry_run=not apply))
 
     if apply and plan.valid:
         print("\n=== APPLYING RELEASE MUTATION ===\n")
@@ -333,7 +333,7 @@ def run_complete(args: argparse.Namespace) -> int:
         return 1
 
     plan = run_transition_dry_run(repo, issue, "complete")
-    print(format_transition_plan(plan))
+    print(format_transition_plan(plan, dry_run=not apply))
 
     if apply and plan.valid:
         print("\n=== APPLYING COMPLETE MUTATION ===\n")
@@ -357,7 +357,7 @@ def run_fail(args: argparse.Namespace) -> int:
         return 1
 
     plan = run_transition_dry_run(repo, issue, "fail")
-    print(format_transition_plan(plan))
+    print(format_transition_plan(plan, dry_run=not apply))
 
     if apply and plan.valid:
         print("\n=== APPLYING FAIL MUTATION ===\n")

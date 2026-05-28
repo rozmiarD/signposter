@@ -149,16 +149,18 @@ def plan_claims(repo: str, *, limit: int | None = 1) -> ClaimDryRunResult:
     )
 
 
-def format_claim_plan_report(result: ClaimDryRunResult) -> str:
-    """Produce a human-readable dry-run claim report with limit information."""
+def format_claim_plan_report(result: ClaimDryRunResult, *, dry_run: bool = True) -> str:
+    """Produce a human-readable claim plan report with limit information."""
     plans = result.selected
     total = result.total_claimable
     limit = result.limit
 
     if total == 0:
-        return "Claim Dry-Run: No claimable items (state:ready) found.\n"
+        prefix = "Claim Dry-Run" if dry_run else "Claim Plan"
+        return f"{prefix}: No claimable items (state:ready) found.\n"
 
-    lines = ["Signposter Claim / Lease Dry-Run Plan\n"]
+    mode_word = "Dry-Run" if dry_run else "Plan"
+    lines = [f"Signposter Claim / Lease {mode_word} Plan\n"]
 
     for i, plan in enumerate(plans, 1):
         item = plan.item
@@ -182,7 +184,10 @@ def format_claim_plan_report(result: ClaimDryRunResult) -> str:
     if unclaimed > 0:
         lines.append(f"Items left unclaimed due to limit: {unclaimed}")
     lines.append("")
-    lines.append("Note: This is a DRY RUN. No labels or state were changed on GitHub.")
+    if dry_run:
+        lines.append("Note: This is a DRY RUN. No labels or state were changed on GitHub.")
+    else:
+        lines.append("Note: This plan will be applied (labels will be mutated on GitHub).")
 
     return "\n".join(lines)
 
@@ -191,7 +196,7 @@ def cli_main(repo: str, limit: int = 1, *, apply: bool = False) -> int:
     """Programmatic entry point for the claim command."""
     try:
         result = plan_claims(repo, limit=limit)
-        print(format_claim_plan_report(result))
+        print(format_claim_plan_report(result, dry_run=not apply))
 
         if apply and result.selected:
             print("\n=== APPLYING MUTATIONS (real changes) ===\n")

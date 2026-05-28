@@ -164,9 +164,14 @@ def plan_fail(labels: list[str], issue_number: int) -> TransitionPlan:
     )
 
 
-def format_transition_plan(plan: TransitionPlan) -> str:
-    """Produce a human-readable dry-run report for a transition."""
-    lines = [f"Signposter {plan.action.capitalize()} Dry-Run — Issue #{plan.issue_number}\n"]
+def format_transition_plan(plan: TransitionPlan, *, dry_run: bool = True) -> str:
+    """Produce a human-readable plan report for a transition.
+
+    When dry_run=True (default): header says "Dry-Run" and includes a clear warning.
+    When dry_run=False (apply mode): header says "Plan" and the warning is milder.
+    """
+    mode_word = "Dry-Run" if dry_run else "Plan"
+    lines = [f"Signposter {plan.action.capitalize()} {mode_word} — Issue #{plan.issue_number}\n"]
 
     if not plan.valid:
         lines.append(f"❌ Invalid transition: {plan.reason}")
@@ -184,7 +189,11 @@ def format_transition_plan(plan: TransitionPlan) -> str:
 
     lines.append("")
     lines.append(f"Reason: {plan.reason}")
-    lines.append("\nNote: This is a DRY RUN. No changes were made to GitHub.")
+
+    if dry_run:
+        lines.append("\nNote: This is a DRY RUN. No changes were made to GitHub.")
+    else:
+        lines.append("\nNote: This plan will be applied to GitHub (labels + comment).")
 
     return "\n".join(lines)
 
