@@ -48,11 +48,25 @@ def _slug_for_commit(title: str) -> str:
     return slug[:60] or "task"
 
 
-def _infer_commit_prefix(labels: list[str]) -> str:
+def _normalize_label_names(labels: list[object]) -> list[str]:
+    """Return label names from either strings or GitHub label dicts."""
+    names: list[str] = []
+    for label in labels:
+        if isinstance(label, str):
+            names.append(label)
+        elif isinstance(label, dict):
+            name = label.get("name")
+            if isinstance(name, str):
+                names.append(name)
+    return names
+
+
+def _infer_commit_prefix(labels: list[object]) -> str:
     """Very lightweight prefix inference."""
-    if any(lbl.startswith("area:docs") for lbl in labels):
+    label_names = _normalize_label_names(labels)
+    if any(lbl.startswith("area:docs") for lbl in label_names):
         return "docs:"
-    if any(lbl.startswith("area:tests") for lbl in labels):
+    if any(lbl.startswith("area:tests") for lbl in label_names):
         return "test:"
     return "work:"
 
