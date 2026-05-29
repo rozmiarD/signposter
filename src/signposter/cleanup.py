@@ -226,6 +226,17 @@ def format_cleanup_plan(plan: CleanupPlan) -> str:
     return "\n".join(lines)
 
 
+def _is_already_fully_cleaned(plan: CleanupPlan) -> bool:
+    """
+    H024B: Returns True only when the entire cleanup lifecycle is already complete.
+    """
+    return (
+        plan.status == "completed"
+        and not plan.worktree_exists
+        and not plan.local_branch_exists
+    )
+
+
 def format_cleanup_apply_dry_run(plan: CleanupPlan) -> str:
     """Dry-run output for `cleanup apply` (default)."""
     lines = [f"Signposter Cleanup Apply Plan — PR #{plan.pr_number}\n"]
