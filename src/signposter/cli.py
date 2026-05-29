@@ -295,9 +295,19 @@ def main() -> None:
         help="Path to the local planner JSON draft",
     )
     planner_seed_parser.add_argument(
+        "--repo",
+        default="<owner/repo>",
+        help="Repository to show in future gh issue create command previews",
+    )
+    planner_seed_parser.add_argument(
         "--show-body",
         action="store_true",
         help="Show the full generated issue body for each proposed issue",
+    )
+    planner_seed_parser.add_argument(
+        "--show-commands",
+        action="store_true",
+        help="Show future gh issue create commands without executing them",
     )
     planner_seed_parser.set_defaults(func=run_planner_seed)
 
@@ -1657,7 +1667,9 @@ def run_planner_seed(args: argparse.Namespace) -> int:
         format_planner_seed_plan(
             args.plan,
             seed_plan,
+            repo=args.repo,
             show_body=args.show_body,
+            show_commands=args.show_commands,
         )
     )
     return 0 if seed_plan["status"] == "ready" else 1
