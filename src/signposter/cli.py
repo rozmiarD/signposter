@@ -6,6 +6,7 @@ Currently in bootstrap phase. Only the `doctor` command is implemented.
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
 from pathlib import Path
 
@@ -27,6 +28,7 @@ from signposter.merge import (
     plan_merge_for_pr,
 )
 from signposter.planner import (
+    apply_planner_seed_manifest,
     build_planner_next,
     build_planner_seed_manifest,
     build_planner_seed_plan,
@@ -34,6 +36,7 @@ from signposter.planner import (
     format_planner_mark_result,
     format_planner_next,
     format_planner_roadmap,
+    format_planner_seed_apply_result,
     format_planner_seed_plan,
     format_planner_validation,
     format_written_issue_bodies,
@@ -335,6 +338,11 @@ def main() -> None:
         default=Path("artifacts/plans/seed-manifest.json"),
         type=Path,
         help="Path for --write-manifest output",
+    )
+    planner_seed_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually create GitHub issues from the seed manifest",
     )
     planner_seed_parser.set_defaults(func=run_planner_seed)
 
@@ -1700,11 +1708,14 @@ def run_planner_seed(args: argparse.Namespace) -> int:
         )
     )
 
-    if args.write_bodies:
+    if seed_plan["status"] != "ready":
+        return 1
+
+    if args.write_bodies or args.apply:
         written = write_planner_seed_issue_bodies(seed_plan, args.body_dir)
         print(format_written_issue_bodies(written))
 
-    if args.write_manifest:
+    if args.write_manifest or args.apply:
         manifest = build_planner_seed_manifest(
             plan_path=args.plan,
             repo=args.repo,
@@ -1714,7 +1725,20 @@ def run_planner_seed(args: argparse.Namespace) -> int:
         write_planner_seed_manifest(manifest, args.manifest)
         print(format_written_seed_manifest(args.manifest))
 
-    return 0 if seed_plan["status"] == "ready" else 1
+    if args.apply:
+        result = apply_planner_seed_manifest(
+            args.manifest,
+            lambda command: subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                check=False,
+            ),
+        )
+        print(format_planner_seed_apply_result(args.manifest, result))
+        return 0 if result["status"] == "applied" else 1
+
+    return 0
 
 
 def run_planner_validate(args: argparse.Namespace) -> int:

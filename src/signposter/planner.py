@@ -722,6 +722,45 @@ def build_planner_seed_plan(plan: dict[str, Any]) -> dict[str, Any]:
 
 
 
+
+def format_planner_seed_apply_result(
+    manifest_path: Path,
+    result: dict[str, Any],
+) -> str:
+    """Format guarded seed apply result."""
+    lines = [
+        "",
+        "Planner Seed Apply",
+        "",
+        "Manifest:",
+        f"  {manifest_path}",
+        "",
+        "Status:",
+        f"  {result['status']}",
+    ]
+
+    if result["created"]:
+        lines.extend(["", "Created GitHub issues:"])
+        for issue in result["created"]:
+            url = issue.get("github_url") or ""
+            lines.append(f"  {issue['key']} -> #{issue['github_issue']} {url}".rstrip())
+
+    if result["errors"]:
+        lines.extend(["", "Errors:"])
+        lines.extend(f"  - {error}" for error in result["errors"])
+
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "  GitHub mutation is only performed when --apply is explicitly used.",
+            "  OpenClaw execution was not performed.",
+            "  Task execution was not performed.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def apply_planner_seed_manifest(
     manifest_path: Path,
     runner: Any,
