@@ -324,3 +324,115 @@ def test_cli_rejects_both_issue_and_pr():
 def test_cli_rejects_neither():
     s = plan_lifecycle_status("x/y")
     assert "exactly one" in s.status.lower()
+
+# =============================================================================
+# Issue-to-PR detection regression tests (HARDENING-028B-Lite)
+# =============================================================================
+
+
+def _gh_pr_list_result(prs):
+    import json
+
+    return type(
+        "Result",
+        (),
+        {
+            "returncode": 0,
+            "stdout": json.dumps(prs),
+            "stderr": "",
+        },
+    )()
+
+
+def test_detect_associated_pr_from_issue_finds_open_pr_by_branch_pattern():
+    from signposter.lifecycle import _detect_associated_pr_from_issue
+
+    open_prs = [
+        {
+            "number": 9,
+            "headRefName": "work/issue-8-smoke-test-post-h027-full-lifecycle-docs-note",
+            "body": "",
+        }
+    ]
+
+    with patch(
+        "signposter.lifecycle.subprocess.run",
+        return_value=_gh_pr_list_result(open_prs),
+    ) as run:
+        assert _detect_associated_pr_from_issue("ExatronOmega/signposter", 8) == 9
+
+    assert run.call_count == 1
+    assert "--state" in run.call_args.args[0]
+    assert "open" in run.call_args.args[0]
+
+
+def test_detect_associated_pr_from_issue_finds_open_pr_by_related_issue_body():
+    from signposter.lifecycle import _detect_associated_pr_from_issue
+
+    open_prs = [
+        {
+            "number": 9,
+            "headRefName": "docs/smoke-003-note",
+            "body": "Related issue: #8\n\nDocs-only smoke note.",
+        }
+    ]
+
+    with patch(
+        "signposter.lifecycle.subprocess.run",
+        return_value=_gh_pr_list_result(open_prs),
+    ):
+        assert _detect_associated_pr_from_issue("ExatronOmega/signposter", 8) == 9
+
+
+def test_detect_associated_pr_from_issue_prefers_open_pr_over_merged_pr():
+    from signposter.lifecycle import _detect_associated_pr_from_issue
+
+    open_prs = [
+        {
+            "number": 9,
+            "headRefName": "work/issue-8-smoke-test-post-h027-full-lifecycle-docs-note",
+            "body": "Related issue: #8",
+        }
+    ]
+    merged_prs = [
+        {
+            "number": 7,
+            "headRefName": "work/issue-8-old-merged-pr",
+            "body": "Related issue: #8",
+        }
+    ]
+
+    with patch(
+        "signposter.lifecycle.subprocess.run",
+        side_effect=[_gh_pr_list_result(open_prs), _gh_pr_list_result(merged_prs)],
+    ) as run:
+        assert _detect_associated_pr_from_issue("ExatronOmega/signposter", 8) == 9
+
+    # Open PR match should short-circuit before merged PR search.
+    assert run.call_count == 1
+    assert "open" in run.call_args.args[0]
+
+
+def test_detect_associated_pr_from_issue_falls_back_to_merged_pr():
+    from signposter.lifecycle import _detect_associated_pr_from_issue
+
+    open_prs = []
+    merged_prs = [
+        {
+            "number": 7,
+            "headRefName": "work/issue-8-old-merged-pr",
+            "body": "Related issue: #8",
+        }
+    ]
+
+    with patch(
+        "signposter.lifecycle.subprocess.run",
+        side_effect=[_gh_pr_list_result(open_prs), _gh_pr_list_result(merged_prs)],
+    ) as run:
+        assert _detect_associated_pr_from_issue("ExatronOmega/signposter", 8) == 7
+
+    assert run.call_count == 2
+    first_call_args = run.call_args_list[0].args[0]
+    second_call_args = run.call_args_list[1].args[0]
+    assert "open" in first_call_args
+    assert "merged" in second_call_args

@@ -169,25 +169,32 @@ def _detect_link_source(
 
 
 def _detect_associated_pr_from_issue(repo: str, issue: int) -> int | None:
-    """Best-effort: look for a merged PR that mentions the issue in body or head branch."""
+    """Best-effort: look for an open/merged PR linked by safe Signposter signals."""
+    branch_prefix = f"work/issue-{issue}-"
+    related_issue_re = re.compile(
+        rf"(?im)^\s*Related issue:\s*#?{issue}\b"
+    )
+
     try:
-        result = subprocess.run(
-            [
-                "gh", "pr", "list", "-R", repo,
-                "--state", "merged",
-                "--json", "number,headRefName,body",
-                "--limit", "50",
-            ],
-            capture_output=True, text=True, timeout=30,
-        )
-        if result.returncode != 0:
-            return None
-        prs = __import__("json").loads(result.stdout or "[]")
-        for p in prs:
-            head = p.get("headRefName", "")
-            body = p.get("body", "") or ""
-            if re.search(rf"work/issue-{issue}\b", head) or re.search(rf"#{issue}\b", body):
-                return int(p["number"])
+        for state in ("open", "merged"):
+            result = subprocess.run(
+                [
+                    "gh", "pr", "list", "-R", repo,
+                    "--state", state,
+                    "--json", "number,headRefName,body",
+                    "--limit", "50",
+                ],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode != 0:
+                continue
+
+            prs = __import__("json").loads(result.stdout or "[]")
+            for p in prs:
+                head = p.get("headRefName", "") or ""
+                body = p.get("body", "") or ""
+                if head.startswith(branch_prefix) or related_issue_re.search(body):
+                    return int(p["number"])
     except Exception:
         pass
     return None
