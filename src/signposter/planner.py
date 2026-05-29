@@ -1078,6 +1078,149 @@ def _seed_manifest_is_applied(manifest: dict[str, Any]) -> bool:
 
 
 
+
+COMPLETED_PLANNER_STATES = {"closed", "done", "merged"}
+
+
+def build_planner_next_from_status(status: dict[str, Any]) -> dict[str, Any]:
+    """Choose the next dependency-ready task from a planner status summary."""
+    tasks = status.get("tasks", [])
+    if not tasks:
+        return {
+            "status": "completed",
+            "reason": "no planner tasks found",
+            "next": None,
+            "waiting": [],
+            "blocked": [],
+        }
+
+    completed = {
+        task["key"]
+        for task in tasks
+        if str(task.get("state", "")).lower() in COMPLETED_PLANNER_STATES
+    }
+
+    waiting: list[dict[str, Any]] = []
+    blocked: list[dict[str, Any]] = []
+
+    for task in tasks:
+        state = str(task.get("state", "")).lower()
+        if state in COMPLETED_PLANNER_STATES:
+            continue
+
+        if task.get("github_issue") is None:
+            blocked.append(
+                {
+                    "key": task["key"],
+                    "reason": "task is not seeded to a GitHub issue",
+                }
+            )
+            continue
+
+        missing_dependencies = [
+            dependency
+            for dependency in task.get("depends_on", [])
+            if dependency not in completed
+        ]
+        if missing_dependencies:
+            waiting.append(
+                {
+                    "key": task["key"],
+                    "reason": "waiting for dependencies",
+                    "missing_dependencies": missing_dependencies,
+                }
+            )
+            continue
+
+        if state == "open":
+            return {
+                "status": "ready",
+                "reason": "first dependency-ready open task selected",
+                "next": {
+                    "key": task["key"],
+                    "title": task["title"],
+                    "github_issue": task["github_issue"],
+                    "github_url": task["github_url"],
+                    "state": task["state"],
+                    "depends_on": task["depends_on"],
+                },
+                "waiting": waiting,
+                "blocked": blocked,
+            }
+
+        blocked.append(
+            {
+                "key": task["key"],
+                "reason": f"unsupported task state: {task.get('state')}",
+            }
+        )
+
+    if len(completed) == len(tasks):
+        return {
+            "status": "completed",
+            "reason": "all planner tasks are completed",
+            "next": None,
+            "waiting": waiting,
+            "blocked": blocked,
+        }
+
+    return {
+        "status": "waiting",
+        "reason": "no dependency-ready open task is available",
+        "next": None,
+        "waiting": waiting,
+        "blocked": blocked,
+    }
+
+
+def format_planner_next_from_status(result: dict[str, Any]) -> str:
+    """Format next-from-status result."""
+    lines = [
+        "Signposter Planner Next",
+        "",
+        "Status:",
+        f"  {result['status']}",
+        "",
+        "Reason:",
+        f"  {result['reason']}",
+    ]
+
+    if result["next"] is not None:
+        task = result["next"]
+        deps = ", ".join(task["depends_on"]) if task["depends_on"] else "none"
+        lines.extend(
+            [
+                "",
+                "Next task:",
+                f"  {task['key']} — issue: #{task['github_issue']} — state: {task['state']}",
+                f"  {task['github_url']}",
+                f"  depends on: {deps}",
+            ]
+        )
+
+    if result["waiting"]:
+        lines.extend(["", "Waiting:"])
+        for item in result["waiting"]:
+            missing = ", ".join(item.get("missing_dependencies", []))
+            lines.append(f"  {item['key']} — {item['reason']}: {missing}")
+
+    if result["blocked"]:
+        lines.extend(["", "Blocked:"])
+        for item in result["blocked"]:
+            lines.append(f"  {item['key']} — {item['reason']}")
+
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "  No GitHub mutation was performed.",
+            "  No OpenClaw execution was performed.",
+            "  No task execution was performed.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def build_planner_status(
     manifest: dict[str, Any],
     issue_states: dict[int, str] | None = None,
