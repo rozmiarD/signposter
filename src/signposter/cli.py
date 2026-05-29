@@ -473,6 +473,9 @@ def main() -> None:
     # HARDENING-021C: local cleanup (plan + guarded --apply)
     _register_cleanup_subcommands(subparsers)
 
+    # HARDENING-022A: lifecycle status (read-only)
+    _register_lifecycle_subcommands(subparsers)
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -1168,4 +1171,65 @@ def _register_cleanup_subcommands(subparsers: argparse._SubParsersAction) -> Non
         help="Actually remove the worktree and delete the local branch (requires explicit use)",
     )
     apply_parser.set_defaults(func=run_cleanup_apply)
+
+
+# =============================================================================
+# HARDENING-022A: Lifecycle status (read-only cross-phase summary)
+# =============================================================================
+
+from signposter.lifecycle import (  # noqa: E402
+    format_lifecycle_status,
+    plan_lifecycle_status,
+)
+
+
+def run_lifecycle_status(args: argparse.Namespace) -> int:
+    """Handler for `signposter lifecycle status --repo ... (--issue N | --pr N)`."""
+    repo = getattr(args, "repo", None)
+    issue = getattr(args, "issue", None)
+    pr = getattr(args, "pr", None)
+
+    if not repo:
+        print("Error: --repo is required", file=sys.stderr)
+        return 1
+    if (issue is None) == (pr is None):
+        print("Error: exactly one of --issue or --pr is required", file=sys.stderr)
+        return 1
+
+    try:
+        status = plan_lifecycle_status(repo, issue=issue, pr=pr)
+        print(format_lifecycle_status(status))
+        # Non-zero exit only for clearly blocked cases
+        if "could not be detected" in status.status or status.status.startswith("incomplete"):
+            return 1
+        return 0
+    except Exception as e:
+        print(f"Lifecycle status failed: {e}", file=sys.stderr)
+        return 2
+
+
+def _register_lifecycle_subcommands(subparsers: argparse._SubParsersAction) -> None:
+    """Register the lifecycle command group (status only)."""
+    lifecycle_parser = subparsers.add_parser(
+        "lifecycle",
+        help="Read-only cross-phase lifecycle status for issue or PR",
+        description=(
+        "Summarize the full lifecycle state (issue + PR + review + "
+        "integration + cleanup) in one view."
+    ),
+    )
+    lifecycle_subparsers = lifecycle_parser.add_subparsers(dest="lifecycle_command")
+
+    status_parser = lifecycle_subparsers.add_parser(
+        "status",
+        help="Show combined lifecycle status for an issue or PR (read-only)",
+    )
+    status_parser.add_argument("--repo", required=True)
+    status_parser.add_argument(
+        "--issue", type=int, help="Issue number (exactly one of --issue or --pr)"
+    )
+    status_parser.add_argument(
+        "--pr", type=int, help="PR number (exactly one of --issue or --pr)"
+    )
+    status_parser.set_defaults(func=run_lifecycle_status)
 
