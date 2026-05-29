@@ -195,6 +195,8 @@ ruff check .
 pytest -v
 ```
 
+Signposter lifecycle smoke-test completed successfully.
+
 ---
 
 **Important:** This project must remain clearly separated from the Neutral Agent Pack at all times.
