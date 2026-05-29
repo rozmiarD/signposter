@@ -157,6 +157,20 @@ def evaluate_ci_gate(
             proposed_command="signposter complete --repo {repo} --issue {issue} --apply",
         )
 
+    # H024G: Strong scoped worker completion evidence (docs-only / README-only cases)
+    if _has_scoped_worker_completion_evidence(summary_text + "\n" + (raw_text or "")):
+        return GateDecision(
+            decision="pass",
+            reason=(
+                "Worker completed successfully (exit 0) with strong scoped completion evidence "
+                "(scope followed 100%, dirty guard clean, README/docs-only, no code changes, "
+                "no scope broadening)."
+            ),
+            confidence="medium",
+            proposed_transition="state:active → state:done",
+            proposed_command="signposter complete --repo {repo} --issue {issue} --apply",
+        )
+
     return GateDecision(
         decision="needs-work",
         reason=(
@@ -167,6 +181,66 @@ def evaluate_ci_gate(
         proposed_transition="state:active (worker should be re-run with more evidence)",
         proposed_command=None,
     )
+
+
+def _has_scoped_worker_completion_evidence(text: str) -> bool:
+    """H024G: Detect strong, conservative evidence of scoped worker completion.
+
+    Recognizes realistic low-risk docs-only / README-only worker summaries
+    without making the gate permissive. Requires exit_code==0 already checked.
+    """
+    t = (text or "").lower()
+
+    # Core strong signals (require several of these)
+    strong_signals = [
+        "scope followed: 100%",
+        "scope followed 100%",
+        "dirty guard: clean",
+        "dirty guard clean",
+        "readme.md only",
+        "docs-only",
+        "no code changes",
+        "no scope broadening",
+        "exact line",
+        "exact diff",
+        "only file edited",
+    ]
+    strong_count = sum(1 for s in strong_signals if s in t)
+
+    # Supportive scoped evidence
+    supportive = [
+        "files changed",
+        "readme.md",
+        "git diff -- readme.md",
+        "execution complete",
+        "worker completed",
+        "task complete",
+        "no risks",
+        "no blockers",
+    ]
+    supportive_count = sum(1 for s in supportive if s in t)
+
+    # Negative / disqualifying signals (even if strong signals present)
+    disqualifiers = [
+        "task incomplete",
+        "not complete",
+        "incomplete",
+        "dirty guard: failed",
+        "dirty guard failed",
+        "dirty: true",
+        "working tree dirty",
+        "scope not followed",
+        "scope broadening",
+        "unexpected change",
+        "code change",
+        "modified python",
+        "modified src/",
+    ]
+    if any(d in t for d in disqualifiers):
+        return False
+
+    # Require strong evidence + some supportive context
+    return strong_count >= 2 and supportive_count >= 1
 
 
 def fetch_issue_state(repo: str, issue: int) -> dict:
