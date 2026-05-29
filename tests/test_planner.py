@@ -12,6 +12,7 @@ from signposter.planner import (
     build_planner_draft,
     build_planner_next,
     build_planner_seed_plan,
+    format_planner_issue_body,
     mark_planner_task,
     validate_planner_plan,
     write_planner_draft,
@@ -311,3 +312,37 @@ def test_cli_planner_mark_updates_file(
     assert saved["issues"][0]["status"] == "done"
     assert "Signposter Planner Mark" in captured
     assert "No task execution was performed." in captured
+
+
+def test_format_planner_issue_body_contains_agent_contract() -> None:
+    plan = build_planner_draft("build lifecycle watch")
+    issue = plan["issues"][0]
+
+    body = format_planner_issue_body(plan, issue)
+
+    assert body.startswith("Task: WATCH-001 — Define lifecycle watch CLI contract")
+    assert "Context:" in body
+    assert "Problem:" in body
+    assert "Goal:" in body
+    assert "Target command:" in body
+    assert "Expected output:" in body
+    assert "Scope:" in body
+    assert "Rules:" in body
+    assert "Implementation guidance:" in body
+    assert "Tests:" in body
+    assert "Acceptance:" in body
+    assert "Stop conditions:" in body
+    assert "Report back:" in body
+    assert "No GitHub mutation was performed." in body
+    assert "No OpenClaw execution was performed." in body
+
+
+def test_build_planner_seed_plan_includes_issue_body() -> None:
+    plan = build_planner_draft("build lifecycle watch")
+
+    seed_plan = build_planner_seed_plan(plan)
+
+    body = seed_plan["issues"][0]["body"]
+    assert seed_plan["status"] == "ready"
+    assert "Task: WATCH-001" in body
+    assert "Do not mutate GitHub unless explicitly required and guarded by --apply." in body

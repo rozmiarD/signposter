@@ -391,6 +391,104 @@ def format_planner_next(plan_path: Path, next_plan: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+
+def format_planner_issue_body(plan: dict[str, Any], issue: dict[str, Any]) -> str:
+    """Format a planner task as a bounded GitHub issue body."""
+    dependencies = issue.get("depends_on", [])
+    dependency_lines = _markdown_bullets(dependencies, fallback="none")
+    acceptance_lines = _markdown_bullets(issue.get("acceptance", []))
+    stop_condition_lines = _markdown_bullets(issue.get("stop_conditions", []))
+
+    return "\n".join(
+        [
+            f"Task: {issue['key']} — {issue['title']}",
+            "",
+            "Context:",
+            "Signposter status:",
+            "",
+            "* Planner draft / validate / seed / next / mark surfaces exist locally.",
+            "* Current planner mode is supervised and local-first.",
+            "* GitHub mutation is forbidden unless explicitly guarded by --apply.",
+            "* OpenClaw execution is forbidden unless explicitly guarded by --execute.",
+            f"* Source plan goal: {plan['goal']}",
+            "",
+            "Problem:",
+            issue["body"],
+            "",
+            "Goal:",
+            f"Complete this narrow task: {issue['title']}.",
+            "",
+            "Target command:",
+            "```bash",
+            _target_command_for_issue(issue),
+            "```",
+            "",
+            "Expected output:",
+            "```text",
+            "Signposter <Feature>",
+            "",
+            "Status:",
+            "ready / blocked / pending / completed",
+            "",
+            "Notes:",
+            "No GitHub mutation was performed.",
+            "No OpenClaw execution was performed.",
+            "```",
+            "",
+            "Scope:",
+            "* Do this exact thing.",
+            "* Do not do unrelated refactors.",
+            "* Do not mutate GitHub unless explicitly required and guarded by --apply.",
+            "* Do not close issues unless this task is specifically about issue close apply.",
+            "* Do not run OpenClaw unless this task is specifically about execution.",
+            "* Keep output compact and deterministic.",
+            "",
+            "Dependencies:",
+            dependency_lines,
+            "",
+            "Rules:",
+            "1. If a required precondition is missing, block safely.",
+            "2. If status is blocked, do not show misleading ready/apply wording.",
+            "3. If a mutation step fails, stop and report partial state clearly.",
+            "4. Never continue to later mutations after an earlier critical mutation failed.",
+            "5. Never print secrets or tokens.",
+            "",
+            "Implementation guidance:",
+            "* Prefer modifying existing Signposter modules where practical.",
+            "* Add a new module only if the feature is clearly separate.",
+            "* Keep helper functions small.",
+            "* Keep CLI output human-readable and deterministic.",
+            "* Capture stderr/stdout for failed subprocesses when subprocesses are used.",
+            "",
+            "Tests:",
+            "* Add or update targeted tests for the changed surface.",
+            "* Cover happy path / ready path.",
+            "* Cover blocked path for missing or unsafe preconditions.",
+            "* Cover safety notes in output.",
+            "",
+            "Acceptance:",
+            acceptance_lines,
+            "* ruff check . passes.",
+            "* python -m pytest tests/ -q passes.",
+            "* No unintended GitHub mutations.",
+            "* No unrelated files changed.",
+            "* Existing flows unchanged.",
+            "",
+            "Stop conditions:",
+            stop_condition_lines,
+            "",
+            "Report back:",
+            "* whether a code bug was found",
+            "* chosen CLI shape",
+            "* files changed",
+            "* tests added/updated",
+            "* sample ready output",
+            "* sample blocked output",
+            "* ruff/pytest result",
+        ]
+    )
+
+
 def build_planner_seed_plan(plan: dict[str, Any]) -> dict[str, Any]:
     """Build a dry-run issue seed plan from a validated planner plan."""
     errors = validate_planner_plan(plan)
@@ -410,6 +508,7 @@ def build_planner_seed_plan(plan: dict[str, Any]) -> dict[str, Any]:
                     f"area:{issue['area']}",
                 ],
                 "depends_on": issue["depends_on"],
+                "body": format_planner_issue_body(plan, issue),
             }
         )
 
@@ -557,3 +656,23 @@ def _list_required(
 
 def _issue_status(issue: dict[str, Any]) -> str:
     return str(issue.get("status", "pending")).strip().lower() or "pending"
+
+
+def _markdown_bullets(items: list[Any], fallback: str | None = None) -> str:
+    if not items:
+        if fallback is None:
+            return "* none"
+        return f"* {fallback}"
+    return "\n".join(f"* {item}" for item in items)
+
+
+def _target_command_for_issue(issue: dict[str, Any]) -> str:
+    area = str(issue.get("area", "")).strip()
+    key = str(issue.get("key", "")).strip()
+    if area == "docs":
+        return "python -m pytest tests/ -q"
+    if area == "tests":
+        return "python -m pytest tests/ -q"
+    if key.startswith("WATCH-"):
+        return "signposter lifecycle watch --repo ExatronOmega/signposter --issue N --interval 5"
+    return "signposter <command> --repo ExatronOmega/signposter"
