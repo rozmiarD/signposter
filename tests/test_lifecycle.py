@@ -37,6 +37,11 @@ def _make_complete_status(**overrides) -> LifecycleStatus:
         worktree_exists=False,
         local_branch_exists=False,
         cleanup_complete=True,
+        # H022C linkage defaults
+        linkage_source="branch-pattern",
+        linkage_confidence="high",
+        formal_github_development_link="no/unknown",
+        auto_close_keyword=False,
         status="complete",
         notes=[
             "Read-only status only.",
@@ -263,6 +268,50 @@ def test_output_contains_no_mutation_notes():
     assert "No GitHub mutation was performed" in out
     assert "No local cleanup was performed" in out
     assert "Read-only status only" in out
+
+
+def test_lifecycle_status_shows_branch_pattern_source():
+    s = _make_complete_status(
+        pr_head="work/issue-4-test-task-isolated-worker-readme-note",
+        linkage_source="branch-pattern",
+        linkage_confidence="high",
+        auto_close_keyword=False,
+    )
+    out = format_lifecycle_status(s)
+    assert "Linkage:" in out
+    assert "source: branch-pattern" in out
+    assert "confidence: high" in out
+    assert "auto-close keyword: no" in out
+
+
+def test_lifecycle_status_shows_pr_body_related_issue_source():
+    s = _make_complete_status(
+        linkage_source="pr-body-related-issue",
+        linkage_confidence="medium",
+        auto_close_keyword=False,
+    )
+    out = format_lifecycle_status(s)
+    assert "source: pr-body-related-issue" in out
+    assert "confidence: medium" in out
+
+
+def test_lifecycle_status_detects_closing_keyword():
+    s = _make_complete_status(
+        linkage_source="closing-keyword",
+        linkage_confidence="high",
+        auto_close_keyword=True,
+        formal_github_development_link="yes",
+    )
+    out = format_lifecycle_status(s)
+    assert "source: closing-keyword" in out
+    assert "auto-close keyword: yes" in out
+    assert "formal GitHub development link: yes" in out
+
+
+def test_related_issue_does_not_set_auto_close_keyword():
+    s = _make_complete_status(linkage_source="pr-body-related-issue", auto_close_keyword=False)
+    out = format_lifecycle_status(s)
+    assert "auto-close keyword: no" in out
 
 
 def test_cli_rejects_both_issue_and_pr():
