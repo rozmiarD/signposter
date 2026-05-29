@@ -442,6 +442,110 @@ def evaluate_worker_issue_body_size(body: str) -> dict[str, Any]:
     }
 
 
+
+def format_planner_roadmap(plan: dict[str, Any]) -> str:
+    """Format a planner-level roadmap document.
+
+    This is intentionally different from worker issue bodies. A roadmap is a
+    planning/architecture document; worker issues are bounded execution leaves.
+    """
+    errors = validate_planner_plan(plan)
+    if errors:
+        error_lines = "\n".join(f"* {error}" for error in errors)
+        return "\n".join(
+            [
+                f"Roadmap: {plan.get('goal', 'invalid planner plan')}",
+                "",
+                "Status:",
+                "blocked",
+                "",
+                "Validation errors:",
+                error_lines,
+            ]
+        )
+
+    issue_lines = []
+    dependency_lines = []
+    for issue in plan["issues"]:
+        issue_lines.append(f"* {issue['key']} — {issue['title']}")
+        deps = issue.get("depends_on", [])
+        if deps:
+            dependency_lines.append(f"* {issue['key']} depends on {', '.join(deps)}")
+        else:
+            dependency_lines.append(f"* {issue['key']} has no dependencies")
+
+    return "\n".join(
+        [
+            f"Roadmap: {plan['goal']}",
+            "",
+            "Intent:",
+            f"Create a supervised implementation plan for: {plan['goal']}.",
+            "",
+            "Outcome:",
+            "A validated issue DAG that can be reviewed, seeded, and executed step by step.",
+            "",
+            "Non-goals:",
+            "* Do not execute worker tasks from the roadmap document.",
+            "* Do not mutate GitHub from the roadmap document.",
+            "* Do not run OpenClaw from the roadmap document.",
+            "* Do not collapse the whole project into one oversized worker issue.",
+            "",
+            "Assumptions:",
+            "* Signposter remains dry-run/read-only by default.",
+            "* GitHub mutation requires explicit --apply.",
+            "* OpenClaw execution requires explicit --execute.",
+            "* Human review remains the final safety gate.",
+            "",
+            "Required capabilities:",
+            _markdown_bullets(plan.get("required_capabilities", [])),
+            "",
+            "Milestones:",
+            _markdown_bullets(issue_lines),
+            "",
+            "Issue DAG:",
+            _markdown_bullets(dependency_lines),
+            "",
+            "Task sizing policy:",
+            f"* Worker task preferred range: {WORKER_ISSUE_PREFERRED_MIN_LINES}–"
+            f"{WORKER_ISSUE_PREFERRED_MAX_LINES} lines.",
+            f"* Worker task hard max: {WORKER_ISSUE_HARD_MAX_LINES} lines.",
+            f"* Worker task hard max chars: {WORKER_ISSUE_HARD_MAX_CHARS}.",
+            "* Split larger work into A/B/C follow-up tasks.",
+            "",
+            "Risk model:",
+            "* low — small bounded local change",
+            "* medium — broader refactor or GitHub mutation",
+            "* high — secrets, auth, CI, release, destructive, or external side effects",
+            "",
+            "Mutation policy:",
+            "* GitHub mutation only with --apply.",
+            "* OpenClaw execution only with --execute.",
+            "* Merge must not close issues.",
+            "* Issue closure belongs to integration apply.",
+            "",
+            "Validation strategy:",
+            "* ruff check .",
+            "* targeted pytest for changed surface",
+            "* full pytest",
+            "* real CLI smoke command",
+            "* CI after push",
+            "",
+            "Stop conditions:",
+            _markdown_bullets(STOP_CONDITIONS),
+            "",
+            "Follow-up policy:",
+            "* Create follow-up tasks when scope exceeds worker task limits.",
+            "* Use dependencies instead of embedding blockers inside oversized tasks.",
+            "* Return to pending DAG items after blockers are resolved.",
+            "",
+            "Done definition:",
+            "* All roadmap tasks are done or intentionally marked blocked.",
+            "* Validation has passed locally and in CI where applicable.",
+            "* No unintended GitHub mutation or OpenClaw execution occurred.",
+        ]
+    )
+
+
 def format_planner_issue_body(plan: dict[str, Any], issue: dict[str, Any]) -> str:
     """Format a planner task as a bounded GitHub issue body."""
     dependencies = issue.get("depends_on", [])
