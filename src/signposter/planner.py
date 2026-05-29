@@ -723,6 +723,73 @@ def build_planner_seed_plan(plan: dict[str, Any]) -> dict[str, Any]:
 
 
 
+
+def validate_seed_plan_labels(
+    seed_plan: dict[str, Any],
+    existing_labels: set[str],
+) -> dict[str, Any]:
+    """Validate that every label required by a seed plan exists."""
+    required_labels = sorted(
+        {
+            label
+            for issue in seed_plan.get("issues", [])
+            for label in issue.get("labels", [])
+        }
+    )
+    missing_labels = [
+        label for label in required_labels if label not in existing_labels
+    ]
+
+    if missing_labels:
+        return {
+            "status": "blocked",
+            "required_labels": required_labels,
+            "missing_labels": missing_labels,
+            "errors": [
+                f"missing GitHub label: {label}" for label in missing_labels
+            ],
+        }
+
+    return {
+        "status": "ready",
+        "required_labels": required_labels,
+        "missing_labels": [],
+        "errors": [],
+    }
+
+
+def format_seed_label_preflight(result: dict[str, Any]) -> str:
+    """Format seed label preflight result."""
+    lines = [
+        "",
+        "Seed Label Preflight",
+        "",
+        "Status:",
+        f"  {result['status']}",
+        "",
+        "Required labels:",
+    ]
+    lines.extend(f"  - {label}" for label in result["required_labels"])
+
+    if result["missing_labels"]:
+        lines.extend(["", "Missing labels:"])
+        lines.extend(f"  - {label}" for label in result["missing_labels"])
+
+    if result["errors"]:
+        lines.extend(["", "Errors:"])
+        lines.extend(f"  - {error}" for error in result["errors"])
+
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "  No GitHub issue was created.",
+            "  No OpenClaw execution was performed.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def format_planner_seed_apply_result(
     manifest_path: Path,
     result: dict[str, Any],

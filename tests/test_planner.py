@@ -18,9 +18,11 @@ from signposter.planner import (
     format_gh_issue_create_command,
     format_planner_issue_body,
     format_planner_roadmap,
+    format_seed_label_preflight,
     mark_planner_task,
     prepare_planner_seed_manifest,
     validate_planner_plan,
+    validate_seed_plan_labels,
     write_planner_draft,
     write_planner_seed_issue_bodies,
     write_planner_seed_manifest,
@@ -1375,3 +1377,48 @@ def test_cli_planner_seed_apply_partial_manifest_continues_missing_only(
     assert "Status:\n  ready" in captured
     assert "Planner Seed Apply" in captured
     assert "WATCH-002 -> #401" in captured
+
+
+def test_validate_seed_plan_labels_reports_ready() -> None:
+    plan = build_planner_draft("build lifecycle watch")
+    seed_plan = build_planner_seed_plan(plan)
+
+    result = validate_seed_plan_labels(
+        seed_plan,
+        {"phase:build", "risk:low", "role:worker", "area:cli", "area:tests", "area:docs"},
+    )
+
+    assert result["status"] == "ready"
+    assert result["missing_labels"] == []
+    assert result["errors"] == []
+
+
+def test_validate_seed_plan_labels_reports_missing_labels() -> None:
+    plan = build_planner_draft("build lifecycle watch")
+    seed_plan = build_planner_seed_plan(plan)
+
+    result = validate_seed_plan_labels(
+        seed_plan,
+        {"phase:build", "risk:low", "role:worker", "area:tests", "area:docs"},
+    )
+
+    assert result["status"] == "blocked"
+    assert result["missing_labels"] == ["area:cli"]
+    assert result["errors"] == ["missing GitHub label: area:cli"]
+
+
+def test_format_seed_label_preflight_includes_safety_notes() -> None:
+    result = {
+        "status": "blocked",
+        "required_labels": ["area:cli", "phase:build"],
+        "missing_labels": ["area:cli"],
+        "errors": ["missing GitHub label: area:cli"],
+    }
+
+    output = format_seed_label_preflight(result)
+
+    assert "Seed Label Preflight" in output
+    assert "Status:\n  blocked" in output
+    assert "missing GitHub label: area:cli" in output
+    assert "No GitHub issue was created." in output
+    assert "No OpenClaw execution was performed." in output
