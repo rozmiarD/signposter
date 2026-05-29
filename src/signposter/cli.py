@@ -41,6 +41,12 @@ from signposter.review import (
 )
 from signposter.runner import cli_main as runner_cli_main
 from signposter.scan import cli_main as scan_cli_main
+from signposter.sync import (
+    apply_sync,
+    format_sync_apply_result,
+    format_sync_plan,
+    plan_sync,
+)
 from signposter.transitions import (
     format_transition_plan,
     perform_transition_mutation,
@@ -475,6 +481,9 @@ def main() -> None:
 
     # HARDENING-022A: lifecycle status (read-only)
     _register_lifecycle_subcommands(subparsers)
+
+    # HARDENING-024E: guarded local repository sync/rebase
+    _register_sync_subcommands(subparsers)
 
     # HARDENING-023A: repository label preflight (read-only)
     _register_labels_subcommands(subparsers)
@@ -1324,6 +1333,84 @@ def _register_lifecycle_subcommands(subparsers: argparse._SubParsersAction) -> N
         help="Pull request number to inspect",
     )
     next_parser.set_defaults(func=run_lifecycle_next)
+
+
+
+# =============================================================================
+# HARDENING-024E: Guarded local repository sync/rebase
+# =============================================================================
+
+
+def run_sync_plan(args: argparse.Namespace) -> int:
+    """Handler for `signposter sync plan --repo ...`."""
+    try:
+        plan = plan_sync(Path.cwd())
+        print(format_sync_plan(plan))
+        return 0 if plan.status in ("completed", "ready") else 1
+    except Exception as e:
+        print(f"Sync plan failed: {e}", file=sys.stderr)
+        return 2
+
+
+def run_sync_apply(args: argparse.Namespace) -> int:
+    """Handler for `signposter sync apply --repo ... [--rebase] [--apply]`."""
+    try:
+        result = apply_sync(
+            Path.cwd(),
+            apply=getattr(args, "apply", False),
+            rebase=getattr(args, "rebase", False),
+        )
+        print(format_sync_apply_result(result))
+
+        if result.get("mode") == "apply" and result.get("status") == "completed":
+            return 0
+
+        plan = result.get("plan")
+        if not getattr(args, "apply", False):
+            if plan is not None and getattr(plan, "status", None) in ("completed", "ready"):
+                return 0
+
+        return 1
+    except Exception as e:
+        print(f"Sync apply failed: {e}", file=sys.stderr)
+        return 2
+
+
+def _register_sync_subcommands(subparsers: argparse._SubParsersAction) -> None:
+    """Register guarded local sync/rebase commands."""
+    sync_parser = subparsers.add_parser(
+        "sync",
+        help="Guarded local repository sync/rebase planning",
+        description=(
+            "Inspect local git sync state and optionally run a guarded "
+            "git pull --rebase. Never pushes."
+        ),
+    )
+    sync_subparsers = sync_parser.add_subparsers(dest="sync_command")
+
+    plan_parser = sync_subparsers.add_parser(
+        "plan",
+        help="Show local repository sync status (read-only except safe fetch)",
+    )
+    plan_parser.add_argument("--repo", required=True)
+    plan_parser.set_defaults(func=run_sync_plan)
+
+    apply_parser = sync_subparsers.add_parser(
+        "apply",
+        help="Guarded sync apply (dry-run by default; --apply to execute)",
+    )
+    apply_parser.add_argument("--repo", required=True)
+    apply_parser.add_argument(
+        "--rebase",
+        action="store_true",
+        help="Allow git pull --rebase when apply mode is explicitly enabled",
+    )
+    apply_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually run the guarded sync operation",
+    )
+    apply_parser.set_defaults(func=run_sync_apply)
 
 
 # =============================================================================

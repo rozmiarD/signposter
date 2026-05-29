@@ -296,6 +296,20 @@ def format_sync_apply_result(result: dict[str, Any]) -> str:
     plan: SyncPlan = result.get("plan")
     repo = plan.repo_path if plan else "?"
 
+    if result.get("mode") == "dry_run":
+        lines = [f"Signposter Sync Apply Plan — {repo}\n"]
+        lines.append("Sync plan:")
+        lines.append(f"  status: {plan.status}")
+        lines.append(f"  action: {plan.recommended_action}")
+        if plan.command_preview:
+            lines.append(f"  command preview: {plan.command_preview}")
+        lines.append("\nStatus:")
+        lines.append(f"  {plan.status}")
+        lines.append("\nNotes:")
+        for note in plan.notes:
+            lines.append(f"  {note}")
+        return "\n".join(lines)
+
     if result.get("mode") == "apply_blocked":
         err = result.get("error", "unknown")
         lines = [f"Signposter Sync Apply — {repo}\n"]
