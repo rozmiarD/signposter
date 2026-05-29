@@ -1734,6 +1734,7 @@ def run_planner_seed(args: argparse.Namespace) -> int:
             args.plan,
             seed_plan,
             repo=args.repo,
+            body_dir=args.body_dir,
             show_body=args.show_body,
             show_commands=args.show_commands,
         )

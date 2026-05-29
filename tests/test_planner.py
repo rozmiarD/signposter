@@ -1519,3 +1519,39 @@ def test_cli_planner_seed_apply_blocks_missing_label_before_issue_create(
     assert "Status:\n  blocked" in captured
     assert "missing GitHub label: area:cli" in captured
     assert "Planner Seed Apply" not in captured
+
+
+def test_cli_planner_seed_show_commands_uses_selected_body_dir(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "custom-issue-bodies"
+    write_planner_draft("build lifecycle watch", plan_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "seed",
+            "--plan",
+            str(plan_path),
+            "--repo",
+            "ExatronOmega/signposter",
+            "--body-dir",
+            str(body_dir),
+            "--show-commands",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+
+    assert exc_info.value.code in (None, 0)
+    assert str(body_dir / "WATCH-001.md") in captured
+    assert "artifacts/plans/issue-bodies/WATCH-001.md" not in captured
+    assert "----- BEGIN GH COMMAND -----" in captured
