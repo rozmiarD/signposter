@@ -27,8 +27,10 @@ from signposter.merge import (
     plan_merge_for_pr,
 )
 from signposter.planner import (
+    build_planner_next,
     build_planner_seed_plan,
     format_planner_draft,
+    format_planner_next,
     format_planner_seed_plan,
     format_planner_validation,
     load_planner_plan,
@@ -290,6 +292,18 @@ def main() -> None:
         help="Path to the local planner JSON draft",
     )
     planner_seed_parser.set_defaults(func=run_planner_seed)
+
+    planner_next_parser = planner_subparsers.add_parser(
+        "next",
+        help="Choose the next dependency-ready issue from a local planner JSON file",
+    )
+    planner_next_parser.add_argument(
+        "--plan",
+        required=True,
+        type=Path,
+        help="Path to the local planner JSON draft",
+    )
+    planner_next_parser.set_defaults(func=run_planner_next)
 
     # worktree subcommand group (planning only — HARDENING-007)
     worktree_parser = subparsers.add_parser(
@@ -1547,6 +1561,14 @@ def _register_labels_subcommands(subparsers: argparse._SubParsersAction) -> None
         help="Actually create the missing labels (requires explicit use)",
     )
     ensure_parser.set_defaults(func=run_labels_ensure)
+
+def run_planner_next(args: argparse.Namespace) -> int:
+    """Choose the next dependency-ready issue from a local planner draft."""
+    plan = load_planner_plan(args.plan)
+    next_plan = build_planner_next(plan)
+    print(format_planner_next(args.plan, next_plan))
+    return 1 if next_plan["status"] == "blocked" else 0
+
 
 def run_planner_seed(args: argparse.Namespace) -> int:
     """Plan GitHub issue creation from a local planner draft."""
