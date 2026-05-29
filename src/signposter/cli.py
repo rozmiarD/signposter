@@ -1035,7 +1035,7 @@ def run_integration_apply(args: argparse.Namespace) -> int:
         plan = result.get("plan")
 
         if result.get("mode") == "dry_run":
-            print(format_integration_apply_dry_run(plan))
+            print(format_integration_apply_dry_run(plan, repo))
             return 0
         elif result.get("mode") == "apply":
             success = result.get("success", False)
