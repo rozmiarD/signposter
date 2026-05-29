@@ -839,6 +839,24 @@ class _FakeGhIssueCreateResult:
         self.stderr = stderr
 
 
+
+
+def _fake_label_list_result() -> _FakeGhIssueCreateResult:
+    return _FakeGhIssueCreateResult(
+        0,
+        stdout="\n".join(
+            [
+                "phase:build",
+                "risk:low",
+                "role:worker",
+                "area:cli",
+                "area:tests",
+                "area:docs",
+            ]
+        ),
+    )
+
+
 class _FakeGhIssueCreateRunner:
     def __init__(self) -> None:
         self.calls: list[list[str]] = []
@@ -958,6 +976,8 @@ def test_cli_planner_seed_apply_uses_fake_subprocess_and_updates_manifest(
         text: bool,
         check: bool,
     ) -> _FakeGhIssueCreateResult:
+        if command[:3] == ["gh", "label", "list"]:
+            return _fake_label_list_result()
         calls.append(command)
         issue_number = len(calls) + 200
         return _FakeGhIssueCreateResult(
@@ -1027,6 +1047,8 @@ def test_cli_planner_seed_apply_stops_on_fake_subprocess_failure(
         text: bool,
         check: bool,
     ) -> _FakeGhIssueCreateResult:
+        if command[:3] == ["gh", "label", "list"]:
+            return _fake_label_list_result()
         return _FakeGhIssueCreateResult(1, stderr="gh failed safely")
 
     monkeypatch.setattr("signposter.cli.subprocess.run", fake_run)
@@ -1336,6 +1358,8 @@ def test_cli_planner_seed_apply_partial_manifest_continues_missing_only(
         text: bool,
         check: bool,
     ) -> _FakeGhIssueCreateResult:
+        if command[:3] == ["gh", "label", "list"]:
+            return _fake_label_list_result()
         calls.append(command)
         issue_number = 400 + len(calls)
         return _FakeGhIssueCreateResult(
@@ -1422,3 +1446,76 @@ def test_format_seed_label_preflight_includes_safety_notes() -> None:
     assert "missing GitHub label: area:cli" in output
     assert "No GitHub issue was created." in output
     assert "No OpenClaw execution was performed." in output
+
+
+def test_cli_planner_seed_apply_blocks_missing_label_before_issue_create(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    issue_create_calls: list[list[str]] = []
+
+    write_planner_draft("build lifecycle watch", plan_path)
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> _FakeGhIssueCreateResult:
+        if command[:3] == ["gh", "label", "list"]:
+            return _FakeGhIssueCreateResult(
+                0,
+                stdout="\n".join(
+                    [
+                        "phase:build",
+                        "risk:low",
+                        "role:worker",
+                        "area:tests",
+                        "area:docs",
+                    ]
+                ),
+            )
+
+        issue_create_calls.append(command)
+        return _FakeGhIssueCreateResult(
+            0,
+            stdout="https://github.com/ExatronOmega/signposter/issues/999",
+        )
+
+    monkeypatch.setattr("signposter.cli.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "seed",
+            "--plan",
+            str(plan_path),
+            "--repo",
+            "ExatronOmega/signposter",
+            "--body-dir",
+            str(body_dir),
+            "--manifest",
+            str(manifest_path),
+            "--apply",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    assert exc_info.value.code == 1
+    assert issue_create_calls == []
+    assert manifest["status"] == "dry-run"
+    assert "Seed Label Preflight" in captured
+    assert "Status:\n  blocked" in captured
+    assert "missing GitHub label: area:cli" in captured
+    assert "Planner Seed Apply" not in captured
