@@ -154,6 +154,69 @@ def validate_planner_plan(plan: dict[str, Any]) -> list[str]:
     return errors
 
 
+
+def build_planner_seed_plan(plan: dict[str, Any]) -> dict[str, Any]:
+    """Build a dry-run issue seed plan from a validated planner plan."""
+    errors = validate_planner_plan(plan)
+    if errors:
+        return {"status": "blocked", "errors": errors, "issues": []}
+
+    issues = []
+    for issue in plan["issues"]:
+        issues.append(
+            {
+                "key": issue["key"],
+                "title": issue["title"],
+                "labels": [
+                    f"phase:{issue['phase']}",
+                    f"risk:{issue['risk']}",
+                    f"role:{issue['role']}",
+                    f"area:{issue['area']}",
+                ],
+                "depends_on": issue["depends_on"],
+            }
+        )
+
+    return {"status": "ready", "errors": [], "issues": issues}
+
+
+def format_planner_seed_plan(plan_path: Path, seed_plan: dict[str, Any]) -> str:
+    """Format a dry-run planner seed plan."""
+    lines = [
+        "Signposter Planner Seed",
+        "",
+        "Plan:",
+        f"  {plan_path}",
+        "",
+        "Status:",
+        f"  {seed_plan['status']}",
+    ]
+
+    if seed_plan["errors"]:
+        lines.extend(["", "Errors:"])
+        lines.extend(f"  - {error}" for error in seed_plan["errors"])
+    else:
+        lines.extend(["", "Proposed GitHub issues:"])
+        for issue in seed_plan["issues"]:
+            deps = ", ".join(issue["depends_on"]) if issue["depends_on"] else "none"
+            labels = ", ".join(issue["labels"])
+            lines.append(f"  {issue['key']} — {issue['title']}")
+            lines.append(f"    labels: {labels}")
+            lines.append(f"    depends on: {deps}")
+
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "  Dry-run only.",
+            "  No GitHub mutation was performed.",
+            "  No OpenClaw execution was performed.",
+            "  No GitHub issue was created.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def format_planner_draft(plan: dict[str, Any], output_path: Path) -> str:
     """Format a compact human-readable planner draft summary."""
     lines = [
