@@ -57,6 +57,12 @@ class LifecycleStatus:
     local_branch_exists: bool
     cleanup_complete: bool
 
+    # Linkage (H022C)
+    linkage_source: str | None  # branch-pattern | pr-body-related-issue | closing-keyword | ...
+    linkage_confidence: str | None  # high | medium | low
+    formal_github_development_link: str | None  # yes | no | unknown
+    auto_close_keyword: bool
+
     # Overall
     status: str
     # "complete" | "incomplete — <reason>" |
@@ -106,6 +112,58 @@ def _fetch_issue_labels_and_state(repo: str, issue: int) -> tuple[list[str], str
                 labels.append(lbl)
 
     return labels, state
+
+
+def _contains_auto_close_keyword(text: str) -> bool:
+    """
+    Case-insensitive detection of *intentional* auto-close keywords.
+
+    Only matches when the keyword appears to be referencing an issue
+    (e.g. "Closes #4", "Fixes #123", "Resolves issue #4").
+
+    This prevents false positives from words like "close" appearing
+    in normal prose ("integration/close policy", "close the loop", etc).
+    """
+    if not text:
+        return False
+
+    # Match keyword followed by optional "issue" and then #number or number
+    pattern = re.compile(
+        r"\b(?:close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved)"
+        r"(?:s|d)?(?:\s+issue)?\s*#?\d+",
+        re.IGNORECASE,
+    )
+    return bool(pattern.search(text))
+
+
+def _detect_link_source(
+    *, pr_head: str | None, body: str | None, detected_from: str
+) -> tuple[str, str]:
+    """
+    Return (source, confidence).
+
+    Rules (H022C):
+    - branch-pattern: head matches work/issue-N-* → high
+    - closing-keyword: body contains Closes/Fixes/Resolves → high
+    - pr-body-related-issue: body contains "Related issue: #N" → medium
+    - detected-pr-search: issue → PR discovery via search → medium
+    - unknown: low
+    """
+    body = body or ""
+
+    if pr_head and re.search(r"work/issue-\d+", pr_head):
+        return "branch-pattern", "high"
+
+    if _contains_auto_close_keyword(body):
+        return "closing-keyword", "high"
+
+    if re.search(r"Related issue:\s*#?\d+", body, re.IGNORECASE):
+        return "pr-body-related-issue", "medium"
+
+    if detected_from == "issue-search":
+        return "detected-pr-search", "medium"
+
+    return "unknown", "low"
 
 
 def _detect_associated_pr_from_issue(repo: str, issue: int) -> int | None:
@@ -167,15 +225,34 @@ def plan_lifecycle_status(
     if (issue is None) == (pr is None):
         # Caller must ensure exactly one is provided
         return LifecycleStatus(
-            query_issue=issue, query_pr=pr,
-            issue_number=None, issue_state=None, workflow_state=None,
-            phase=None, risk=None, role=None, area=None,
-            pr_number=None, pr_state=None, pr_base=None, pr_head=None,
-            pr_merged=False, merge_commit=None,
-            review_decision=None, has_non_author_approval=False, reviewer_login=None,
-            integrated=False, issue_closed=False,
-            expected_worktree=None, worktree_exists=False,
-            local_branch_exists=False, cleanup_complete=False,
+            query_issue=issue,
+            query_pr=pr,
+            issue_number=None,
+            issue_state=None,
+            workflow_state=None,
+            phase=None,
+            risk=None,
+            role=None,
+            area=None,
+            pr_number=None,
+            pr_state=None,
+            pr_base=None,
+            pr_head=None,
+            pr_merged=False,
+            merge_commit=None,
+            review_decision=None,
+            has_non_author_approval=False,
+            reviewer_login=None,
+            integrated=False,
+            issue_closed=False,
+            expected_worktree=None,
+            worktree_exists=False,
+            local_branch_exists=False,
+            cleanup_complete=False,
+            linkage_source="unknown",
+            linkage_confidence="low",
+            formal_github_development_link="no/unknown",
+            auto_close_keyword=False,
             status="incomplete — exactly one of --issue or --pr is required",
             notes=notes,
         )
@@ -212,15 +289,34 @@ def plan_lifecycle_status(
 
     except Exception as e:
         return LifecycleStatus(
-            query_issue=query_issue, query_pr=query_pr,
-            issue_number=issue_number, issue_state=issue_state,
-            workflow_state=None, phase=None, risk=None, role=None, area=None,
-            pr_number=pr_number, pr_state=None, pr_base=None, pr_head=None,
-            pr_merged=False, merge_commit=None,
-            review_decision=None, has_non_author_approval=False, reviewer_login=None,
-            integrated=False, issue_closed=False,
-            expected_worktree=None, worktree_exists=False,
-            local_branch_exists=False, cleanup_complete=False,
+            query_issue=query_issue,
+            query_pr=query_pr,
+            issue_number=issue_number,
+            issue_state=issue_state,
+            workflow_state=None,
+            phase=None,
+            risk=None,
+            role=None,
+            area=None,
+            pr_number=pr_number,
+            pr_state=None,
+            pr_base=None,
+            pr_head=None,
+            pr_merged=False,
+            merge_commit=None,
+            review_decision=None,
+            has_non_author_approval=False,
+            reviewer_login=None,
+            integrated=False,
+            issue_closed=False,
+            expected_worktree=None,
+            worktree_exists=False,
+            local_branch_exists=False,
+            cleanup_complete=False,
+            linkage_source="unknown",
+            linkage_confidence="low",
+            formal_github_development_link="no/unknown",
+            auto_close_keyword=False,
             status=f"incomplete — failed to fetch data: {str(e)[:120]}",
             notes=notes,
         )
@@ -292,6 +388,29 @@ def plan_lifecycle_status(
     else:
         status = "complete"
 
+    # === Linkage source detection (H022C) ===
+    body = pr_data.get("body", "") if pr_data else ""
+    detected_from = (
+        "issue-search"
+        if (pr is None and issue_number is not None and pr_number is not None)
+        else "direct"
+    )
+
+    source, confidence = _detect_link_source(
+        pr_head=pr_head,
+        body=body,
+        detected_from=detected_from,
+    )
+
+    auto_close = _contains_auto_close_keyword(body)
+
+    # Formal GitHub development link:
+    # Only claim "yes" if we explicitly detected a closing keyword as the linkage source.
+    if source == "closing-keyword":
+        formal_dev_link = "yes"
+    else:
+        formal_dev_link = "no/unknown"
+
     return LifecycleStatus(
         query_issue=query_issue,
         query_pr=query_pr,
@@ -317,6 +436,10 @@ def plan_lifecycle_status(
         worktree_exists=worktree_exists,
         local_branch_exists=local_branch_exists,
         cleanup_complete=cleanup_complete,
+        linkage_source=source,
+        linkage_confidence=confidence,
+        formal_github_development_link=formal_dev_link,
+        auto_close_keyword=auto_close,
         status=status,
         notes=notes,
     )
@@ -375,6 +498,18 @@ def format_lifecycle_status(status: LifecycleStatus) -> str:
     lines.append(f"  worktree exists: {'yes' if status.worktree_exists else 'no'}")
     lines.append(f"  local branch exists: {'yes' if status.local_branch_exists else 'no'}")
     lines.append(f"  cleanup complete: {'yes' if status.cleanup_complete else 'no'}")
+
+    # Linkage (H022C)
+    lines.append("\nLinkage:")
+    if status.linkage_source:
+        lines.append("  issue-pr linked: yes")
+        lines.append(f"  source: {status.linkage_source}")
+        lines.append(f"  confidence: {status.linkage_confidence or 'unknown'}")
+        formal = status.formal_github_development_link or "no/unknown"
+        lines.append(f"  formal GitHub development link: {formal}")
+        lines.append(f"  auto-close keyword: {'yes' if status.auto_close_keyword else 'no'}")
+    else:
+        lines.append("  issue-pr linked: no")
 
     # Status
     lines.append("\nStatus:")
