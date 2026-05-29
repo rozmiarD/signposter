@@ -14,6 +14,7 @@ from signposter.comments import (
     format_fail_comment,
     format_release_comment,
 )
+from signposter.labels import check_labels
 
 
 @dataclass(frozen=True)
@@ -224,6 +225,13 @@ def perform_transition_mutation(
     if not plan.valid:
         raise ValueError(f"Cannot apply invalid transition plan: {plan.reason}")
 
+    # H023D-B: Centralized label preflight before any mutation
+    if not dry_run:
+        ok, missing, err = _required_label_preflight(repo)
+        if not ok:
+            reason = err or ("required labels missing: " + ", ".join(missing))
+            raise RuntimeError(f"Label preflight failed — {reason}")
+
     commands: list[str] = []
     issue_num = str(plan.issue_number)
 
@@ -264,3 +272,16 @@ def perform_transition_mutation(
         subprocess.run(comment_cmd, check=True, capture_output=True, text=True)
 
     return commands
+
+
+def _required_label_preflight(repo: str) -> tuple[bool, list[str], str | None]:
+    """Centralized required-label preflight for release/complete/fail (H023D-B)."""
+    try:
+        result = check_labels(repo)
+        if result.error:
+            return False, [], f"label preflight failed: {result.error}"
+        if result.missing:
+            return False, result.missing, None
+        return True, [], None
+    except Exception as e:
+        return False, [], f"label preflight error: {str(e)[:200]}"
