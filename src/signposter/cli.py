@@ -1243,7 +1243,9 @@ def _register_lifecycle_subcommands(subparsers: argparse._SubParsersAction) -> N
 
 from signposter.labels import (  # noqa: E402
     check_labels,
+    ensure_labels,
     format_label_check,
+    format_label_ensure,
 )
 
 
@@ -1263,6 +1265,26 @@ def run_labels_check(args: argparse.Namespace) -> int:
         return 2
 
 
+def run_labels_ensure(args: argparse.Namespace) -> int:
+    """Handler for `signposter labels ensure --repo ... [--apply]`."""
+    repo = getattr(args, "repo", None)
+    do_apply = getattr(args, "apply", False)
+
+    if not repo:
+        print("Error: --repo is required", file=sys.stderr)
+        return 1
+
+    try:
+        result = ensure_labels(repo, apply=do_apply)
+        print(format_label_ensure(result))
+        if result.status in ("completed", "ready"):
+            return 0
+        return 1
+    except Exception as e:
+        print(f"Label ensure failed: {e}", file=sys.stderr)
+        return 2
+
+
 def _register_labels_subcommands(subparsers: argparse._SubParsersAction) -> None:
     """Register the labels command group (check only for now)."""
     labels_parser = subparsers.add_parser(
@@ -1278,4 +1300,17 @@ def _register_labels_subcommands(subparsers: argparse._SubParsersAction) -> None
     )
     check_parser.add_argument("--repo", required=True)
     check_parser.set_defaults(func=run_labels_check)
+
+    # H023B: guarded ensure (dry-run by default, --apply to create)
+    ensure_parser = labels_subparsers.add_parser(
+        "ensure",
+        help="Create missing required workflow labels (dry-run by default)",
+    )
+    ensure_parser.add_argument("--repo", required=True)
+    ensure_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually create the missing labels (requires explicit use)",
+    )
+    ensure_parser.set_defaults(func=run_labels_ensure)
 
