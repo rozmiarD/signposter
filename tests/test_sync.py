@@ -158,7 +158,7 @@ def test_apply_refuses_without_rebase_flag_when_rebase_needed():
 
 
 def test_apply_runs_git_pull_rebase_when_ready():
-    """apply runs git pull --rebase origin main when ready."""
+    """apply runs git pull --rebase origin main when ready (no duplicated 'git')."""
     with patch("signposter.sync.plan_sync") as mock_plan, \
          patch("signposter.sync._git") as mock_git:
 
@@ -168,7 +168,41 @@ def test_apply_runs_git_pull_rebase_when_ready():
         result = apply_sync("/tmp/signposter", apply=True, rebase=True)
 
         assert result["success"] is True
+
+        # Assert exact args passed to _git (must NOT start with 'git')
+        assert mock_git.called
+        called_args = mock_git.call_args[0][0]   # first positional arg to _git
+        assert called_args[0] == "pull", f"Expected first arg 'pull', got {called_args[0]}"
+        assert "git" not in called_args[0], "Duplicated 'git' detected in argv"
+        assert called_args == ["pull", "--rebase", "origin", "main"]
+
         assert any("pull --rebase" in c for c in result.get("commands_run", []))
+
+
+def test_apply_runs_git_pull_fast_forward_when_behind():
+    """apply runs correct 'git pull origin main' (no duplicated 'git') for fast-forward case."""
+    with patch("signposter.sync.plan_sync") as mock_plan, \
+         patch("signposter.sync._git") as mock_git:
+
+        mock_plan.return_value = _make_plan(
+            status="ready",
+            recommended_action="pull",          # fast-forward case
+            command_preview="git pull origin main"
+        )
+        mock_git.return_value = (0, "Fast-forward", "")
+
+        result = apply_sync("/tmp/signposter", apply=True, rebase=True)
+
+        assert result["success"] is True
+
+        # Critical regression: _git must receive args starting with 'pull', not 'git'
+        assert mock_git.called
+        called_args = mock_git.call_args[0][0]
+        assert called_args[0] == "pull"
+        assert called_args == ["pull", "origin", "main"]
+        assert "git" not in called_args
+
+        assert any("pull origin main" in c for c in result.get("commands_run", []))
 
 
 def test_apply_reports_conflict_with_bounded_stderr():

@@ -270,9 +270,14 @@ def apply_sync(
 
     cwd = Path(repo_path).resolve()
 
-    # Run git pull --rebase origin main
-    cmd = ["git", "pull", "--rebase", "origin", "main"]
-    code, stdout, stderr = _git(cmd, cwd, timeout=120)
+    # Build git args WITHOUT leading 'git' ( _git() adds it )
+    if plan.recommended_action == "rebase":
+        git_args = ["pull", "--rebase", "origin", "main"]
+    else:
+        # fast-forward / pull case
+        git_args = ["pull", "origin", "main"]
+
+    code, stdout, stderr = _git(git_args, cwd, timeout=120)
 
     if code != 0:
         return {
@@ -280,14 +285,14 @@ def apply_sync(
             "plan": plan,
             "success": False,
             "error": (stderr or stdout or "rebase failed")[:500],
-            "commands_run": [" ".join(cmd)],
+            "commands_run": [" ".join(["git"] + git_args)],
         }
 
     return {
         "mode": "apply",
         "plan": plan,
         "success": True,
-        "commands_run": [" ".join(cmd)],
+        "commands_run": [" ".join(["git"] + git_args)],
     }
 
 
