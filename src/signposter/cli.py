@@ -470,6 +470,9 @@ def main() -> None:
     )
     gate_parser.set_defaults(func=run_gate)
 
+    # HARDENING-021C: local cleanup (plan + guarded --apply)
+    _register_cleanup_subcommands(subparsers)
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -1069,4 +1072,100 @@ def run_integration_apply(args: argparse.Namespace) -> int:
     except Exception as e:
         print(f"Integration apply failed: {e}", file=sys.stderr)
         return 2
+
+
+# =============================================================================
+# HARDENING-021C: Local worktree cleanup (plan + guarded apply)
+# =============================================================================
+
+from signposter.cleanup import (  # noqa: E402
+    apply_cleanup,
+    format_cleanup_apply_dry_run,
+    format_cleanup_apply_result,
+    format_cleanup_plan,
+    plan_cleanup_for_pr,
+)
+
+
+def run_cleanup_plan(args: argparse.Namespace) -> int:
+    """Handler for `signposter cleanup plan --repo ... --pr N`."""
+    repo = getattr(args, "repo", None)
+    pr = getattr(args, "pr", None)
+
+    if not repo or pr is None:
+        print("Error: --repo and --pr are required", file=sys.stderr)
+        return 1
+
+    try:
+        plan = plan_cleanup_for_pr(repo, pr)
+        print(format_cleanup_plan(plan))
+        return 0 if plan.status in ("ready", "completed") else 1
+    except Exception as e:
+        print(f"Cleanup plan failed: {e}", file=sys.stderr)
+        return 2
+
+
+def run_cleanup_apply(args: argparse.Namespace) -> int:
+    """Handler for `signposter cleanup apply --repo ... --pr N [--apply]`."""
+    repo = getattr(args, "repo", None)
+    pr = getattr(args, "pr", None)
+    do_apply = getattr(args, "apply", False)
+
+    if not repo or pr is None:
+        print("Error: --repo and --pr are required", file=sys.stderr)
+        return 1
+
+    try:
+        result = apply_cleanup(repo, pr, apply=do_apply)
+
+        if result.get("mode") == "dry_run":
+            print(format_cleanup_apply_dry_run(result.get("plan")))
+            return 0
+        elif result.get("mode") == "apply":
+            print(format_cleanup_apply_result(result))
+            success = result.get("success", False)
+            return 0 if success else 1
+        else:
+            # apply_blocked
+            print(format_cleanup_apply_result(result))
+            return 1
+    except Exception as e:
+        print(f"Cleanup apply failed: {e}", file=sys.stderr)
+        return 2
+
+
+def _register_cleanup_subcommands(subparsers: argparse._SubParsersAction) -> None:
+    """Register the cleanup command group (plan + apply)."""
+    cleanup_parser = subparsers.add_parser(
+        "cleanup",
+        help="Local worktree/branch cleanup for merged PRs (local only, no GitHub mutations)",
+        description="Plan and apply safe removal of finished worker worktrees and local branches.",
+    )
+    cleanup_subparsers = cleanup_parser.add_subparsers(dest="cleanup_command")
+
+    # cleanup plan
+    plan_parser = cleanup_subparsers.add_parser(
+        "plan",
+        help="Produce a read-only cleanup plan for a merged PR (identifies worktree + branch)",
+    )
+    plan_parser.add_argument("--repo", required=True)
+    plan_parser.add_argument("--pr", type=int, required=True)
+    plan_parser.set_defaults(func=run_cleanup_plan)
+
+    # cleanup apply
+    apply_parser = cleanup_subparsers.add_parser(
+        "apply",
+        help=(
+            "Remove worktree and local branch for a merged PR "
+            "(dry-run by default; --apply to execute)"
+        ),
+    )
+    apply_parser.add_argument("--repo", required=True)
+    apply_parser.add_argument("--pr", type=int, required=True)
+    apply_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually remove the worktree and delete the local branch (requires explicit use)",
+    )
+    apply_parser.set_defaults(func=run_cleanup_apply)
 
