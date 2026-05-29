@@ -212,5 +212,6 @@ git -C $WORKTREE status
 ## Notes
 
 - SMOKE-002 validated the full end-to-end flow (issue #6 / PR #7).
+- SMOKE-003 validated the post-H027 lifecycle path (issue #8).
 - The workflow is intentionally manual and observable at every step.
 - All mutations are explicit and reversible until the final integration step.
