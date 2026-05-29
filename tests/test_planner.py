@@ -744,3 +744,83 @@ def test_write_planner_seed_manifest_writes_json(tmp_path: Path) -> None:
     saved = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert saved == manifest
     assert saved["issues"][0]["github_issue"] is None
+
+
+def test_cli_planner_seed_write_manifest_writes_local_json(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    write_planner_draft("build lifecycle watch", plan_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "seed",
+            "--plan",
+            str(plan_path),
+            "--repo",
+            "ExatronOmega/signposter",
+            "--write-bodies",
+            "--body-dir",
+            str(body_dir),
+            "--write-manifest",
+            "--manifest",
+            str(manifest_path),
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    captured = capsys.readouterr().out
+
+    assert exc_info.value.code in (None, 0)
+    assert manifest["version"] == "planner.seed-manifest.v0.1"
+    assert manifest["status"] == "dry-run"
+    assert manifest["repo"] == "ExatronOmega/signposter"
+    assert manifest["issues"][0]["key"] == "WATCH-001"
+    assert manifest["issues"][0]["github_issue"] is None
+    assert manifest["issues"][0]["body_file"].endswith("WATCH-001.md")
+    assert (body_dir / "WATCH-001.md").exists()
+    assert "Written seed manifest:" in captured
+    assert "Local manifest only." in captured
+    assert "No GitHub issue was created." in captured
+
+
+def test_cli_planner_seed_without_write_manifest_does_not_write_manifest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    manifest_path = tmp_path / "seed-manifest.json"
+    write_planner_draft("build lifecycle watch", plan_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "seed",
+            "--plan",
+            str(plan_path),
+            "--repo",
+            "ExatronOmega/signposter",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+
+    assert exc_info.value.code in (None, 0)
+    assert not manifest_path.exists()
+    assert "Written seed manifest:" not in captured

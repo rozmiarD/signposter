@@ -28,6 +28,7 @@ from signposter.merge import (
 )
 from signposter.planner import (
     build_planner_next,
+    build_planner_seed_manifest,
     build_planner_seed_plan,
     format_planner_draft,
     format_planner_mark_result,
@@ -36,11 +37,13 @@ from signposter.planner import (
     format_planner_seed_plan,
     format_planner_validation,
     format_written_issue_bodies,
+    format_written_seed_manifest,
     load_planner_plan,
     mark_planner_task,
     validate_planner_plan,
     write_planner_draft,
     write_planner_seed_issue_bodies,
+    write_planner_seed_manifest,
 )
 from signposter.pr import format_pr_plan, plan_pr_for_issue
 from signposter.report import report_main
@@ -321,6 +324,17 @@ def main() -> None:
         default=Path("artifacts/plans/issue-bodies"),
         type=Path,
         help="Directory for --write-bodies output",
+    )
+    planner_seed_parser.add_argument(
+        "--write-manifest",
+        action="store_true",
+        help="Write a local seed manifest JSON file",
+    )
+    planner_seed_parser.add_argument(
+        "--manifest",
+        default=Path("artifacts/plans/seed-manifest.json"),
+        type=Path,
+        help="Path for --write-manifest output",
     )
     planner_seed_parser.set_defaults(func=run_planner_seed)
 
@@ -1689,6 +1703,16 @@ def run_planner_seed(args: argparse.Namespace) -> int:
     if args.write_bodies:
         written = write_planner_seed_issue_bodies(seed_plan, args.body_dir)
         print(format_written_issue_bodies(written))
+
+    if args.write_manifest:
+        manifest = build_planner_seed_manifest(
+            plan_path=args.plan,
+            repo=args.repo,
+            seed_plan=seed_plan,
+            body_dir=args.body_dir,
+        )
+        write_planner_seed_manifest(manifest, args.manifest)
+        print(format_written_seed_manifest(args.manifest))
 
     return 0 if seed_plan["status"] == "ready" else 1
 

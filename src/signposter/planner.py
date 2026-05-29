@@ -759,6 +759,24 @@ def build_planner_seed_manifest(
     }
 
 
+
+def format_written_seed_manifest(manifest_path: Path) -> str:
+    """Format local seed manifest write result."""
+    return "\n".join(
+        [
+            "",
+            "Written seed manifest:",
+            f"  {manifest_path}",
+            "",
+            "Notes:",
+            "  Local manifest only.",
+            "  No GitHub mutation was performed.",
+            "  No GitHub issue was created.",
+            "  No OpenClaw execution was performed.",
+        ]
+    )
+
+
 def write_planner_seed_manifest(
     manifest: dict[str, Any],
     manifest_path: Path,
