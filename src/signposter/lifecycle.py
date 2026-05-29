@@ -521,3 +521,201 @@ def format_lifecycle_status(status: LifecycleStatus) -> str:
             lines.append(f"  {n}")
 
     return "\n".join(lines)
+
+@dataclass(frozen=True)
+class LifecycleNext:
+    """Read-only recommendation for the next safe lifecycle action."""
+
+    query_issue: int | None
+    query_pr: int | None
+    issue_number: int | None
+    pr_number: int | None
+    issue_state: str | None
+    workflow_state: str | None
+    pr_state: str | None
+    worktree_exists: bool
+    local_branch_exists: bool
+    prompt_exists: bool
+    worker_summary_exists: bool
+    action: str
+    command: str
+    status: str
+    reason: str | None
+    notes: list[str]
+
+
+def _prompt_exists(issue: int | None) -> bool:
+    if issue is None:
+        return False
+    return Path(f"artifacts/prompts/issue-{issue}.md").exists()
+
+
+def _worker_summary_exists(issue: int | None) -> bool:
+    if issue is None:
+        return False
+    return bool(list(Path("artifacts/runs").glob(f"issue-{issue}-*.summary.md")))
+
+
+def plan_lifecycle_next(
+    repo: str,
+    *,
+    issue: int | None = None,
+    pr: int | None = None,
+) -> LifecycleNext:
+    """Recommend the next safe operator action without performing mutations."""
+    status = plan_lifecycle_status(repo, issue=issue, pr=pr)
+
+    issue_number = status.issue_number
+    pr_number = status.pr_number
+    workflow_state = status.workflow_state
+    prompt_exists = _prompt_exists(issue_number)
+    worker_summary_exists = _worker_summary_exists(issue_number)
+
+    notes = [
+        "Read-only recommendation only.",
+        "No GitHub mutation was performed.",
+        "No local mutation was performed.",
+    ]
+
+    action = "diagnose"
+    command = (
+        f"signposter lifecycle status --repo {repo} "
+        + (f"--issue {issue}" if issue is not None else f"--pr {pr}")
+    )
+    next_status = "blocked"
+    reason: str | None = None
+
+    if status.status == "complete":
+        action = "none"
+        command = "(none)"
+        next_status = "complete"
+        reason = "lifecycle already complete"
+
+    elif issue_number is None:
+        action = "diagnose-mapping"
+        command = f"signposter lifecycle status --repo {repo} --pr {pr}"
+        next_status = "blocked"
+        reason = "associated issue could not be detected"
+
+    elif pr_number is None and workflow_state == "state:done":
+        action = "create-pr"
+        command = f"signposter pr plan --repo {repo} --issue {issue_number}"
+        next_status = "actionable"
+        reason = "issue is done and no associated PR was detected"
+
+    elif status.pr_state == "MERGED" and workflow_state == "state:done":
+        action = "integrate-issue"
+        command = f"signposter integration apply --repo {repo} --pr {pr_number} --apply"
+        next_status = "actionable"
+        reason = "PR is merged and issue is ready for integration"
+
+    elif status.integrated and (status.worktree_exists or status.local_branch_exists):
+        action = "cleanup"
+        command = f"signposter cleanup apply --repo {repo} --pr {pr_number} --apply"
+        next_status = "actionable"
+        reason = "issue is integrated and local cleanup remains"
+
+    elif workflow_state == "state:ready" and not status.worktree_exists:
+        action = "create-worktree"
+        command = f"signposter worktree apply --repo {repo} --issue {issue_number} --apply"
+        next_status = "actionable"
+        reason = "ready issue has no local worktree"
+
+    elif workflow_state == "state:ready" and status.worktree_exists:
+        action = "claim-issue"
+        command = f"signposter run --repo {repo} --issue {issue_number} --claim"
+        next_status = "actionable"
+        reason = "ready issue has a worktree and can be claimed"
+
+    elif workflow_state == "state:active" and not prompt_exists:
+        action = "write-prompt"
+        command = f"signposter run --repo {repo} --issue {issue_number} --write-prompt"
+        next_status = "actionable"
+        reason = "active issue has no prompt artifact"
+
+    elif workflow_state == "state:active" and prompt_exists and not worker_summary_exists:
+        action = "execute-worker"
+        command = f"signposter run --repo {repo} --issue {issue_number} --execute --worktree"
+        next_status = "actionable"
+        reason = "active issue has a prompt but no worker summary"
+
+    elif workflow_state == "state:active" and worker_summary_exists:
+        action = "check-gate"
+        command = f"signposter gate --repo {repo} --issue {issue_number}"
+        next_status = "actionable"
+        reason = "worker evidence exists and gate should be checked"
+
+    elif status.pr_state == "OPEN" and status.review_decision != "APPROVED":
+        action = "review-pr"
+        command = f"signposter review plan --repo {repo} --pr {pr_number}"
+        next_status = "actionable"
+        reason = "PR is open and not approved"
+
+    elif status.pr_state == "OPEN" and status.review_decision == "APPROVED":
+        action = "merge-pr"
+        command = f"signposter merge apply --repo {repo} --pr {pr_number} --apply"
+        next_status = "actionable"
+        reason = "PR is approved and may be mergeable"
+
+    elif workflow_state == "state:merged" and status.issue_state == "CLOSED":
+        action = "none"
+        command = "(none)"
+        next_status = "complete"
+        reason = "issue is already closed and merged"
+
+    return LifecycleNext(
+        query_issue=issue,
+        query_pr=pr,
+        issue_number=issue_number,
+        pr_number=pr_number,
+        issue_state=status.issue_state,
+        workflow_state=workflow_state,
+        pr_state=status.pr_state,
+        worktree_exists=status.worktree_exists,
+        local_branch_exists=status.local_branch_exists,
+        prompt_exists=prompt_exists,
+        worker_summary_exists=worker_summary_exists,
+        action=action,
+        command=command,
+        status=next_status,
+        reason=reason,
+        notes=notes,
+    )
+
+
+def format_lifecycle_next(result: LifecycleNext) -> str:
+    """Compact deterministic next-step output."""
+    if result.issue_number:
+        header = f"Signposter Lifecycle Next — Issue #{result.issue_number}"
+    else:
+        header = f"Signposter Lifecycle Next — PR #{result.pr_number}"
+
+    lines = [f"{header}\n"]
+
+    lines.append("Current:")
+    lines.append(f"  issue state: {result.issue_state or 'unknown'}")
+    lines.append(f"  workflow state: {result.workflow_state or 'unknown'}")
+    if result.pr_number:
+        lines.append(f"  pr: #{result.pr_number} ({result.pr_state or 'unknown'})")
+    else:
+        lines.append("  pr: none detected")
+    lines.append(f"  worktree: {'present' if result.worktree_exists else 'missing'}")
+    lines.append(f"  local branch: {'present' if result.local_branch_exists else 'missing'}")
+    lines.append(f"  prompt: {'present' if result.prompt_exists else 'missing'}")
+    lines.append(f"  worker summary: {'present' if result.worker_summary_exists else 'missing'}")
+
+    lines.append("\nNext:")
+    lines.append(f"  action: {result.action}")
+    lines.append(f"  command: {result.command}")
+    if result.reason:
+        lines.append(f"  reason: {result.reason}")
+
+    lines.append("\nStatus:")
+    lines.append(f"  {result.status}")
+
+    if result.notes:
+        lines.append("\nNotes:")
+        for note in result.notes:
+            lines.append(f"  {note}")
+
+    return "\n".join(lines)
