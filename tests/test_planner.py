@@ -19,6 +19,7 @@ from signposter.planner import (
     format_planner_issue_body,
     format_planner_roadmap,
     mark_planner_task,
+    prepare_planner_seed_manifest,
     validate_planner_plan,
     write_planner_draft,
     write_planner_seed_issue_bodies,
@@ -1056,3 +1057,116 @@ def test_cli_planner_seed_apply_stops_on_fake_subprocess_failure(
     assert "Planner Seed Apply" in captured
     assert "Status:\n  failed" in captured
     assert "gh failed safely" in captured
+
+
+def test_prepare_planner_seed_manifest_creates_new_manifest(tmp_path: Path) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+
+    result = prepare_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+        manifest_path=manifest_path,
+    )
+
+    assert result["status"] == "ready"
+    assert result["errors"] == []
+    assert result["reused_existing"] is False
+    assert manifest_path.exists()
+
+
+def test_prepare_planner_seed_manifest_reuses_completed_manifest(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=1):
+        issue["github_issue"] = 100 + index
+    write_planner_seed_manifest(manifest, manifest_path)
+
+    result = prepare_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+        manifest_path=manifest_path,
+    )
+
+    assert result["status"] == "completed"
+    assert result["errors"] == []
+    assert result["reused_existing"] is True
+    assert result["manifest"]["issues"][0]["github_issue"] == 101
+
+
+def test_prepare_planner_seed_manifest_reuses_partial_manifest(tmp_path: Path) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "partial"
+    manifest["issues"][0]["github_issue"] = 101
+    write_planner_seed_manifest(manifest, manifest_path)
+
+    result = prepare_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+        manifest_path=manifest_path,
+    )
+
+    assert result["status"] == "ready"
+    assert result["errors"] == []
+    assert result["reused_existing"] is True
+    assert result["manifest"]["issues"][0]["github_issue"] == 101
+
+
+def test_prepare_planner_seed_manifest_blocks_incompatible_manifest(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="OtherOrg/other",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    write_planner_seed_manifest(manifest, manifest_path)
+
+    result = prepare_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+        manifest_path=manifest_path,
+    )
+
+    assert result["status"] == "blocked"
+    assert result["errors"] == ["manifest repo mismatch"]
+    assert result["reused_existing"] is True

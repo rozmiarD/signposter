@@ -888,6 +888,92 @@ def _bounded_error(message: str, limit: int = 500) -> str:
     return message[:limit].rstrip() + "..."
 
 
+
+def prepare_planner_seed_manifest(
+    *,
+    plan_path: Path,
+    repo: str,
+    seed_plan: dict[str, Any],
+    body_dir: Path,
+    manifest_path: Path,
+) -> dict[str, Any]:
+    """Prepare or reuse a seed manifest without creating duplicate issues."""
+    new_manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo=repo,
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+
+    if not manifest_path.exists():
+        write_planner_seed_manifest(new_manifest, manifest_path)
+        return {
+            "status": "ready",
+            "manifest": new_manifest,
+            "errors": [],
+            "reused_existing": False,
+        }
+
+    existing = json.loads(manifest_path.read_text(encoding="utf-8"))
+    errors = _validate_seed_manifest_compatibility(
+        existing=existing,
+        expected=new_manifest,
+    )
+    if errors:
+        return {
+            "status": "blocked",
+            "manifest": existing,
+            "errors": errors,
+            "reused_existing": True,
+        }
+
+    if _seed_manifest_is_applied(existing):
+        return {
+            "status": "completed",
+            "manifest": existing,
+            "errors": [],
+            "reused_existing": True,
+        }
+
+    return {
+        "status": "ready",
+        "manifest": existing,
+        "errors": [],
+        "reused_existing": True,
+    }
+
+
+def _validate_seed_manifest_compatibility(
+    *,
+    existing: dict[str, Any],
+    expected: dict[str, Any],
+) -> list[str]:
+    errors: list[str] = []
+
+    if existing.get("version") != expected.get("version"):
+        errors.append("manifest version mismatch")
+    if existing.get("repo") != expected.get("repo"):
+        errors.append("manifest repo mismatch")
+    if existing.get("plan") != expected.get("plan"):
+        errors.append("manifest plan mismatch")
+
+    existing_keys = [issue.get("key") for issue in existing.get("issues", [])]
+    expected_keys = [issue.get("key") for issue in expected.get("issues", [])]
+    if existing_keys != expected_keys:
+        errors.append("manifest issue key mismatch")
+
+    return errors
+
+
+def _seed_manifest_is_applied(manifest: dict[str, Any]) -> bool:
+    issues = manifest.get("issues", [])
+    return (
+        manifest.get("status") == "applied"
+        and bool(issues)
+        and all(issue.get("github_issue") is not None for issue in issues)
+    )
+
+
 def build_planner_seed_manifest(
     *,
     plan_path: Path,
