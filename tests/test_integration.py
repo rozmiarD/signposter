@@ -199,10 +199,10 @@ def test_integration_apply_with_apply_calls_expected_commands(monkeypatch):
     monkeypatch.setattr("subprocess.run", fake_run)
 
     with patch("signposter.integration.plan_integration_for_pr") as mock_plan, \
-         patch(
-             "signposter.integration._fetch_repo_label_names",
-             return_value={"state:done", "state:merged"},
-         ):
+         patch("signposter.integration.check_labels") as mock_check:
+        mock_check.return_value.missing = []
+        mock_check.return_value.error = None
+
         fake_plan = IntegrationPlan(
             pr_number=5, pr_title="test", pr_state="MERGED",
             merge_commit="abc123", base_branch="main", head_branch="work/issue-4-xxx",
@@ -218,7 +218,7 @@ def test_integration_apply_with_apply_calls_expected_commands(monkeypatch):
 
         result = apply_integration("test/repo", 5, apply=True)
 
-    assert result["success"] is True
+    assert result.get("success") is True
     # Check that we tried to do label edit, comment, and close
     assert any("issue edit" in c and "state:merged" in c for c in calls)
     assert any("issue comment" in c for c in calls)
@@ -236,10 +236,10 @@ def test_integration_apply_failed_mutation_includes_stderr(monkeypatch):
     monkeypatch.setattr("subprocess.run", lambda *a, **k: FakeProc())
 
     with patch("signposter.integration.plan_integration_for_pr") as mock_plan, \
-         patch(
-             "signposter.integration._fetch_repo_label_names",
-             return_value={"state:done", "state:merged"},
-         ):
+         patch("signposter.integration.check_labels") as mock_check:
+        mock_check.return_value.missing = []
+        mock_check.return_value.error = None
+
         fake_plan = IntegrationPlan(
             pr_number=5, pr_title="test", pr_state="MERGED",
             merge_commit="abc123", base_branch="main", head_branch="work/issue-4-xxx",
@@ -376,11 +376,15 @@ def test_fetch_main_ci_status_unknown_on_gh_failure(monkeypatch):
 
 
 def test_integration_apply_refuses_when_required_labels_missing(monkeypatch):
+    """H023C: apply must refuse before any mutation if required labels are missing."""
     from signposter.integration import IntegrationPlan, apply_integration
 
     with patch("signposter.integration.plan_integration_for_pr") as mock_plan, \
-         patch("signposter.integration._fetch_repo_label_names", return_value={"state:done"}), \
+         patch("signposter.integration.check_labels") as mock_check, \
          patch("subprocess.run") as mock_sub:
+        mock_check.return_value.missing = ["state:merged"]
+        mock_check.return_value.error = None
+
         fake_plan = IntegrationPlan(
             pr_number=5,
             pr_title="test",
@@ -404,4 +408,5 @@ def test_integration_apply_refuses_when_required_labels_missing(monkeypatch):
 
     assert result["mode"] == "apply_blocked"
     assert "state:merged" in result.get("error", "")
+    # No mutations should have been attempted
     mock_sub.assert_not_called()

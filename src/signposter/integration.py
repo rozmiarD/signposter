@@ -12,6 +12,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import Any
 
+from signposter.labels import check_labels
 from signposter.review import _run_gh_pr_view
 from signposter.scan import fetch_issue_by_number, fetch_issue_context
 
@@ -337,8 +338,11 @@ No local worktree cleanup was performed.
     return comment.strip()
 
 
-def _integration_apply_status(plan: IntegrationPlan) -> str:
-    """Return effective readiness for integration apply."""
+def _integration_apply_status(plan: IntegrationPlan, repo: str | None = None) -> str:
+    """Return effective readiness for integration apply.
+
+    Also runs the centralized label preflight (H023C) when repo is provided.
+    """
     if plan.status != "ready":
         return f"blocked — integration plan is not ready ({plan.status})"
     if plan.associated_issue is None:
@@ -352,7 +356,34 @@ def _integration_apply_status(plan: IntegrationPlan) -> str:
         )
     if plan.main_ci_status != "pass":
         return f"blocked — main CI is not confirmed pass (got {plan.main_ci_status})"
+
+    # H023C: label preflight (only when repo provided)
+    if repo:
+        ok, missing, err = _label_preflight(repo)
+        if not ok:
+            if err:
+                return f"blocked — {err}"
+            if missing:
+                return "blocked — required labels missing: " + ", ".join(missing)
+            return "blocked — required labels missing"
     return "ready"
+
+
+def _label_preflight(repo: str) -> tuple[bool, list[str], str | None]:
+    """
+    Centralized required-label preflight for integration apply.
+
+    Returns: (ok, missing_labels, error_message)
+    """
+    try:
+        result = check_labels(repo)
+        if result.error:
+            return False, [], f"label preflight failed: {result.error}"
+        if result.missing:
+            return False, result.missing, None
+        return True, [], None
+    except Exception as e:
+        return False, [], f"label preflight error: {str(e)[:200]}"
 
 
 def apply_integration(
@@ -416,15 +447,14 @@ def apply_integration(
             "error": f"Main CI is not confirmed pass (got {plan.main_ci_status})",
         }
 
-    label_names = _fetch_repo_label_names(repo)
-    missing_labels = [
-        label for label in ("state:done", "state:merged") if label not in label_names
-    ]
-    if missing_labels:
+    # Centralized required label preflight (H023C)
+    ok, missing, preflight_err = _label_preflight(repo)
+    if not ok:
+        reason = preflight_err or ("required labels missing: " + ", ".join(missing))
         return {
             "mode": "apply_blocked",
             "plan": plan,
-            "error": "Required integration label(s) missing: " + ", ".join(missing_labels),
+            "error": reason,
         }
 
     issue = plan.associated_issue
@@ -507,9 +537,9 @@ def apply_integration(
     }
 
 
-def format_integration_apply_dry_run(plan: IntegrationPlan) -> str:
+def format_integration_apply_dry_run(plan: IntegrationPlan, repo: str | None = None) -> str:
     """Dry-run output for integration apply."""
-    apply_status = _integration_apply_status(plan)
+    apply_status = _integration_apply_status(plan, repo)
 
     lines = [f"Signposter Integration Apply Plan — PR #{plan.pr_number}\n"]
 
@@ -522,6 +552,10 @@ def format_integration_apply_dry_run(plan: IntegrationPlan) -> str:
     lines.append(f"  close issue: {'yes' if plan.close_issue else 'no'}")
     lines.append(f"  close reason: {plan.close_reason}")
     lines.append(f"  main CI: {plan.main_ci_status}")
+
+    if "required labels missing" in apply_status.lower():
+        lines.append("\nLabel preflight:")
+        lines.append(f"  {apply_status}")
 
     lines.append("\nPlanned GitHub mutations:")
     lines.append("  remove label: state:done")
