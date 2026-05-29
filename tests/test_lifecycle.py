@@ -56,6 +56,7 @@ def _make_complete_status(**overrides) -> LifecycleStatus:
 def test_lifecycle_complete_for_issue_4_style_data():
     with patch("signposter.lifecycle.fetch_issue_by_number") as m_issue, \
          patch("signposter.lifecycle.fetch_issue_context") as m_ctx, \
+         patch("signposter.lifecycle._detect_associated_pr_from_issue", return_value=5), \
          patch("signposter.lifecycle._run_gh_pr_view") as m_pr, \
          patch("signposter.lifecycle._worktree_exists", return_value=False), \
          patch("signposter.lifecycle._local_branch_exists", return_value=False):
@@ -120,6 +121,7 @@ def test_lifecycle_complete_when_starting_from_pr():
 def test_incomplete_when_issue_not_closed():
     with patch("signposter.lifecycle.fetch_issue_by_number") as m_issue, \
          patch("signposter.lifecycle.fetch_issue_context") as m_ctx, \
+         patch("signposter.lifecycle._detect_associated_pr_from_issue", return_value=5), \
          patch("signposter.lifecycle._run_gh_pr_view") as m_pr, \
          patch("signposter.lifecycle._worktree_exists", return_value=False), \
          patch("signposter.lifecycle._local_branch_exists", return_value=False):
@@ -139,6 +141,7 @@ def test_incomplete_when_issue_not_closed():
 def test_incomplete_when_missing_state_merged():
     with patch("signposter.lifecycle.fetch_issue_by_number") as m_issue, \
          patch("signposter.lifecycle.fetch_issue_context") as m_ctx, \
+         patch("signposter.lifecycle._detect_associated_pr_from_issue", return_value=5), \
          patch("signposter.lifecycle._run_gh_pr_view") as m_pr, \
          patch("signposter.lifecycle._worktree_exists", return_value=False), \
          patch("signposter.lifecycle._local_branch_exists", return_value=False):
@@ -158,6 +161,7 @@ def test_incomplete_when_missing_state_merged():
 def test_incomplete_when_pr_not_merged():
     with patch("signposter.lifecycle.fetch_issue_by_number") as m_issue, \
          patch("signposter.lifecycle.fetch_issue_context") as m_ctx, \
+         patch("signposter.lifecycle._detect_associated_pr_from_issue", return_value=5), \
          patch("signposter.lifecycle._run_gh_pr_view") as m_pr, \
          patch("signposter.lifecycle._worktree_exists", return_value=False), \
          patch("signposter.lifecycle._local_branch_exists", return_value=False):
@@ -177,6 +181,7 @@ def test_incomplete_when_pr_not_merged():
 def test_incomplete_when_worktree_still_exists():
     with patch("signposter.lifecycle.fetch_issue_by_number") as m_issue, \
          patch("signposter.lifecycle.fetch_issue_context") as m_ctx, \
+         patch("signposter.lifecycle._detect_associated_pr_from_issue", return_value=5), \
          patch("signposter.lifecycle._run_gh_pr_view") as m_pr, \
          patch("signposter.lifecycle._worktree_exists", return_value=True), \
          patch("signposter.lifecycle._local_branch_exists", return_value=False):
@@ -196,6 +201,7 @@ def test_incomplete_when_worktree_still_exists():
 def test_incomplete_when_local_branch_still_exists():
     with patch("signposter.lifecycle.fetch_issue_by_number") as m_issue, \
          patch("signposter.lifecycle.fetch_issue_context") as m_ctx, \
+         patch("signposter.lifecycle._detect_associated_pr_from_issue", return_value=5), \
          patch("signposter.lifecycle._run_gh_pr_view") as m_pr, \
          patch("signposter.lifecycle._worktree_exists", return_value=False), \
          patch("signposter.lifecycle._local_branch_exists", return_value=True):
