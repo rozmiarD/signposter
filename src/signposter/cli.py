@@ -6,6 +6,7 @@ Currently in bootstrap phase. Only the `doctor` command is implemented.
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -32,12 +33,14 @@ from signposter.planner import (
     build_planner_next,
     build_planner_seed_manifest,
     build_planner_seed_plan,
+    build_planner_status,
     format_planner_draft,
     format_planner_mark_result,
     format_planner_next,
     format_planner_roadmap,
     format_planner_seed_apply_result,
     format_planner_seed_plan,
+    format_planner_status,
     format_planner_validation,
     format_prepared_seed_manifest,
     format_seed_label_preflight,
@@ -407,6 +410,18 @@ def main() -> None:
         help="Optional output path for the rendered roadmap Markdown",
     )
     planner_roadmap_parser.set_defaults(func=run_planner_roadmap)
+
+    planner_status_parser = planner_subparsers.add_parser(
+        "status",
+        help="Show local planner status from a seed manifest",
+    )
+    planner_status_parser.add_argument(
+        "--manifest",
+        required=True,
+        type=Path,
+        help="Path to the local planner seed manifest JSON file",
+    )
+    planner_status_parser.set_defaults(func=run_planner_status)
 
     # worktree subcommand group (planning only — HARDENING-007)
     worktree_parser = subparsers.add_parser(
@@ -1682,6 +1697,13 @@ def run_planner_roadmap(args: argparse.Namespace) -> int:
 
     return 1 if "Status:\nblocked" in roadmap else 0
 
+
+def run_planner_status(args: argparse.Namespace) -> int:
+    """Show local planner status from a seed manifest."""
+    manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+    status = build_planner_status(manifest)
+    print(format_planner_status(status))
+    return 0
 
 def run_planner_mark(args: argparse.Namespace) -> int:
     """Update a local planner task status."""
