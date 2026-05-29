@@ -35,10 +35,12 @@ from signposter.planner import (
     format_planner_roadmap,
     format_planner_seed_plan,
     format_planner_validation,
+    format_written_issue_bodies,
     load_planner_plan,
     mark_planner_task,
     validate_planner_plan,
     write_planner_draft,
+    write_planner_seed_issue_bodies,
 )
 from signposter.pr import format_pr_plan, plan_pr_for_issue
 from signposter.report import report_main
@@ -308,6 +310,17 @@ def main() -> None:
         "--show-commands",
         action="store_true",
         help="Show future gh issue create commands without executing them",
+    )
+    planner_seed_parser.add_argument(
+        "--write-bodies",
+        action="store_true",
+        help="Write generated issue bodies to local Markdown files",
+    )
+    planner_seed_parser.add_argument(
+        "--body-dir",
+        default=Path("artifacts/plans/issue-bodies"),
+        type=Path,
+        help="Directory for --write-bodies output",
     )
     planner_seed_parser.set_defaults(func=run_planner_seed)
 
@@ -1672,6 +1685,11 @@ def run_planner_seed(args: argparse.Namespace) -> int:
             show_commands=args.show_commands,
         )
     )
+
+    if args.write_bodies:
+        written = write_planner_seed_issue_bodies(seed_plan, args.body_dir)
+        print(format_written_issue_bodies(written))
+
     return 0 if seed_plan["status"] == "ready" else 1
 
 

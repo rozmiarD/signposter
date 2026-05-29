@@ -719,6 +719,50 @@ def build_planner_seed_plan(plan: dict[str, Any]) -> dict[str, Any]:
     return {"status": "ready", "errors": [], "issues": issues}
 
 
+
+def write_planner_seed_issue_bodies(
+    seed_plan: dict[str, Any],
+    body_dir: Path,
+) -> list[Path]:
+    """Write generated issue bodies to local Markdown files."""
+    if seed_plan["status"] != "ready":
+        return []
+
+    body_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+
+    for issue in seed_plan["issues"]:
+        body_path = body_dir / f"{issue['key']}.md"
+        body_path.write_text(issue["body"] + "\n", encoding="utf-8")
+        written.append(body_path)
+
+    return written
+
+
+def format_written_issue_bodies(paths: list[Path]) -> str:
+    """Format local issue body write result."""
+    lines = [
+        "",
+        "Written issue body files:",
+    ]
+
+    if not paths:
+        lines.append("  none")
+    else:
+        lines.extend(f"  {path}" for path in paths)
+
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "  Local files only.",
+            "  No GitHub mutation was performed.",
+            "  No GitHub issue was created.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def format_planner_seed_plan(
     plan_path: Path,
     seed_plan: dict[str, Any],

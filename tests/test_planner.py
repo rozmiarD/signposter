@@ -19,6 +19,7 @@ from signposter.planner import (
     mark_planner_task,
     validate_planner_plan,
     write_planner_draft,
+    write_planner_seed_issue_bodies,
 )
 
 
@@ -643,3 +644,58 @@ def test_cli_planner_seed_without_show_commands_keeps_command_hidden(
     assert exc_info.value.code in (None, 0)
     assert "----- BEGIN GH COMMAND -----" not in captured
     assert "gh issue create" not in captured
+
+
+def test_write_planner_seed_issue_bodies_writes_markdown_files(tmp_path: Path) -> None:
+    plan = build_planner_draft("build lifecycle watch")
+    seed_plan = build_planner_seed_plan(plan)
+    body_dir = tmp_path / "issue-bodies"
+
+    written = write_planner_seed_issue_bodies(seed_plan, body_dir)
+
+    assert [path.name for path in written] == [
+        "WATCH-001.md",
+        "WATCH-002.md",
+        "WATCH-003.md",
+        "WATCH-004.md",
+        "WATCH-005.md",
+    ]
+    assert (body_dir / "WATCH-001.md").read_text(encoding="utf-8").startswith(
+        "Task: WATCH-001"
+    )
+
+
+def test_cli_planner_seed_write_bodies_writes_local_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    write_planner_draft("build lifecycle watch", plan_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "seed",
+            "--plan",
+            str(plan_path),
+            "--write-bodies",
+            "--body-dir",
+            str(body_dir),
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+    assert exc_info.value.code in (None, 0)
+    assert "Written issue body files:" in captured
+    assert "Local files only." in captured
+    assert (body_dir / "WATCH-001.md").exists()
+    assert (body_dir / "WATCH-001.md").read_text(encoding="utf-8").startswith(
+        "Task: WATCH-001"
+    )
