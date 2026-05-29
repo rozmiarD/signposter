@@ -691,17 +691,21 @@ def build_planner_seed_plan(plan: dict[str, Any]) -> dict[str, Any]:
     for issue in plan["issues"]:
         body = format_planner_issue_body(plan, issue)
         body_size = evaluate_worker_issue_body_size(body)
+        labels = [
+            f"phase:{issue['phase']}",
+            f"risk:{issue['risk']}",
+            f"role:{issue['role']}",
+            f"area:{issue['area']}",
+        ]
+        if not issue["depends_on"]:
+            labels.append("state:ready")
+
         issues.append(
             {
                 "key": issue["key"],
                 "title": issue["title"],
                 "github_title": f"{issue['key']} — {issue['title']}",
-                "labels": [
-                    f"phase:{issue['phase']}",
-                    f"risk:{issue['risk']}",
-                    f"role:{issue['role']}",
-                    f"area:{issue['area']}",
-                ],
+                "labels": labels,
                 "depends_on": issue["depends_on"],
                 "body": body,
                 "body_size": body_size,

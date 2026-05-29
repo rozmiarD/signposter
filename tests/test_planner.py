@@ -169,7 +169,9 @@ def test_build_planner_seed_plan_ready_contains_labels() -> None:
         "risk:low",
         "role:worker",
         "area:cli",
+        "state:ready",
     ]
+    assert "state:ready" not in seed_plan["issues"][1]["labels"]
 
 
 def test_cli_planner_seed_reports_ready(
@@ -579,13 +581,14 @@ def test_format_gh_issue_create_command_quotes_args() -> None:
         repo="ExatronOmega/signposter",
         title="WATCH-001 — Define lifecycle watch CLI contract",
         body_file=Path("artifacts/plans/issue-bodies/WATCH-001.md"),
-        labels=["phase:build", "risk:low", "role:worker", "area:cli"],
+        labels=["phase:build", "risk:low", "role:worker", "area:cli", "state:ready"],
     )
 
     assert command.startswith("gh \\\n  issue \\\n  create")
     assert "--repo \\\n  ExatronOmega/signposter" in command
     assert "--body-file \\\n  artifacts/plans/issue-bodies/WATCH-001.md" in command
     assert "--label \\\n  phase:build" in command
+    assert "--label \\\n  state:ready" in command
     assert "WATCH-001" in command
 
 
@@ -856,6 +859,7 @@ def _fake_label_list_result() -> _FakeGhIssueCreateResult:
                 "area:cli",
                 "area:tests",
                 "area:docs",
+                "state:ready",
             ]
         ),
     )
@@ -1413,7 +1417,15 @@ def test_validate_seed_plan_labels_reports_ready() -> None:
 
     result = validate_seed_plan_labels(
         seed_plan,
-        {"phase:build", "risk:low", "role:worker", "area:cli", "area:tests", "area:docs"},
+        {
+            "phase:build",
+            "risk:low",
+            "role:worker",
+            "area:cli",
+            "area:tests",
+            "area:docs",
+            "state:ready",
+        },
     )
 
     assert result["status"] == "ready"
@@ -1431,8 +1443,11 @@ def test_validate_seed_plan_labels_reports_missing_labels() -> None:
     )
 
     assert result["status"] == "blocked"
-    assert result["missing_labels"] == ["area:cli"]
-    assert result["errors"] == ["missing GitHub label: area:cli"]
+    assert result["missing_labels"] == ["area:cli", "state:ready"]
+    assert result["errors"] == [
+        "missing GitHub label: area:cli",
+        "missing GitHub label: state:ready",
+    ]
 
 
 def test_format_seed_label_preflight_includes_safety_notes() -> None:
@@ -1522,6 +1537,7 @@ def test_cli_planner_seed_apply_blocks_missing_label_before_issue_create(
     assert "Seed Label Preflight" in captured
     assert "Status:\n  blocked" in captured
     assert "missing GitHub label: area:cli" in captured
+    assert "missing GitHub label: state:ready" in captured
     assert "Planner Seed Apply" not in captured
 
 
