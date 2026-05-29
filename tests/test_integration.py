@@ -410,3 +410,100 @@ def test_integration_apply_refuses_when_required_labels_missing(monkeypatch):
     assert "state:merged" in result.get("error", "")
     # No mutations should have been attempted
     mock_sub.assert_not_called()
+
+
+# =============================================================================
+# HARDENING-027A: clarify integration apply output for completed plans
+# =============================================================================
+
+def test_integration_apply_dry_run_completed_plan_shows_no_mutations():
+    """Completed integration plans must not list concrete pending mutations."""
+    from signposter.integration import IntegrationPlan, format_integration_apply_dry_run
+
+    plan = IntegrationPlan(
+        pr_number=7,
+        pr_title="test",
+        pr_state="MERGED",
+        merge_commit="abc123",
+        base_branch="main",
+        head_branch="work/issue-6-xxx",
+        associated_issue=6,
+        issue_state="CLOSED",
+        current_workflow_state="state:merged",
+        proposed_workflow_state="state:merged",
+        close_issue=True,
+        close_reason="completed",
+        main_ci_status="pass",
+        status="completed",
+        notes=[],
+    )
+
+    output = format_integration_apply_dry_run(plan)
+
+    # Must not list the concrete mutations
+    assert "remove label: state:done" not in output
+    assert "add label: state:merged" not in output
+    assert "close issue: #6 as completed" not in output
+    assert "post integration comment: yes" not in output
+
+    # Must clearly say no pending mutations
+    assert "none — integration already completed" in output
+
+
+def test_integration_apply_dry_run_not_ready_shows_no_mutations():
+    """Blocked/not-ready plans must not list concrete mutations."""
+    from signposter.integration import IntegrationPlan, format_integration_apply_dry_run
+
+    plan = IntegrationPlan(
+        pr_number=7,
+        pr_title="test",
+        pr_state="MERGED",
+        merge_commit="abc123",
+        base_branch="main",
+        head_branch="work/issue-6-xxx",
+        associated_issue=6,
+        issue_state="CLOSED",
+        current_workflow_state="state:merged",
+        proposed_workflow_state="state:merged",
+        close_issue=True,
+        close_reason="completed",
+        main_ci_status="pass",
+        status="blocked",
+        notes=[],
+    )
+
+    output = format_integration_apply_dry_run(plan)
+
+    assert "remove label: state:done" not in output
+    assert "none — integration plan is not ready (blocked)" in output
+
+
+def test_integration_apply_dry_run_ready_still_lists_mutations():
+    """Ready plans must continue to show the actual planned mutations."""
+    from signposter.integration import IntegrationPlan, format_integration_apply_dry_run
+
+    plan = IntegrationPlan(
+        pr_number=5,
+        pr_title="test",
+        pr_state="MERGED",
+        merge_commit="abc123",
+        base_branch="main",
+        head_branch="work/issue-4-xxx",
+        associated_issue=4,
+        issue_state="OPEN",
+        current_workflow_state="state:done",
+        proposed_workflow_state="state:merged",
+        close_issue=True,
+        close_reason="completed",
+        main_ci_status="pass",
+        status="ready",
+        notes=[],
+    )
+
+    output = format_integration_apply_dry_run(plan)
+
+    assert "remove label: state:done" in output
+    assert "add label: state:merged" in output
+    assert "close issue: #4 as completed" in output
+    assert "post integration comment: yes" in output
+    assert "none —" not in output  # should not use the 'none' wording
