@@ -10,6 +10,7 @@ from signposter.cli import main
 from signposter.planner import (
     PLAN_VERSION,
     build_planner_draft,
+    build_planner_next,
     build_planner_seed_plan,
     validate_planner_plan,
     write_planner_draft,
@@ -201,3 +202,46 @@ def test_cli_planner_seed_blocks_invalid_plan(
     assert exc_info.value.code == 1
     assert "Status:\n  blocked" in captured
     assert "WATCH-001: contains auto-close keyword" in captured
+
+
+def test_build_planner_next_selects_first_ready_issue() -> None:
+    plan = build_planner_draft("build lifecycle watch")
+
+    next_plan = build_planner_next(plan)
+
+    assert next_plan["status"] == "ready"
+    assert next_plan["next"]["key"] == "WATCH-001"
+
+
+def test_build_planner_next_respects_completed_dependencies() -> None:
+    plan = build_planner_draft("build lifecycle watch")
+    plan["issues"][0]["status"] = "done"
+
+    next_plan = build_planner_next(plan)
+
+    assert next_plan["status"] == "ready"
+    assert next_plan["next"]["key"] == "WATCH-002"
+
+
+def test_cli_planner_next_reports_ready(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    write_planner_draft("build lifecycle watch", plan_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["signposter", "planner", "next", "--plan", str(plan_path)],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+    assert exc_info.value.code in (None, 0)
+    assert "Signposter Planner Next" in captured
+    assert "Status:\n  ready" in captured
+    assert "WATCH-001 — Define lifecycle watch CLI contract" in captured
+    assert "No task execution was performed." in captured

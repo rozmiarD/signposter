@@ -155,6 +155,126 @@ def validate_planner_plan(plan: dict[str, Any]) -> list[str]:
 
 
 
+
+DONE_STATUSES = {"done", "merged", "completed"}
+BLOCKED_STATUSES = {"blocked", "failed"}
+
+
+def build_planner_next(plan: dict[str, Any]) -> dict[str, Any]:
+    """Choose the next dependency-ready issue from a planner plan."""
+    errors = validate_planner_plan(plan)
+    if errors:
+        return {
+            "status": "blocked",
+            "reason": "plan validation failed",
+            "errors": errors,
+            "next": None,
+        }
+
+    issues = plan["issues"]
+    completed = {
+        issue["key"]
+        for issue in issues
+        if _issue_status(issue) in DONE_STATUSES
+    }
+    remaining = [
+        issue
+        for issue in issues
+        if _issue_status(issue) not in DONE_STATUSES
+    ]
+
+    if not remaining:
+        return {
+            "status": "completed",
+            "reason": "all issues are completed",
+            "errors": [],
+            "next": None,
+        }
+
+    blocked = [
+        issue["key"]
+        for issue in remaining
+        if _issue_status(issue) in BLOCKED_STATUSES
+    ]
+
+    for issue in remaining:
+        status = _issue_status(issue)
+        if status in BLOCKED_STATUSES:
+            continue
+
+        missing_dependencies = [
+            dependency
+            for dependency in issue["depends_on"]
+            if dependency not in completed
+        ]
+        if missing_dependencies:
+            continue
+
+        return {
+            "status": "ready",
+            "reason": "first dependency-ready issue selected",
+            "errors": [],
+            "next": {
+                "key": issue["key"],
+                "title": issue["title"],
+                "status": status,
+                "depends_on": issue["depends_on"],
+            },
+        }
+
+    return {
+        "status": "waiting",
+        "reason": "no dependency-ready issue is available",
+        "errors": [f"blocked issue: {key}" for key in blocked],
+        "next": None,
+    }
+
+
+def format_planner_next(plan_path: Path, next_plan: dict[str, Any]) -> str:
+    """Format planner next result."""
+    lines = [
+        "Signposter Planner Next",
+        "",
+        "Plan:",
+        f"  {plan_path}",
+        "",
+        "Status:",
+        f"  {next_plan['status']}",
+        "",
+        "Reason:",
+        f"  {next_plan['reason']}",
+    ]
+
+    if next_plan["next"]:
+        issue = next_plan["next"]
+        deps = ", ".join(issue["depends_on"]) if issue["depends_on"] else "none"
+        lines.extend(
+            [
+                "",
+                "Next issue:",
+                f"  {issue['key']} — {issue['title']}",
+                f"  status: {issue['status']}",
+                f"  depends on: {deps}",
+            ]
+        )
+
+    if next_plan["errors"]:
+        lines.extend(["", "Notes:"])
+        lines.extend(f"  - {error}" for error in next_plan["errors"])
+
+    lines.extend(
+        [
+            "",
+            "Safety:",
+            "  No GitHub mutation was performed.",
+            "  No OpenClaw execution was performed.",
+            "  No GitHub issue was created.",
+            "  No task execution was performed.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def build_planner_seed_plan(plan: dict[str, Any]) -> dict[str, Any]:
     """Build a dry-run issue seed plan from a validated planner plan."""
     errors = validate_planner_plan(plan)
@@ -318,3 +438,6 @@ def _list_required(
         errors.append(f"{key}: {field} must be a list")
     elif field != "depends_on" and not value:
         errors.append(f"{key}: {field} must not be empty")
+
+def _issue_status(issue: dict[str, Any]) -> str:
+    return str(issue.get("status", "pending")).strip().lower() or "pending"
