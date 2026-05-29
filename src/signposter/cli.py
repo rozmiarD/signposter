@@ -294,6 +294,11 @@ def main() -> None:
         type=Path,
         help="Path to the local planner JSON draft",
     )
+    planner_seed_parser.add_argument(
+        "--show-body",
+        action="store_true",
+        help="Show the full generated issue body for each proposed issue",
+    )
     planner_seed_parser.set_defaults(func=run_planner_seed)
 
     planner_next_parser = planner_subparsers.add_parser(
@@ -1648,7 +1653,13 @@ def run_planner_seed(args: argparse.Namespace) -> int:
     """Plan GitHub issue creation from a local planner draft."""
     plan = load_planner_plan(args.plan)
     seed_plan = build_planner_seed_plan(plan)
-    print(format_planner_seed_plan(args.plan, seed_plan))
+    print(
+        format_planner_seed_plan(
+            args.plan,
+            seed_plan,
+            show_body=args.show_body,
+        )
+    )
     return 0 if seed_plan["status"] == "ready" else 1
 
 

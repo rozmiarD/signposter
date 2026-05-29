@@ -493,3 +493,70 @@ def test_cli_planner_roadmap_writes_markdown_file(
     assert saved.startswith("Roadmap Template")
     assert "Output:" in captured
     assert str(out_path) in captured
+
+
+def test_build_planner_seed_plan_blocks_oversized_issue_body() -> None:
+    plan = build_planner_draft("build lifecycle watch")
+    plan["issues"][0]["acceptance"] = [
+        f"acceptance item {index}" for index in range(200)
+    ]
+
+    seed_plan = build_planner_seed_plan(plan)
+
+    assert seed_plan["status"] == "blocked"
+    assert any("WATCH-001" in error for error in seed_plan["errors"])
+    assert any("hard max is 165" in error for error in seed_plan["errors"])
+
+
+def test_cli_planner_seed_show_body_prints_issue_body(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    write_planner_draft("build lifecycle watch", plan_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "seed",
+            "--plan",
+            str(plan_path),
+            "--show-body",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+    assert exc_info.value.code in (None, 0)
+    assert "body size:" in captured
+    assert "----- BEGIN ISSUE BODY -----" in captured
+    assert "Task: WATCH-001" in captured
+    assert "No GitHub issue was created." in captured
+
+
+def test_cli_planner_seed_without_show_body_keeps_output_compact(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    write_planner_draft("build lifecycle watch", plan_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["signposter", "planner", "seed", "--plan", str(plan_path)],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+    assert exc_info.value.code in (None, 0)
+    assert "body size:" in captured
+    assert "----- BEGIN ISSUE BODY -----" not in captured
+    assert "Task: WATCH-001" not in captured

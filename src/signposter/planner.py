@@ -679,10 +679,23 @@ def build_planner_seed_plan(plan: dict[str, Any]) -> dict[str, Any]:
             }
         )
 
+    body_errors = [
+        f"{issue['key']}: {error}"
+        for issue in issues
+        for error in issue["body_size"]["errors"]
+    ]
+    if body_errors:
+        return {"status": "blocked", "errors": body_errors, "issues": issues}
+
     return {"status": "ready", "errors": [], "issues": issues}
 
 
-def format_planner_seed_plan(plan_path: Path, seed_plan: dict[str, Any]) -> str:
+def format_planner_seed_plan(
+    plan_path: Path,
+    seed_plan: dict[str, Any],
+    *,
+    show_body: bool = False,
+) -> str:
     """Format a dry-run planner seed plan."""
     lines = [
         "Signposter Planner Seed",
@@ -702,9 +715,26 @@ def format_planner_seed_plan(plan_path: Path, seed_plan: dict[str, Any]) -> str:
         for issue in seed_plan["issues"]:
             deps = ", ".join(issue["depends_on"]) if issue["depends_on"] else "none"
             labels = ", ".join(issue["labels"])
+            body_size = issue.get("body_size", {})
+            size_status = body_size.get("status", "unknown")
+            line_count = body_size.get("line_count", "?")
+            char_count = body_size.get("char_count", "?")
             lines.append(f"  {issue['key']} — {issue['title']}")
             lines.append(f"    labels: {labels}")
             lines.append(f"    depends on: {deps}")
+            lines.append(
+                f"    body size: {size_status} "
+                f"({line_count} lines, {char_count} chars)"
+            )
+            if show_body:
+                lines.extend(
+                    [
+                        "    body:",
+                        "      ----- BEGIN ISSUE BODY -----",
+                    ]
+                )
+                lines.extend(f"      {line}" for line in issue["body"].splitlines())
+                lines.append("      ----- END ISSUE BODY -----")
 
     lines.extend(
         [
