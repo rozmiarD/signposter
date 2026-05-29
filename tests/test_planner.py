@@ -435,3 +435,61 @@ def test_format_planner_roadmap_blocks_invalid_plan() -> None:
     assert "Status:\nblocked" in roadmap
     assert "Validation errors:" in roadmap
     assert "WATCH-001: contains auto-close keyword" in roadmap
+
+
+def test_cli_planner_roadmap_prints_generic_template(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    write_planner_draft("build lifecycle watch", plan_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["signposter", "planner", "roadmap", "--plan", str(plan_path)],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+    assert exc_info.value.code in (None, 0)
+    assert captured.startswith("Roadmap Template")
+    assert "User goal:" in captured
+    assert "Milestone model:" in captured
+    assert "WATCH-001" not in captured
+    assert "signposter lifecycle watch" not in captured
+
+
+def test_cli_planner_roadmap_writes_markdown_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    out_path = tmp_path / "roadmaps" / "roadmap.md"
+    write_planner_draft("build lifecycle watch", plan_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "roadmap",
+            "--plan",
+            str(plan_path),
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    saved = out_path.read_text(encoding="utf-8")
+    captured = capsys.readouterr().out
+    assert exc_info.value.code in (None, 0)
+    assert saved.startswith("Roadmap Template")
+    assert "Output:" in captured
+    assert str(out_path) in captured

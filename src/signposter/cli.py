@@ -32,6 +32,7 @@ from signposter.planner import (
     format_planner_draft,
     format_planner_mark_result,
     format_planner_next,
+    format_planner_roadmap,
     format_planner_seed_plan,
     format_planner_validation,
     load_planner_plan,
@@ -334,6 +335,24 @@ def main() -> None:
         help="Optional reason stored with the task status",
     )
     planner_mark_parser.set_defaults(func=run_planner_mark)
+
+    planner_roadmap_parser = planner_subparsers.add_parser(
+        "roadmap",
+        help="Render a generic roadmap document from a local planner JSON file",
+    )
+    planner_roadmap_parser.add_argument(
+        "--plan",
+        required=True,
+        type=Path,
+        help="Path to the local planner JSON draft",
+    )
+    planner_roadmap_parser.add_argument(
+        "--out",
+        default=None,
+        type=Path,
+        help="Optional output path for the rendered roadmap Markdown",
+    )
+    planner_roadmap_parser.set_defaults(func=run_planner_roadmap)
 
     # worktree subcommand group (planning only — HARDENING-007)
     worktree_parser = subparsers.add_parser(
@@ -1591,6 +1610,24 @@ def _register_labels_subcommands(subparsers: argparse._SubParsersAction) -> None
         help="Actually create the missing labels (requires explicit use)",
     )
     ensure_parser.set_defaults(func=run_labels_ensure)
+
+def run_planner_roadmap(args: argparse.Namespace) -> int:
+    """Render a generic roadmap document from a local planner draft."""
+    plan = load_planner_plan(args.plan)
+    roadmap = format_planner_roadmap(plan)
+
+    if args.out is not None:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(roadmap + "\n", encoding="utf-8")
+
+    print(roadmap)
+    if args.out is not None:
+        print()
+        print("Output:")
+        print(f"  {args.out}")
+
+    return 1 if "Status:\nblocked" in roadmap else 0
+
 
 def run_planner_mark(args: argparse.Namespace) -> int:
     """Update a local planner task status."""
