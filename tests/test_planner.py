@@ -10,6 +10,7 @@ from signposter.cli import main
 from signposter.planner import (
     PLAN_VERSION,
     build_planner_draft,
+    build_planner_seed_plan,
     validate_planner_plan,
     write_planner_draft,
 )
@@ -128,6 +129,69 @@ def test_cli_planner_validate_reports_blocked(
         sys,
         "argv",
         ["signposter", "planner", "validate", "--plan", str(plan_path)],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+    assert exc_info.value.code == 1
+    assert "Status:\n  blocked" in captured
+    assert "WATCH-001: contains auto-close keyword" in captured
+
+
+def test_build_planner_seed_plan_ready_contains_labels() -> None:
+    plan = build_planner_draft("build lifecycle watch")
+
+    seed_plan = build_planner_seed_plan(plan)
+
+    assert seed_plan["status"] == "ready"
+    assert seed_plan["errors"] == []
+    assert seed_plan["issues"][0]["labels"] == [
+        "phase:build",
+        "risk:low",
+        "role:worker",
+        "area:cli",
+    ]
+
+
+def test_cli_planner_seed_reports_ready(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    write_planner_draft("build lifecycle watch", plan_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["signposter", "planner", "seed", "--plan", str(plan_path)],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+    assert exc_info.value.code in (None, 0)
+    assert "Signposter Planner Seed" in captured
+    assert "Status:\n  ready" in captured
+    assert "WATCH-001 — Define lifecycle watch CLI contract" in captured
+    assert "No GitHub issue was created." in captured
+
+
+def test_cli_planner_seed_blocks_invalid_plan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    plan = build_planner_draft("build lifecycle watch")
+    plan["issues"][0]["body"] = "Closes #1"
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["signposter", "planner", "seed", "--plan", str(plan_path)],
     )
 
     with pytest.raises(SystemExit) as exc_info:

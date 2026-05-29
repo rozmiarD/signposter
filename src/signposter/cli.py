@@ -27,7 +27,9 @@ from signposter.merge import (
     plan_merge_for_pr,
 )
 from signposter.planner import (
+    build_planner_seed_plan,
     format_planner_draft,
+    format_planner_seed_plan,
     format_planner_validation,
     load_planner_plan,
     validate_planner_plan,
@@ -276,6 +278,18 @@ def main() -> None:
         help="Path to the local planner JSON draft",
     )
     planner_validate_parser.set_defaults(func=run_planner_validate)
+
+    planner_seed_parser = planner_subparsers.add_parser(
+        "seed",
+        help="Plan GitHub issue creation from a local planner JSON file",
+    )
+    planner_seed_parser.add_argument(
+        "--plan",
+        required=True,
+        type=Path,
+        help="Path to the local planner JSON draft",
+    )
+    planner_seed_parser.set_defaults(func=run_planner_seed)
 
     # worktree subcommand group (planning only — HARDENING-007)
     worktree_parser = subparsers.add_parser(
@@ -1533,6 +1547,14 @@ def _register_labels_subcommands(subparsers: argparse._SubParsersAction) -> None
         help="Actually create the missing labels (requires explicit use)",
     )
     ensure_parser.set_defaults(func=run_labels_ensure)
+
+def run_planner_seed(args: argparse.Namespace) -> int:
+    """Plan GitHub issue creation from a local planner draft."""
+    plan = load_planner_plan(args.plan)
+    seed_plan = build_planner_seed_plan(plan)
+    print(format_planner_seed_plan(args.plan, seed_plan))
+    return 0 if seed_plan["status"] == "ready" else 1
+
 
 def run_planner_validate(args: argparse.Namespace) -> int:
     """Validate a local planner draft."""
