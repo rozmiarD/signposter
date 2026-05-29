@@ -791,8 +791,10 @@ def test_cli_planner_seed_write_manifest_writes_local_json(
     assert manifest["issues"][0]["github_issue"] is None
     assert manifest["issues"][0]["body_file"].endswith("WATCH-001.md")
     assert (body_dir / "WATCH-001.md").exists()
-    assert "Written seed manifest:" in captured
-    assert "Local manifest only." in captured
+    assert "Prepared seed manifest:" in captured
+    assert "Existing manifest:" in captured
+    assert "none — created" in captured
+    assert "No GitHub mutation was performed during manifest preparation." in captured
     assert "No GitHub issue was created." in captured
 
 
