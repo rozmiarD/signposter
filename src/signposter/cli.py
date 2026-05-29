@@ -26,7 +26,13 @@ from signposter.merge import (
     format_merge_plan,
     plan_merge_for_pr,
 )
-from signposter.planner import format_planner_draft, write_planner_draft
+from signposter.planner import (
+    format_planner_draft,
+    format_planner_validation,
+    load_planner_plan,
+    validate_planner_plan,
+    write_planner_draft,
+)
 from signposter.pr import format_pr_plan, plan_pr_for_issue
 from signposter.report import report_main
 from signposter.review import (
@@ -258,6 +264,18 @@ def main() -> None:
         help="Output path for the local planner JSON draft",
     )
     planner_draft_parser.set_defaults(func=run_planner_draft)
+
+    planner_validate_parser = planner_subparsers.add_parser(
+        "validate",
+        help="Validate a local planner JSON file",
+    )
+    planner_validate_parser.add_argument(
+        "--plan",
+        required=True,
+        type=Path,
+        help="Path to the local planner JSON draft",
+    )
+    planner_validate_parser.set_defaults(func=run_planner_validate)
 
     # worktree subcommand group (planning only — HARDENING-007)
     worktree_parser = subparsers.add_parser(
@@ -1515,6 +1533,14 @@ def _register_labels_subcommands(subparsers: argparse._SubParsersAction) -> None
         help="Actually create the missing labels (requires explicit use)",
     )
     ensure_parser.set_defaults(func=run_labels_ensure)
+
+def run_planner_validate(args: argparse.Namespace) -> int:
+    """Validate a local planner draft."""
+    plan = load_planner_plan(args.plan)
+    errors = validate_planner_plan(plan)
+    print(format_planner_validation(args.plan, errors))
+    return 0 if not errors else 1
+
 
 def run_planner_draft(args: argparse.Namespace) -> None:
     """Write a local deterministic planner draft."""

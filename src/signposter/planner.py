@@ -1,12 +1,14 @@
-"""Local planner draft surface for Signposter."""
+"""Local planner draft and validation surfaces for Signposter."""
 
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 PLAN_VERSION = "planner.v0.1"
+AUTO_CLOSE_RE = re.compile(r"\b(closes|fixes|resolves)\s+#\d+", re.IGNORECASE)
 
 STOP_CONDITIONS = [
     "ruff check fails",
@@ -75,6 +77,83 @@ def write_planner_draft(goal: str, output_path: Path) -> dict[str, Any]:
     return plan
 
 
+def load_planner_plan(plan_path: Path) -> dict[str, Any]:
+    """Load a planner JSON file."""
+    data = json.loads(plan_path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("planner file must contain a JSON object")
+    return data
+
+
+def validate_planner_plan(plan: dict[str, Any]) -> list[str]:
+    """Return validation errors for a planner plan."""
+    errors: list[str] = []
+
+    _require(plan, "version", str, errors)
+    _require(plan, "goal", str, errors)
+    _require(plan, "issues", list, errors)
+
+    if plan.get("version") != PLAN_VERSION:
+        errors.append(f"version must be {PLAN_VERSION}")
+
+    if not str(plan.get("goal", "")).strip():
+        errors.append("goal must not be empty")
+
+    issues = plan.get("issues")
+    if not isinstance(issues, list) or not issues:
+        errors.append("issues must be a non-empty list")
+        return errors
+
+    keys: set[str] = set()
+    for index, issue in enumerate(issues, start=1):
+        if not isinstance(issue, dict):
+            errors.append(f"issue #{index} must be an object")
+            continue
+
+        key = str(issue.get("key", f"#{index}"))
+        if key in keys:
+            errors.append(f"{key}: duplicate issue key")
+        keys.add(key)
+
+        for field in [
+            "key",
+            "title",
+            "body",
+            "phase",
+            "risk",
+            "role",
+            "area",
+            "depends_on",
+            "acceptance",
+            "stop_conditions",
+            "allowed_mutations",
+        ]:
+            if field not in issue:
+                errors.append(f"{key}: missing {field}")
+
+        _list_required(issue, "depends_on", key, errors)
+        _list_required(issue, "acceptance", key, errors)
+        _list_required(issue, "stop_conditions", key, errors)
+
+        if issue.get("allowed_mutations") != []:
+            errors.append(f"{key}: allowed_mutations must be empty for local draft plans")
+
+        searchable = " ".join(
+            str(issue.get(field, "")) for field in ["title", "body", "acceptance"]
+        )
+        if AUTO_CLOSE_RE.search(searchable):
+            errors.append(f"{key}: contains auto-close keyword")
+
+    for issue in issues:
+        if isinstance(issue, dict):
+            key = str(issue.get("key", "unknown"))
+            for dependency in issue.get("depends_on", []):
+                if dependency not in keys:
+                    errors.append(f"{key}: unknown dependency {dependency}")
+
+    return errors
+
+
 def format_planner_draft(plan: dict[str, Any], output_path: Path) -> str:
     """Format a compact human-readable planner draft summary."""
     lines = [
@@ -108,6 +187,35 @@ def format_planner_draft(plan: dict[str, Any], output_path: Path) -> str:
     return "\n".join(lines)
 
 
+def format_planner_validation(plan_path: Path, errors: list[str]) -> str:
+    """Format planner validation result."""
+    status = "pass" if not errors else "blocked"
+    lines = [
+        "Signposter Planner Validate",
+        "",
+        "Plan:",
+        f"  {plan_path}",
+        "",
+        "Status:",
+        f"  {status}",
+    ]
+
+    if errors:
+        lines.extend(["", "Errors:"])
+        lines.extend(f"  - {error}" for error in errors)
+
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "  No GitHub mutation was performed.",
+            "  No OpenClaw execution was performed.",
+            "  No GitHub issue was created.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _issue(key: str, title: str, area: str, depends_on: list[str]) -> dict[str, Any]:
     return {
         "key": key,
@@ -122,3 +230,28 @@ def _issue(key: str, title: str, area: str, depends_on: list[str]) -> dict[str, 
         "stop_conditions": STOP_CONDITIONS,
         "allowed_mutations": [],
     }
+
+
+def _require(
+    value: dict[str, Any],
+    field: str,
+    expected_type: type,
+    errors: list[str],
+) -> None:
+    if field not in value:
+        errors.append(f"missing {field}")
+    elif not isinstance(value[field], expected_type):
+        errors.append(f"{field} must be {expected_type.__name__}")
+
+
+def _list_required(
+    issue: dict[str, Any],
+    field: str,
+    key: str,
+    errors: list[str],
+) -> None:
+    value = issue.get(field)
+    if not isinstance(value, list):
+        errors.append(f"{key}: {field} must be a list")
+    elif field != "depends_on" and not value:
+        errors.append(f"{key}: {field} must not be empty")
