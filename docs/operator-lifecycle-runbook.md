@@ -14,6 +14,21 @@ Concise local operator runbook for taking a low-risk issue through the full Sign
 - Keep raw artifacts local (`artifacts/runs/`).
 - Do not expose OpenClaw publicly.
 
+## Safe PR–issue Linkage
+
+Supported default linkage:
+- Branch name pattern: `work/issue-N-slug`
+- PR body line: `Related issue: #N`
+
+Intentionally not used by default:
+- `Closes #N`, `Fixes #N`, `Resolves #N`
+- Formal GitHub "Development" links
+
+Why this model:
+- Merge must never close the issue.
+- Only `signposter integration apply` owns issue closure.
+- Lifecycle can still correctly detect the relationship via branch pattern + "Related issue" text (reported as `source: branch-pattern`, `formal GitHub development link: no/unknown`).
+
 ## Happy Path
 
 ### 1. Preflight
