@@ -133,13 +133,12 @@ def test_gh_failure_produces_blocked_status_with_bounded_error():
         assert len(result.error) <= 320  # allow for prefix + bounded stderr
 
 
-def test_command_is_read_only_by_design():
-    """The module only performs read operations (no mutation functions exposed)."""
+def test_ensure_functions_exist_for_h023b():
+    """H023B added guarded ensure functions (still read-only by default)."""
     import signposter.labels as labels_mod
 
-    # Only check + format functions should exist at module level for this task
     public_names = [n for n in dir(labels_mod) if not n.startswith("_")]
     assert "check_labels" in public_names
-    assert "format_label_check" in public_names
-    # No create/ensure/apply functions yet (H023B territory)
-    assert not any("create" in n.lower() or "ensure" in n.lower() for n in public_names)
+    assert "ensure_labels" in public_names
+    assert "plan_label_ensure" in public_names
+    assert "format_label_ensure" in public_names

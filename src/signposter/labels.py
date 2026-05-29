@@ -24,6 +24,20 @@ REQUIRED_LABELS: tuple[str, ...] = (
     "area:docs",
 )
 
+# Deterministic metadata for required labels (description, color)
+LABEL_METADATA: dict[str, tuple[str, str]] = {
+    "state:ready":   ("Ready to be claimed", "0E8A16"),
+    "state:active":  ("Currently being worked on", "1D76DB"),
+    "state:done":    ("Completed successfully", "C2E0C6"),
+    "state:failed":  ("Failed", "D93F0B"),
+    "state:blocked": ("Blocked - cannot proceed", "B60205"),
+    "state:merged":  ("Merged/integrated into main", "5319E7"),
+    "phase:build":  ("Phase: implementation/build", "1D76DB"),
+    "risk:low":     ("Low risk change", "C2E0C6"),
+    "role:worker":  ("Execution worker", "0052CC"),
+    "area:docs":    ("Documentation changes", "0075CA"),
+}
+
 
 @dataclass(frozen=True)
 class LabelCheckResult:
@@ -147,5 +161,178 @@ def format_label_check(result: LabelCheckResult) -> str:
     lines.append("  No labels were created.")
     lines.append("  No labels were modified.")
     lines.append("  No GitHub mutation was performed.")
+
+    return "\n".join(lines)
+
+
+# =============================================================================
+# H023B: Guarded label ensure (create missing required labels)
+# =============================================================================
+
+@dataclass(frozen=True)
+class LabelEnsureResult:
+    """Result of a guarded label ensure operation."""
+
+    repo: str
+    missing_before: list[str]
+    created: list[str]
+    failed: list[str]
+    status: str  # "ready" | "completed" | "failed / partial"
+    mode: str    # "dry_run" | "apply"
+    error: str | None = None
+
+
+def plan_label_ensure(repo: str) -> LabelEnsureResult:
+    """Read-only plan for what ensure would do."""
+    check = check_labels(repo)
+
+    if check.error:
+        return LabelEnsureResult(
+            repo=repo,
+            missing_before=check.missing,
+            created=[],
+            failed=[],
+            status="failed / partial",
+            mode="dry_run",
+            error=check.error,
+        )
+
+    if not check.missing:
+        return LabelEnsureResult(
+            repo=repo,
+            missing_before=[],
+            created=[],
+            failed=[],
+            status="completed",
+            mode="dry_run",
+            error=None,
+        )
+
+    return LabelEnsureResult(
+        repo=repo,
+        missing_before=check.missing,
+        created=[],
+        failed=[],
+        status="ready",
+        mode="dry_run",
+        error=None,
+    )
+
+
+def ensure_labels(repo: str, *, apply: bool = False) -> LabelEnsureResult:
+    """Ensure all REQUIRED_LABELS exist. Dry-run by default."""
+    plan = plan_label_ensure(repo)
+
+    if not apply:
+        return plan
+
+    if plan.status != "ready":
+        # Nothing to do or already failed to plan
+        return LabelEnsureResult(
+            repo=repo,
+            missing_before=plan.missing_before,
+            created=[],
+            failed=[],
+            status=plan.status,
+            mode="apply",
+            error=plan.error,
+        )
+
+    created: list[str] = []
+    failed: list[str] = []
+
+    for label in plan.missing_before:
+        desc, color = LABEL_METADATA.get(label, ("Signposter workflow label", "ededed"))
+
+        cmd = [
+            "gh",
+            "label",
+            "create",
+            label,
+            "-R",
+            repo,
+            "--description",
+            desc,
+            "--color",
+            color,
+        ]
+
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            if proc.returncode != 0:
+                stderr = (proc.stderr or "").strip()[:300]
+                failed.append(f"{label}: {stderr}")
+                break  # fail fast
+            else:
+                created.append(label)
+        except Exception as e:
+            failed.append(f"{label}: {str(e)[:200]}")
+            break
+
+    final_status = "completed" if not failed else "failed / partial"
+
+    return LabelEnsureResult(
+        repo=repo,
+        missing_before=plan.missing_before,
+        created=created,
+        failed=failed,
+        status=final_status,
+        mode="apply",
+        error=None,
+    )
+
+
+def format_label_ensure(result: LabelEnsureResult) -> str:
+    """Compact output for ensure plan and apply results."""
+    header = f"Signposter Label Ensure Plan — {result.repo}"
+    if result.mode == "apply":
+        header = f"Signposter Label Ensure — {result.repo}"
+
+    lines = [f"{header}\n"]
+
+    if result.missing_before:
+        lines.append("Missing labels:")
+        for m in result.missing_before:
+            lines.append(f"  {m}")
+    else:
+        lines.append("Missing labels:")
+        lines.append("  (none)")
+
+    if result.mode == "dry_run":
+        if result.status == "ready":
+            lines.append("\nPlanned GitHub mutations:")
+            for m in result.missing_before:
+                lines.append(f"  create label: {m}")
+            lines.append("\nStatus:")
+            lines.append(f"  {result.status}")
+            lines.append("\nNotes:")
+            lines.append("  DRY RUN: no labels were created.")
+            lines.append("  No labels were modified.")
+            lines.append("  No labels were deleted.")
+        else:
+            lines.append("\nStatus:")
+            lines.append(f"  {result.status}")
+            lines.append("\nNotes:")
+            lines.append("  No labels were created.")
+            lines.append("  No labels were modified.")
+            lines.append("  No labels were deleted.")
+    else:
+        # apply mode
+        if result.created:
+            lines.append("\nCreated labels:")
+            for c in result.created:
+                lines.append(f"  {c}")
+
+        if result.failed:
+            lines.append("\nFailed:")
+            for f in result.failed:
+                lines.append(f"  {f}")
+
+        lines.append("\nStatus:")
+        lines.append(f"  {result.status}")
+
+        lines.append("\nNotes:")
+        lines.append("  No existing labels were modified.")
+        lines.append("  No labels were deleted.")
 
     return "\n".join(lines)
