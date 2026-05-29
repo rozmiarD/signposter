@@ -1077,6 +1077,95 @@ def _seed_manifest_is_applied(manifest: dict[str, Any]) -> bool:
     )
 
 
+
+def build_planner_status(
+    manifest: dict[str, Any],
+    issue_states: dict[int, str] | None = None,
+) -> dict[str, Any]:
+    """Build a local planner status summary from a seed manifest."""
+    issue_states = issue_states or {}
+    tasks = []
+
+    for issue in manifest.get("issues", []):
+        github_issue = issue.get("github_issue")
+        state = "unseeded"
+        if github_issue is not None:
+            state = issue_states.get(int(github_issue), "unknown")
+
+        tasks.append(
+            {
+                "key": issue.get("key"),
+                "title": issue.get("title"),
+                "github_issue": github_issue,
+                "github_url": issue.get("github_url", ""),
+                "state": state,
+                "labels": issue.get("labels", []),
+                "depends_on": issue.get("depends_on", []),
+            }
+        )
+
+    if not tasks:
+        status = "empty"
+    elif all(task["github_issue"] is None for task in tasks):
+        status = "unseeded"
+    elif any(task["github_issue"] is None for task in tasks):
+        status = "partial"
+    elif all(task["state"] in {"closed", "merged", "done"} for task in tasks):
+        status = "completed"
+    else:
+        status = "active"
+
+    return {
+        "version": "planner.status.v0.1",
+        "manifest_status": manifest.get("status", "unknown"),
+        "repo": manifest.get("repo", ""),
+        "status": status,
+        "tasks": tasks,
+        "notes": [
+            "Local status summary only.",
+            "No GitHub mutation was performed.",
+            "No OpenClaw execution was performed.",
+            "No task execution was performed.",
+        ],
+    }
+
+
+def format_planner_status(status: dict[str, Any]) -> str:
+    """Format planner status summary."""
+    lines = [
+        "Signposter Planner Status",
+        "",
+        "Repo:",
+        f"  {status['repo']}",
+        "",
+        "Manifest status:",
+        f"  {status['manifest_status']}",
+        "",
+        "Status:",
+        f"  {status['status']}",
+        "",
+        "Tasks:",
+    ]
+
+    if not status["tasks"]:
+        lines.append("  none")
+    else:
+        for task in status["tasks"]:
+            issue_text = (
+                f"#{task['github_issue']}"
+                if task["github_issue"] is not None
+                else "none"
+            )
+            url = f" {task['github_url']}" if task["github_url"] else ""
+            lines.append(
+                f"  {task['key']} — issue: {issue_text} — state: {task['state']}{url}"
+            )
+
+    lines.extend(["", "Notes:"])
+    lines.extend(f"  {note}" for note in status["notes"])
+    return "\n".join(lines)
+
+
 def build_planner_seed_manifest(
     *,
     plan_path: Path,
