@@ -40,12 +40,14 @@ from signposter.planner import (
     format_planner_seed_plan,
     format_planner_validation,
     format_prepared_seed_manifest,
+    format_seed_label_preflight,
     format_written_issue_bodies,
     format_written_seed_manifest,
     load_planner_plan,
     mark_planner_task,
     prepare_planner_seed_manifest,
     validate_planner_plan,
+    validate_seed_plan_labels,
     write_planner_draft,
     write_planner_seed_issue_bodies,
     write_planner_seed_manifest,
@@ -1696,6 +1698,33 @@ def run_planner_next(args: argparse.Namespace) -> int:
     return 1 if next_plan["status"] == "blocked" else 0
 
 
+
+def _fetch_repo_label_names(repo: str) -> set[str]:
+    """Fetch GitHub label names for planner seed preflight."""
+    result = subprocess.run(
+        [
+            "gh",
+            "label",
+            "list",
+            "-R",
+            repo,
+            "--limit",
+            "1000",
+            "--json",
+            "name",
+            "--jq",
+            ".[].name",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        stderr = (result.stderr or "").strip()
+        raise RuntimeError(stderr or "gh label list failed")
+    return {line.strip() for line in result.stdout.splitlines() if line.strip()}
+
+
 def run_planner_seed(args: argparse.Namespace) -> int:
     """Plan GitHub issue creation from a local planner draft."""
     plan = load_planner_plan(args.plan)
@@ -1743,6 +1772,24 @@ def run_planner_seed(args: argparse.Namespace) -> int:
         print(format_written_seed_manifest(args.manifest))
 
     if args.apply:
+        try:
+            existing_labels = _fetch_repo_label_names(args.repo)
+        except RuntimeError as exc:
+            print()
+            print("Seed Label Preflight")
+            print()
+            print("Status:")
+            print("  blocked")
+            print()
+            print("Errors:")
+            print(f"  - {exc}")
+            return 1
+
+        label_preflight = validate_seed_plan_labels(seed_plan, existing_labels)
+        print(format_seed_label_preflight(label_preflight))
+        if label_preflight["status"] == "blocked":
+            return 1
+
         result = apply_planner_seed_manifest(
             args.manifest,
             lambda command: subprocess.run(
