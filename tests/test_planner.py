@@ -399,28 +399,31 @@ def test_build_planner_seed_plan_includes_body_size() -> None:
     assert body_size["errors"] == []
 
 
-def test_format_planner_roadmap_uses_roadmap_contract() -> None:
+def test_format_planner_roadmap_uses_generic_roadmap_contract() -> None:
     plan = build_planner_draft("build lifecycle watch")
 
     roadmap = format_planner_roadmap(plan)
 
-    assert roadmap.startswith("Roadmap: build lifecycle watch")
-    assert "Intent:" in roadmap
+    assert roadmap.startswith("Roadmap Template")
+    assert "User goal:" in roadmap
+    assert "Purpose:" in roadmap
+    assert "Roadmap role:" in roadmap
     assert "Outcome:" in roadmap
     assert "Non-goals:" in roadmap
-    assert "Assumptions:" in roadmap
-    assert "Required capabilities:" in roadmap
-    assert "Milestones:" in roadmap
-    assert "Issue DAG:" in roadmap
-    assert "Task sizing policy:" in roadmap
+    assert "Planning sections:" in roadmap
+    assert "Milestone model:" in roadmap
+    assert "Worker task sizing policy:" in roadmap
     assert "Risk model:" in roadmap
     assert "Mutation policy:" in roadmap
     assert "Validation strategy:" in roadmap
     assert "Stop conditions:" in roadmap
     assert "Follow-up policy:" in roadmap
     assert "Done definition:" in roadmap
-    assert "Worker task preferred range: 60–120 lines." in roadmap
-    assert "Do not collapse the whole project into one oversized worker issue." in roadmap
+    assert "Preferred range: 60–120 lines." in roadmap
+    assert "Do not hard-code product-specific task names" in roadmap
+    assert "WATCH-001" not in roadmap
+    assert "Define lifecycle watch CLI contract" not in roadmap
+    assert "signposter lifecycle watch" not in roadmap
 
 
 def test_format_planner_roadmap_blocks_invalid_plan() -> None:

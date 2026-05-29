@@ -444,78 +444,86 @@ def evaluate_worker_issue_body_size(body: str) -> dict[str, Any]:
 
 
 def format_planner_roadmap(plan: dict[str, Any]) -> str:
-    """Format a planner-level roadmap document.
+    """Format a generic planner-level roadmap template.
 
-    This is intentionally different from worker issue bodies. A roadmap is a
-    planning/architecture document; worker issues are bounded execution leaves.
+    This is not a worker issue body and does not render concrete issue DAG
+    entries. Concrete worker tasks belong to seed/next/issue-body surfaces.
     """
     errors = validate_planner_plan(plan)
     if errors:
-        error_lines = "\n".join(f"* {error}" for error in errors)
         return "\n".join(
             [
-                f"Roadmap: {plan.get('goal', 'invalid planner plan')}",
+                "Roadmap Template",
                 "",
                 "Status:",
                 "blocked",
                 "",
                 "Validation errors:",
-                error_lines,
+                _markdown_bullets(errors),
             ]
         )
 
-    issue_lines = []
-    dependency_lines = []
-    for issue in plan["issues"]:
-        issue_lines.append(f"* {issue['key']} — {issue['title']}")
-        deps = issue.get("depends_on", [])
-        if deps:
-            dependency_lines.append(f"* {issue['key']} depends on {', '.join(deps)}")
-        else:
-            dependency_lines.append(f"* {issue['key']} has no dependencies")
-
     return "\n".join(
         [
-            f"Roadmap: {plan['goal']}",
+            "Roadmap Template",
             "",
-            "Intent:",
-            f"Create a supervised implementation plan for: {plan['goal']}.",
+            "User goal:",
+            f"{plan['goal']}",
+            "",
+            "Purpose:",
+            "Convert a broad user goal into a bounded, reviewable, dependency-aware plan.",
+            "",
+            "Roadmap role:",
+            "* Describe strategy, scope, sequencing, risk, and validation.",
+            "* Decide what must become worker-ready tasks.",
+            "* Keep architecture-level decisions separate from execution details.",
+            "* Prevent broad work from becoming one oversized worker issue.",
             "",
             "Outcome:",
-            "A validated issue DAG that can be reviewed, seeded, and executed step by step.",
+            "* Clear implementation direction.",
+            "* Explicit non-goals and boundaries.",
+            "* A later issue DAG made of small worker-ready tasks.",
+            "* Validation and stop conditions before any execution.",
             "",
             "Non-goals:",
             "* Do not execute worker tasks from the roadmap document.",
             "* Do not mutate GitHub from the roadmap document.",
             "* Do not run OpenClaw from the roadmap document.",
-            "* Do not collapse the whole project into one oversized worker issue.",
+            "* Do not include full worker issue bodies inside the roadmap.",
+            "* Do not hard-code product-specific task names in the roadmap template.",
             "",
-            "Assumptions:",
-            "* Signposter remains dry-run/read-only by default.",
-            "* GitHub mutation requires explicit --apply.",
-            "* OpenClaw execution requires explicit --execute.",
-            "* Human review remains the final safety gate.",
+            "Planning sections:",
+            "* Intent and desired end state.",
+            "* Scope and non-goals.",
+            "* Assumptions and constraints.",
+            "* Required capabilities.",
+            "* Proposed milestones.",
+            "* Dependency strategy.",
+            "* Risk model.",
+            "* Validation strategy.",
+            "* Stop conditions.",
+            "* Follow-up and branching policy.",
+            "* Done definition.",
             "",
-            "Required capabilities:",
-            _markdown_bullets(plan.get("required_capabilities", [])),
+            "Milestone model:",
+            "* M1 — clarify intent, outcome, and boundaries.",
+            "* M2 — identify required capabilities.",
+            "* M3 — split work into small worker-ready tasks.",
+            "* M4 — define dependencies and ordering.",
+            "* M5 — validate task size, safety, and acceptance criteria.",
+            "* M6 — execute one task at a time through guarded workflow.",
             "",
-            "Milestones:",
-            _markdown_bullets(issue_lines),
-            "",
-            "Issue DAG:",
-            _markdown_bullets(dependency_lines),
-            "",
-            "Task sizing policy:",
-            f"* Worker task preferred range: {WORKER_ISSUE_PREFERRED_MIN_LINES}–"
+            "Worker task sizing policy:",
+            f"* Preferred range: {WORKER_ISSUE_PREFERRED_MIN_LINES}–"
             f"{WORKER_ISSUE_PREFERRED_MAX_LINES} lines.",
-            f"* Worker task hard max: {WORKER_ISSUE_HARD_MAX_LINES} lines.",
-            f"* Worker task hard max chars: {WORKER_ISSUE_HARD_MAX_CHARS}.",
+            f"* Hard max: {WORKER_ISSUE_HARD_MAX_LINES} lines.",
+            f"* Hard max chars: {WORKER_ISSUE_HARD_MAX_CHARS}.",
             "* Split larger work into A/B/C follow-up tasks.",
             "",
             "Risk model:",
-            "* low — small bounded local change",
-            "* medium — broader refactor or GitHub mutation",
-            "* high — secrets, auth, CI, release, destructive, or external side effects",
+            "* low — small bounded local change.",
+            "* medium — broader refactor or guarded GitHub mutation.",
+            "* high — secrets, auth, CI, release, destructive action, or external side effect.",
             "",
             "Mutation policy:",
             "* GitHub mutation only with --apply.",
@@ -525,10 +533,10 @@ def format_planner_roadmap(plan: dict[str, Any]) -> str:
             "",
             "Validation strategy:",
             "* ruff check .",
-            "* targeted pytest for changed surface",
-            "* full pytest",
-            "* real CLI smoke command",
-            "* CI after push",
+            "* targeted pytest for changed surface.",
+            "* full pytest.",
+            "* real CLI smoke command.",
+            "* CI after push.",
             "",
             "Stop conditions:",
             _markdown_bullets(STOP_CONDITIONS),
@@ -539,8 +547,10 @@ def format_planner_roadmap(plan: dict[str, Any]) -> str:
             "* Return to pending DAG items after blockers are resolved.",
             "",
             "Done definition:",
-            "* All roadmap tasks are done or intentionally marked blocked.",
-            "* Validation has passed locally and in CI where applicable.",
+            "* Roadmap has a clear issue DAG candidate.",
+            "* Worker tasks fit the sizing policy.",
+            "* Blockers and risks are explicit.",
+            "* Required validation strategy is defined.",
             "* No unintended GitHub mutation or OpenClaw execution occurred.",
         ]
     )
