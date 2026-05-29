@@ -427,3 +427,65 @@ def test_apply_refuses_when_plan_blocked_even_with_apply_flag():
     assert result["mode"] == "apply_blocked"
     assert "Refusing to merge" in result.get("error", "")
 
+
+# =============================================================================
+# HARDENING-027B: clarify merge apply output for already-merged / blocked plans
+# =============================================================================
+
+def test_merge_apply_dry_run_already_merged_shows_no_command():
+    """Already-merged PRs must not display a concrete gh pr merge command."""
+    from signposter.merge import MergePlan, format_merge_apply_dry_run
+
+    plan = MergePlan(
+        pr_number=7, title="test", state="MERGED", base_branch="main",
+        head_branch="work/issue-6-xxx", mergeable="UNKNOWN",
+        review_decision="APPROVED", checks_status="pass",
+        successful_checks=1, failing_checks=0, pending_checks=0,
+        github_approved=True, approving_reviewers=["AlphaExatron"],
+        has_non_author_approval=True, pr_author="ExatronOmega",
+        reviewer_gate_pass=True, reviewer_verdict="APPROVE",
+        reviewer_confidence=0.95, reviewer_risk="low",
+        associated_issue=6, has_auto_close_keywords=False,
+        files_changed=1, additions=2, deletions=0,
+        risk_level="low", size="small",
+        merge_method="squash", delete_branch_after_merge=True,
+        command_preview="gh pr merge 7 -R ExatronOmega/signposter --squash --delete-branch",
+        status="blocked — PR is merged",
+        notes=[],
+    )
+
+    output = format_merge_apply_dry_run(plan)
+
+    # Must not show the concrete command
+    assert "gh pr merge 7" not in output
+    # Must show the safe "none" wording
+    assert "none — merge plan is not ready (blocked — PR is merged)" in output
+
+
+def test_merge_apply_dry_run_ready_still_shows_command():
+    """Ready merge plans must continue to show the real gh pr merge command."""
+    from signposter.merge import MergePlan, format_merge_apply_dry_run
+
+    plan = MergePlan(
+        pr_number=5, title="test", state="OPEN", base_branch="main",
+        head_branch="work/issue-4-xxx", mergeable="MERGEABLE",
+        review_decision="APPROVED", checks_status="pass",
+        successful_checks=1, failing_checks=0, pending_checks=0,
+        github_approved=True, approving_reviewers=["AlphaExatron"],
+        has_non_author_approval=True, pr_author="ExatronOmega",
+        reviewer_gate_pass=True, reviewer_verdict="APPROVE",
+        reviewer_confidence=0.95, reviewer_risk="low",
+        associated_issue=4, has_auto_close_keywords=False,
+        files_changed=1, additions=8, deletions=0,
+        risk_level="low", size="small",
+        merge_method="squash", delete_branch_after_merge=True,
+        command_preview="gh pr merge 5 -R test/repo --squash --delete-branch",
+        status="ready",
+        notes=[],
+    )
+
+    output = format_merge_apply_dry_run(plan)
+
+    assert "gh pr merge 5 -R test/repo --squash --delete-branch" in output
+    assert "none —" not in output
+
