@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from signposter.comments import format_claim_comment
 from signposter.dependencies import is_dependency_blocked
 from signposter.dispatch import DispatchDecision, run_dry_run
+from signposter.labels import check_labels
 from signposter.scan import LabeledItem, fetch_issue_context
 
 
@@ -93,6 +94,19 @@ def _claim_sort_key(plan: ClaimPlan) -> tuple[int, int, int]:
     }.get(phase, 3)
 
     return (risk_priority, phase_priority, plan.item.number)
+
+
+def _required_label_preflight(repo: str) -> tuple[bool, list[str], str | None]:
+    """Centralized required-label preflight for claim (H023D-A)."""
+    try:
+        result = check_labels(repo)
+        if result.error:
+            return False, [], f"label preflight failed: {result.error}"
+        if result.missing:
+            return False, result.missing, None
+        return True, [], None
+    except Exception as e:
+        return False, [], f"label preflight error: {str(e)[:200]}"
 
 
 def plan_claims(repo: str, *, limit: int | None = 1) -> ClaimDryRunResult:
@@ -210,6 +224,17 @@ def cli_main(repo: str, limit: int = 1, *, apply: bool = False) -> int:
         print(format_claim_plan_report(result, dry_run=not apply))
 
         if apply and result.selected:
+            # H023D-A: Centralized label preflight before any mutation
+            ok, missing, err = _required_label_preflight(repo)
+            if not ok:
+                reason = err or ("required labels missing: " + ", ".join(missing))
+                print(f"\nStatus: blocked — {reason}")
+                print("\nNotes:")
+                print("  No issue was claimed.")
+                print("  No labels were changed.")
+                print("  No GitHub mutation was performed.")
+                return 1
+
             print("\n=== APPLYING MUTATIONS (real changes) ===\n")
             for plan in result.selected:
                 print(f"Applying claim to issue #{plan.item.number}...")
