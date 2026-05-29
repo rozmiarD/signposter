@@ -1624,3 +1624,96 @@ def test_format_planner_status_contains_safety_notes(tmp_path: Path) -> None:
     assert "No GitHub mutation was performed." in output
     assert "No OpenClaw execution was performed." in output
     assert "No task execution was performed." in output
+
+
+def test_cli_planner_status_prints_local_manifest_status(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    manifest["issues"][0]["github_issue"] = 10
+    manifest["issues"][0]["github_url"] = "https://github.com/ExatronOmega/signposter/issues/10"
+    write_planner_seed_manifest(manifest, manifest_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["signposter", "planner", "status", "--manifest", str(manifest_path)],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+    assert exc_info.value.code in (None, 0)
+    assert "Signposter Planner Status" in captured
+    assert "WATCH-001 — issue: #10 — state: unknown" in captured
+    assert "No GitHub mutation was performed." in captured
+
+
+def test_cli_planner_status_sync_github_fetches_issue_states(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    calls: list[list[str]] = []
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+    write_planner_seed_manifest(manifest, manifest_path)
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> _FakeGhIssueCreateResult:
+        calls.append(command)
+        return _FakeGhIssueCreateResult(0, stdout="OPEN\n")
+
+    monkeypatch.setattr("signposter.cli.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "status",
+            "--manifest",
+            str(manifest_path),
+            "--sync-github",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+    assert exc_info.value.code in (None, 0)
+    assert len(calls) == 5
+    assert calls[0][:4] == ["gh", "issue", "view", "10"]
+    assert "WATCH-001 — issue: #10 — state: open" in captured
+    assert "No task execution was performed." in captured

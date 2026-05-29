@@ -421,6 +421,11 @@ def main() -> None:
         type=Path,
         help="Path to the local planner seed manifest JSON file",
     )
+    planner_status_parser.add_argument(
+        "--sync-github",
+        action="store_true",
+        help="Fetch current GitHub issue states for seeded planner issues",
+    )
     planner_status_parser.set_defaults(func=run_planner_status)
 
     # worktree subcommand group (planning only — HARDENING-007)
@@ -1698,10 +1703,52 @@ def run_planner_roadmap(args: argparse.Namespace) -> int:
     return 1 if "Status:\nblocked" in roadmap else 0
 
 
+def _fetch_manifest_issue_states(repo: str, manifest: dict[str, object]) -> dict[int, str]:
+    """Fetch GitHub issue states for issues listed in a planner manifest."""
+    states: dict[int, str] = {}
+    for issue in manifest.get("issues", []):
+        if not isinstance(issue, dict):
+            continue
+        issue_number = issue.get("github_issue")
+        if issue_number is None:
+            continue
+
+        result = subprocess.run(
+            [
+                "gh",
+                "issue",
+                "view",
+                str(issue_number),
+                "-R",
+                repo,
+                "--json",
+                "state",
+                "--jq",
+                ".state",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            continue
+
+        state = result.stdout.strip().lower()
+        if state:
+            states[int(issue_number)] = state
+
+    return states
+
+
 def run_planner_status(args: argparse.Namespace) -> int:
     """Show local planner status from a seed manifest."""
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
-    status = build_planner_status(manifest)
+    issue_states = (
+        _fetch_manifest_issue_states(str(manifest.get("repo", "")), manifest)
+        if args.sync_github
+        else {}
+    )
+    status = build_planner_status(manifest, issue_states)
     print(format_planner_status(status))
     return 0
 
