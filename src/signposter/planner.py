@@ -1193,6 +1193,7 @@ def format_planner_seed_plan(
     seed_plan: dict[str, Any],
     *,
     repo: str = "<owner/repo>",
+    body_dir: Path = Path("artifacts/plans/issue-bodies"),
     show_body: bool = False,
     show_commands: bool = False,
 ) -> str:
@@ -1228,7 +1229,7 @@ def format_planner_seed_plan(
                 f"({line_count} lines, {char_count} chars)"
             )
             if show_commands:
-                body_file = Path("artifacts/plans/issue-bodies") / f"{issue['key']}.md"
+                body_file = body_dir / f"{issue['key']}.md"
                 command = format_gh_issue_create_command(
                     repo=repo,
                     title=issue["github_title"],
