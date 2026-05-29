@@ -476,6 +476,9 @@ def main() -> None:
     # HARDENING-022A: lifecycle status (read-only)
     _register_lifecycle_subcommands(subparsers)
 
+    # HARDENING-023A: repository label preflight (read-only)
+    _register_labels_subcommands(subparsers)
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -1232,4 +1235,47 @@ def _register_lifecycle_subcommands(subparsers: argparse._SubParsersAction) -> N
         "--pr", type=int, help="PR number (exactly one of --issue or --pr)"
     )
     status_parser.set_defaults(func=run_lifecycle_status)
+
+
+# =============================================================================
+# HARDENING-023A: Repository label preflight (read-only)
+# =============================================================================
+
+from signposter.labels import (  # noqa: E402
+    check_labels,
+    format_label_check,
+)
+
+
+def run_labels_check(args: argparse.Namespace) -> int:
+    """Handler for `signposter labels check --repo ...`."""
+    repo = getattr(args, "repo", None)
+    if not repo:
+        print("Error: --repo is required", file=sys.stderr)
+        return 1
+
+    try:
+        result = check_labels(repo)
+        print(format_label_check(result))
+        return 0 if result.status == "pass" else 1
+    except Exception as e:
+        print(f"Label check failed: {e}", file=sys.stderr)
+        return 2
+
+
+def _register_labels_subcommands(subparsers: argparse._SubParsersAction) -> None:
+    """Register the labels command group (check only for now)."""
+    labels_parser = subparsers.add_parser(
+        "labels",
+        help="Repository label preflight checks (read-only)",
+        description="Check that required Signposter workflow labels exist in the repository.",
+    )
+    labels_subparsers = labels_parser.add_subparsers(dest="labels_command")
+
+    check_parser = labels_subparsers.add_parser(
+        "check",
+        help="Verify that all required workflow labels exist (read-only)",
+    )
+    check_parser.add_argument("--repo", required=True)
+    check_parser.set_defaults(func=run_labels_check)
 
