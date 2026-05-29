@@ -12,12 +12,14 @@ from signposter.planner import (
     apply_planner_seed_manifest,
     build_planner_draft,
     build_planner_next,
+    build_planner_next_from_status,
     build_planner_seed_manifest,
     build_planner_seed_plan,
     build_planner_status,
     evaluate_worker_issue_body_size,
     format_gh_issue_create_command,
     format_planner_issue_body,
+    format_planner_next_from_status,
     format_planner_roadmap,
     format_planner_status,
     format_seed_label_preflight,
@@ -1717,3 +1719,140 @@ def test_cli_planner_status_sync_github_fetches_issue_states(
     assert calls[0][:4] == ["gh", "issue", "view", "10"]
     assert "WATCH-001 — issue: #10 — state: open" in captured
     assert "No task execution was performed." in captured
+
+
+def test_build_planner_next_from_status_selects_first_open_ready_task(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+
+    status = build_planner_status(
+        manifest,
+        {
+            10: "open",
+            11: "open",
+            12: "open",
+            13: "open",
+            14: "open",
+        },
+    )
+
+    result = build_planner_next_from_status(status)
+
+    assert result["status"] == "ready"
+    assert result["next"]["key"] == "WATCH-001"
+    assert result["next"]["github_issue"] == 10
+    assert result["waiting"] == []
+
+
+def test_build_planner_next_from_status_respects_closed_dependencies(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+
+    status = build_planner_status(
+        manifest,
+        {
+            10: "closed",
+            11: "open",
+            12: "open",
+            13: "open",
+            14: "open",
+        },
+    )
+
+    result = build_planner_next_from_status(status)
+
+    assert result["status"] == "ready"
+    assert result["next"]["key"] == "WATCH-002"
+    assert result["next"]["github_issue"] == 11
+
+
+def test_build_planner_next_from_status_waits_for_open_dependency(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+
+    status = build_planner_status(
+        manifest,
+        {
+            10: "closed",
+            11: "unknown",
+            12: "open",
+            13: "open",
+            14: "open",
+        },
+    )
+
+    result = build_planner_next_from_status(status)
+
+    assert result["status"] == "waiting"
+    assert result["next"] is None
+    assert result["blocked"][0]["key"] == "WATCH-002"
+    assert result["waiting"][0]["key"] == "WATCH-003"
+
+
+def test_format_planner_next_from_status_contains_safety_notes(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    manifest["issues"][0]["github_issue"] = 10
+    manifest["issues"][0]["github_url"] = "https://github.com/ExatronOmega/signposter/issues/10"
+    status = build_planner_status(manifest, {10: "open"})
+
+    output = format_planner_next_from_status(build_planner_next_from_status(status))
+
+    assert "Signposter Planner Next" in output
+    assert "WATCH-001 — issue: #10 — state: open" in output
+    assert "No GitHub mutation was performed." in output
+    assert "No OpenClaw execution was performed." in output
+    assert "No task execution was performed." in output
