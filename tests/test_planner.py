@@ -1172,3 +1172,206 @@ def test_prepare_planner_seed_manifest_blocks_incompatible_manifest(
     assert result["status"] == "blocked"
     assert result["errors"] == ["manifest repo mismatch"]
     assert result["reused_existing"] is True
+
+
+def test_cli_planner_seed_apply_completed_manifest_is_noop(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    calls: list[list[str]] = []
+
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=1):
+        issue["github_issue"] = 300 + index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{300 + index}"
+    write_planner_seed_manifest(manifest, manifest_path)
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> _FakeGhIssueCreateResult:
+        calls.append(command)
+        return _FakeGhIssueCreateResult(0)
+
+    monkeypatch.setattr("signposter.cli.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "seed",
+            "--plan",
+            str(plan_path),
+            "--repo",
+            "ExatronOmega/signposter",
+            "--body-dir",
+            str(body_dir),
+            "--manifest",
+            str(manifest_path),
+            "--apply",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+    saved = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    assert exc_info.value.code in (None, 0)
+    assert calls == []
+    assert saved["status"] == "applied"
+    assert saved["issues"][0]["github_issue"] == 301
+    assert "Prepared seed manifest:" in captured
+    assert "Status:\n  completed" in captured
+    assert "Existing manifest:\n  reused" in captured
+    assert "Planner Seed Apply" not in captured
+
+
+def test_cli_planner_seed_apply_blocks_incompatible_manifest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    calls: list[list[str]] = []
+
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="OtherOrg/other",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    write_planner_seed_manifest(manifest, manifest_path)
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> _FakeGhIssueCreateResult:
+        calls.append(command)
+        return _FakeGhIssueCreateResult(0)
+
+    monkeypatch.setattr("signposter.cli.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "seed",
+            "--plan",
+            str(plan_path),
+            "--repo",
+            "ExatronOmega/signposter",
+            "--body-dir",
+            str(body_dir),
+            "--manifest",
+            str(manifest_path),
+            "--apply",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+
+    assert exc_info.value.code == 1
+    assert calls == []
+    assert "Status:\n  blocked" in captured
+    assert "manifest repo mismatch" in captured
+    assert "Planner Seed Apply" not in captured
+
+
+def test_cli_planner_seed_apply_partial_manifest_continues_missing_only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    calls: list[list[str]] = []
+
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    write_planner_seed_issue_bodies(seed_plan, body_dir)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "partial"
+    manifest["issues"][0]["github_issue"] = 301
+    manifest["issues"][0]["github_url"] = "https://github.com/ExatronOmega/signposter/issues/301"
+    write_planner_seed_manifest(manifest, manifest_path)
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> _FakeGhIssueCreateResult:
+        calls.append(command)
+        issue_number = 400 + len(calls)
+        return _FakeGhIssueCreateResult(
+            0,
+            stdout=f"https://github.com/ExatronOmega/signposter/issues/{issue_number}",
+        )
+
+    monkeypatch.setattr("signposter.cli.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "seed",
+            "--plan",
+            str(plan_path),
+            "--repo",
+            "ExatronOmega/signposter",
+            "--body-dir",
+            str(body_dir),
+            "--manifest",
+            str(manifest_path),
+            "--apply",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    saved = json.loads(manifest_path.read_text(encoding="utf-8"))
+    captured = capsys.readouterr().out
+
+    assert exc_info.value.code in (None, 0)
+    assert len(calls) == 4
+    assert saved["status"] == "applied"
+    assert saved["issues"][0]["github_issue"] == 301
+    assert saved["issues"][1]["github_issue"] == 401
+    assert "Status:\n  ready" in captured
+    assert "Planner Seed Apply" in captured
+    assert "WATCH-002 -> #401" in captured
