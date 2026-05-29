@@ -933,3 +933,126 @@ def test_apply_planner_seed_manifest_stops_on_runner_failure(tmp_path: Path) -> 
     assert result["created"] == []
     assert result["errors"] == ["boom"]
     assert saved["status"] == "partial"
+
+
+def test_cli_planner_seed_apply_uses_fake_subprocess_and_updates_manifest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    calls: list[list[str]] = []
+
+    write_planner_draft("build lifecycle watch", plan_path)
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> _FakeGhIssueCreateResult:
+        calls.append(command)
+        issue_number = len(calls) + 200
+        return _FakeGhIssueCreateResult(
+            0,
+            stdout=f"https://github.com/ExatronOmega/signposter/issues/{issue_number}",
+        )
+
+    monkeypatch.setattr("signposter.cli.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "seed",
+            "--plan",
+            str(plan_path),
+            "--repo",
+            "ExatronOmega/signposter",
+            "--body-dir",
+            str(body_dir),
+            "--manifest",
+            str(manifest_path),
+            "--apply",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    captured = capsys.readouterr().out
+
+    assert exc_info.value.code in (None, 0)
+    assert len(calls) == 5
+    assert calls[0][:6] == [
+        "gh",
+        "issue",
+        "create",
+        "--repo",
+        "ExatronOmega/signposter",
+        "--title",
+    ]
+    assert manifest["status"] == "applied"
+    assert manifest["issues"][0]["github_issue"] == 201
+    assert manifest["issues"][0]["github_url"].endswith("/issues/201")
+    assert (body_dir / "WATCH-001.md").exists()
+    assert "Planner Seed Apply" in captured
+    assert "WATCH-001 -> #201" in captured
+    assert "OpenClaw execution was not performed." in captured
+
+
+def test_cli_planner_seed_apply_stops_on_fake_subprocess_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+
+    write_planner_draft("build lifecycle watch", plan_path)
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> _FakeGhIssueCreateResult:
+        return _FakeGhIssueCreateResult(1, stderr="gh failed safely")
+
+    monkeypatch.setattr("signposter.cli.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "seed",
+            "--plan",
+            str(plan_path),
+            "--repo",
+            "ExatronOmega/signposter",
+            "--body-dir",
+            str(body_dir),
+            "--manifest",
+            str(manifest_path),
+            "--apply",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    captured = capsys.readouterr().out
+
+    assert exc_info.value.code == 1
+    assert manifest["status"] == "partial"
+    assert manifest["issues"][0]["github_issue"] is None
+    assert "Planner Seed Apply" in captured
+    assert "Status:\n  failed" in captured
+    assert "gh failed safely" in captured
