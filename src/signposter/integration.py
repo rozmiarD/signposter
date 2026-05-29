@@ -597,11 +597,17 @@ def format_integration_apply_dry_run(plan: IntegrationPlan, repo: str | None = N
         lines.append("\nLabel preflight:")
         lines.append(f"  {apply_status}")
 
+    # HARDENING-027A: do not list concrete mutations for non-ready plans
     lines.append("\nPlanned GitHub mutations:")
-    lines.append("  remove label: state:done")
-    lines.append("  add label: state:merged")
-    lines.append(f"  close issue: #{plan.associated_issue} as completed")
-    lines.append("  post integration comment: yes")
+    if plan.status == "ready":
+        lines.append("  remove label: state:done")
+        lines.append("  add label: state:merged")
+        lines.append(f"  close issue: #{plan.associated_issue} as completed")
+        lines.append("  post integration comment: yes")
+    elif plan.status == "completed":
+        lines.append("  none — integration already completed")
+    else:
+        lines.append(f"  none — integration plan is not ready ({plan.status})")
 
     lines.append("\nStatus:")
     lines.append(f"  {apply_status}")
