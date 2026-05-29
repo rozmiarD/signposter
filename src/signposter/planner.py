@@ -720,6 +720,57 @@ def build_planner_seed_plan(plan: dict[str, Any]) -> dict[str, Any]:
 
 
 
+
+def build_planner_seed_manifest(
+    *,
+    plan_path: Path,
+    repo: str,
+    seed_plan: dict[str, Any],
+    body_dir: Path,
+) -> dict[str, Any]:
+    """Build a local seed manifest for future guarded GitHub issue creation."""
+    issues = []
+    for issue in seed_plan["issues"]:
+        body_file = body_dir / f"{issue['key']}.md"
+        issues.append(
+            {
+                "key": issue["key"],
+                "title": issue["github_title"],
+                "labels": issue["labels"],
+                "depends_on": issue["depends_on"],
+                "body_file": str(body_file),
+                "body_size": issue["body_size"],
+                "github_issue": None,
+            }
+        )
+
+    return {
+        "version": "planner.seed-manifest.v0.1",
+        "plan": str(plan_path),
+        "repo": repo,
+        "status": "dry-run",
+        "issues": issues,
+        "notes": [
+            "Local manifest only.",
+            "No GitHub mutation was performed.",
+            "No GitHub issue was created.",
+            "No OpenClaw execution was performed.",
+        ],
+    }
+
+
+def write_planner_seed_manifest(
+    manifest: dict[str, Any],
+    manifest_path: Path,
+) -> None:
+    """Write a local planner seed manifest JSON file."""
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
 def write_planner_seed_issue_bodies(
     seed_plan: dict[str, Any],
     body_dir: Path,
