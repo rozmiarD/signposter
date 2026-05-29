@@ -9,6 +9,7 @@ import pytest
 from signposter.cli import main
 from signposter.planner import (
     PLAN_VERSION,
+    apply_planner_seed_manifest,
     build_planner_draft,
     build_planner_next,
     build_planner_seed_manifest,
@@ -824,3 +825,111 @@ def test_cli_planner_seed_without_write_manifest_does_not_write_manifest(
     assert exc_info.value.code in (None, 0)
     assert not manifest_path.exists()
     assert "Written seed manifest:" not in captured
+
+
+class _FakeGhIssueCreateResult:
+    def __init__(self, returncode: int, stdout: str = "", stderr: str = "") -> None:
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+
+
+class _FakeGhIssueCreateRunner:
+    def __init__(self) -> None:
+        self.calls: list[list[str]] = []
+
+    def __call__(self, args: list[str]) -> _FakeGhIssueCreateResult:
+        self.calls.append(args)
+        issue_number = len(self.calls) + 100
+        return _FakeGhIssueCreateResult(
+            0,
+            stdout=f"https://github.com/ExatronOmega/signposter/issues/{issue_number}",
+        )
+
+
+def test_apply_planner_seed_manifest_uses_fake_runner_and_updates_manifest(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    write_planner_seed_issue_bodies(seed_plan, body_dir)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    write_planner_seed_manifest(manifest, manifest_path)
+    runner = _FakeGhIssueCreateRunner()
+
+    result = apply_planner_seed_manifest(manifest_path, runner)
+
+    saved = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert result["status"] == "applied"
+    assert result["errors"] == []
+    assert len(result["created"]) == 5
+    assert len(runner.calls) == 5
+    assert runner.calls[0][:6] == [
+        "gh",
+        "issue",
+        "create",
+        "--repo",
+        "ExatronOmega/signposter",
+        "--title",
+    ]
+    assert saved["status"] == "applied"
+    assert saved["issues"][0]["github_issue"] == 101
+    assert saved["issues"][0]["github_url"].endswith("/issues/101")
+
+
+def test_apply_planner_seed_manifest_blocks_missing_body_files(tmp_path: Path) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    write_planner_seed_manifest(manifest, manifest_path)
+    runner = _FakeGhIssueCreateRunner()
+
+    result = apply_planner_seed_manifest(manifest_path, runner)
+
+    assert result["status"] == "blocked"
+    assert result["created"] == []
+    assert "missing body file" in result["errors"][0]
+    assert runner.calls == []
+
+
+def test_apply_planner_seed_manifest_stops_on_runner_failure(tmp_path: Path) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    write_planner_seed_issue_bodies(seed_plan, body_dir)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    write_planner_seed_manifest(manifest, manifest_path)
+
+    def failing_runner(args: list[str]) -> _FakeGhIssueCreateResult:
+        return _FakeGhIssueCreateResult(1, stderr="boom")
+
+    result = apply_planner_seed_manifest(manifest_path, failing_runner)
+
+    saved = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert result["status"] == "failed"
+    assert result["created"] == []
+    assert result["errors"] == ["boom"]
+    assert saved["status"] == "partial"

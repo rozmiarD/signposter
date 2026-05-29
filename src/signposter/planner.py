@@ -721,6 +721,134 @@ def build_planner_seed_plan(plan: dict[str, Any]) -> dict[str, Any]:
 
 
 
+
+def apply_planner_seed_manifest(
+    manifest_path: Path,
+    runner: Any,
+) -> dict[str, Any]:
+    """Apply a seed manifest using an injected command runner.
+
+    This core function is intentionally runner-injected so tests can use a fake
+    runner. The CLI layer must remain responsible for guarding real execution
+    behind explicit --apply.
+    """
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    repo = manifest.get("repo", "")
+    issues = manifest.get("issues", [])
+
+    missing_body_files = [
+        issue["body_file"]
+        for issue in issues
+        if issue.get("github_issue") is None and not Path(issue["body_file"]).exists()
+    ]
+    if missing_body_files:
+        return {
+            "status": "blocked",
+            "created": [],
+            "errors": [
+                f"missing body file: {body_file}" for body_file in missing_body_files
+            ],
+        }
+
+    created: list[dict[str, Any]] = []
+    for issue in issues:
+        if issue.get("github_issue") is not None:
+            continue
+
+        args = _build_gh_issue_create_args(
+            repo=repo,
+            title=issue["title"],
+            body_file=Path(issue["body_file"]),
+            labels=issue["labels"],
+        )
+        result = runner(args)
+        returncode = int(getattr(result, "returncode", 1))
+        stdout = str(getattr(result, "stdout", "") or "")
+        stderr = str(getattr(result, "stderr", "") or "")
+        output = "\n".join(part for part in [stdout.strip(), stderr.strip()] if part)
+
+        if returncode != 0:
+            manifest["status"] = "partial"
+            write_planner_seed_manifest(manifest, manifest_path)
+            return {
+                "status": "failed",
+                "created": created,
+                "errors": [_bounded_error(output or "gh issue create failed")],
+            }
+
+        issue_number = _parse_github_issue_number(output)
+        if issue_number is None:
+            manifest["status"] = "partial"
+            write_planner_seed_manifest(manifest, manifest_path)
+            return {
+                "status": "failed",
+                "created": created,
+                "errors": [_bounded_error("could not parse created issue number")],
+            }
+
+        issue_url = _parse_github_issue_url(output)
+        issue["github_issue"] = issue_number
+        issue["github_url"] = issue_url
+        created.append(
+            {
+                "key": issue["key"],
+                "github_issue": issue_number,
+                "github_url": issue_url,
+            }
+        )
+        manifest["status"] = "partial"
+        write_planner_seed_manifest(manifest, manifest_path)
+
+    manifest["status"] = "applied"
+    manifest["applied_at"] = datetime.now(UTC).isoformat(timespec="seconds")
+    write_planner_seed_manifest(manifest, manifest_path)
+    return {"status": "applied", "created": created, "errors": []}
+
+
+def _build_gh_issue_create_args(
+    *,
+    repo: str,
+    title: str,
+    body_file: Path,
+    labels: list[str],
+) -> list[str]:
+    args = [
+        "gh",
+        "issue",
+        "create",
+        "--repo",
+        repo,
+        "--title",
+        title,
+        "--body-file",
+        str(body_file),
+    ]
+    for label in labels:
+        args.extend(["--label", label])
+    return args
+
+
+def _parse_github_issue_number(output: str) -> int | None:
+    match = re.search(r"/issues/(\d+)\b", output)
+    if not match:
+        return None
+    return int(match.group(1))
+
+
+def _parse_github_issue_url(output: str) -> str:
+    match = re.search(r"https://github\.com/\S+/issues/\d+", output)
+    if not match:
+        return output.strip()
+    return match.group(0)
+
+
+def _bounded_error(message: str, limit: int = 500) -> str:
+    message = message.strip()
+    if len(message) <= limit:
+        return message
+    return message[:limit].rstrip() + "..."
+
+
 def build_planner_seed_manifest(
     *,
     plan_path: Path,
