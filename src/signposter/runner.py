@@ -768,10 +768,11 @@ def cli_main(
                             if dirty:
                                 shown = ", ".join(dirty[:3])
                                 print(
-                                "Refusing worktree execution: worktree has uncommitted changes: "
-                                f"{shown}"
-                            )
-                            return 1
+                                    "Refusing worktree execution: "
+                                    "worktree has uncommitted changes: "
+                                    f"{shown}"
+                                )
+                                return 1
 
                         result = execute_plan(
                             p, repo, allow_dirty=allow_dirty, worktree_cwd=worktree_path
