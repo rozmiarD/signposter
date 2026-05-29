@@ -889,6 +889,42 @@ def _bounded_error(message: str, limit: int = 500) -> str:
 
 
 
+
+def format_prepared_seed_manifest(
+    manifest_path: Path,
+    result: dict[str, Any],
+) -> str:
+    """Format seed manifest preparation/idempotence result."""
+    lines = [
+        "",
+        "Prepared seed manifest:",
+        f"  {manifest_path}",
+        "",
+        "Status:",
+        f"  {result['status']}",
+    ]
+
+    if result.get("reused_existing"):
+        lines.extend(["", "Existing manifest:", "  reused"])
+    else:
+        lines.extend(["", "Existing manifest:", "  none — created"])
+
+    if result["errors"]:
+        lines.extend(["", "Errors:"])
+        lines.extend(f"  - {error}" for error in result["errors"])
+
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "  Existing applied manifests are treated as completed/no-op.",
+            "  Partial manifests are reused so missing issues can be continued.",
+            "  No GitHub mutation was performed during manifest preparation.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def prepare_planner_seed_manifest(
     *,
     plan_path: Path,

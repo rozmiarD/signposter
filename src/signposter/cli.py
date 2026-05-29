@@ -39,10 +39,12 @@ from signposter.planner import (
     format_planner_seed_apply_result,
     format_planner_seed_plan,
     format_planner_validation,
+    format_prepared_seed_manifest,
     format_written_issue_bodies,
     format_written_seed_manifest,
     load_planner_plan,
     mark_planner_task,
+    prepare_planner_seed_manifest,
     validate_planner_plan,
     write_planner_draft,
     write_planner_seed_issue_bodies,
@@ -1711,11 +1713,26 @@ def run_planner_seed(args: argparse.Namespace) -> int:
     if seed_plan["status"] != "ready":
         return 1
 
+    prepared_manifest = None
+    if args.write_manifest or args.apply:
+        prepared_manifest = prepare_planner_seed_manifest(
+            plan_path=args.plan,
+            repo=args.repo,
+            seed_plan=seed_plan,
+            body_dir=args.body_dir,
+            manifest_path=args.manifest,
+        )
+        print(format_prepared_seed_manifest(args.manifest, prepared_manifest))
+        if prepared_manifest["status"] == "blocked":
+            return 1
+        if prepared_manifest["status"] == "completed":
+            return 0
+
     if args.write_bodies or args.apply:
         written = write_planner_seed_issue_bodies(seed_plan, args.body_dir)
         print(format_written_issue_bodies(written))
 
-    if args.write_manifest or args.apply:
+    if args.write_manifest and prepared_manifest is None:
         manifest = build_planner_seed_manifest(
             plan_path=args.plan,
             repo=args.repo,
