@@ -12,6 +12,7 @@ from signposter.planner import (
     build_planner_draft,
     build_planner_next,
     build_planner_seed_plan,
+    evaluate_worker_issue_body_size,
     format_planner_issue_body,
     mark_planner_task,
     validate_planner_plan,
@@ -346,3 +347,52 @@ def test_build_planner_seed_plan_includes_issue_body() -> None:
     assert seed_plan["status"] == "ready"
     assert "Task: WATCH-001" in body
     assert "Do not mutate GitHub unless explicitly required and guarded by --apply." in body
+
+
+def test_evaluate_worker_issue_body_size_passes_preferred_range() -> None:
+    body = "\n".join(f"line {index}" for index in range(80))
+
+    result = evaluate_worker_issue_body_size(body)
+
+    assert result["status"] == "pass"
+    assert result["line_count"] == 80
+    assert result["warnings"] == []
+    assert result["errors"] == []
+
+
+def test_evaluate_worker_issue_body_size_warns_outside_preferred_range() -> None:
+    short_body = "\n".join(f"line {index}" for index in range(20))
+    long_body = "\n".join(f"line {index}" for index in range(130))
+
+    short_result = evaluate_worker_issue_body_size(short_body)
+    long_result = evaluate_worker_issue_body_size(long_body)
+
+    assert short_result["status"] == "warning"
+    assert "preferred min" in short_result["warnings"][0]
+    assert long_result["status"] == "warning"
+    assert "preferred max" in long_result["warnings"][0]
+
+
+def test_evaluate_worker_issue_body_size_blocks_hard_limits() -> None:
+    too_many_lines = "\n".join(f"line {index}" for index in range(166))
+    too_many_chars = "x" * 12001
+
+    line_result = evaluate_worker_issue_body_size(too_many_lines)
+    char_result = evaluate_worker_issue_body_size(too_many_chars)
+
+    assert line_result["status"] == "blocked"
+    assert "hard max is 165" in line_result["errors"][0]
+    assert char_result["status"] == "blocked"
+    assert "hard max is 12000" in char_result["errors"][0]
+
+
+def test_build_planner_seed_plan_includes_body_size() -> None:
+    plan = build_planner_draft("build lifecycle watch")
+
+    seed_plan = build_planner_seed_plan(plan)
+
+    body_size = seed_plan["issues"][0]["body_size"]
+    assert body_size["status"] in {"pass", "warning"}
+    assert body_size["line_count"] > 0
+    assert body_size["char_count"] > 0
+    assert body_size["errors"] == []
