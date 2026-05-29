@@ -243,6 +243,17 @@ def _has_scoped_worker_completion_evidence(text: str) -> bool:
     return strong_count >= 2 and supportive_count >= 1
 
 
+def _is_already_integrated_issue(issue_state: dict) -> bool:
+    """Return True if issue is CLOSED and carries the state:merged workflow label.
+
+    This indicates the issue has completed the full lifecycle (PR merged + integrated).
+    Used for early short-circuit in gate evaluation.
+    """
+    state = issue_state.get("state", "")
+    labels = issue_state.get("labels", []) or []
+    return state == "CLOSED" and "state:merged" in labels
+
+
 def fetch_issue_state(repo: str, issue: int) -> dict:
     """Fetch current labels and state for the issue (read-only)."""
     result = subprocess.run(
@@ -291,6 +302,26 @@ def run_gate_dry_run(
     """Main dry-run gate evaluation."""
     issue_state = fetch_issue_state(repo, issue)
     labels = issue_state["labels"]
+
+    # HARDENING-025E-B: Already-integrated short-circuit
+    # Must happen before any gate label checks or artifact loading.
+    if _is_already_integrated_issue(issue_state):
+        return {
+            "repo": repo,
+            "issue": issue,
+            "issue_title": issue_state["title"],
+            "current_state": issue_state["state"],
+            "labels": labels,
+            "is_already_integrated": True,
+            "decision": "NOT-APPLICABLE",
+            "reason": "Issue is already closed and integrated.",
+            "confidence": "high",
+            "status": "completed",
+            "notes": [
+                "No gate action is required.",
+                "No GitHub mutation was performed.",
+            ],
+        }
 
     has_active = "state:active" in labels
     has_gate_review = "gate:review" in labels
@@ -362,6 +393,32 @@ def run_gate_dry_run(
 
 
 def format_gate_report(result: dict) -> str:
+    # HARDENING-025E-B: Clean output for already-integrated issues
+    if result.get("is_already_integrated"):
+        lines = [
+            "Signposter Gate Decision (dry-run)",
+            "",
+            f"Repository: {result['repo']}",
+            f"Issue: #{result['issue']} — {result['issue_title']}",
+            "",
+            "Current State:",
+            f"  state: {result['current_state']}",
+            f"  labels: {', '.join(result['labels'])}",
+            "",
+            "Decision:",
+            f"  {result['decision']}",
+            f"  Reason: {result['reason']}",
+            f"  Confidence: {result['confidence']}",
+            "",
+            "Status:",
+            f"  {result['status']}",
+            "",
+            "Notes:",
+        ]
+        for note in result.get("notes", []):
+            lines.append(f"  {note}")
+        return "\n".join(lines)
+
     lines = [
         "Signposter Gate Decision (dry-run)",
         "",
@@ -375,7 +432,7 @@ def format_gate_report(result: dict) -> str:
         "Evidence:",
         f"  Summary: {result['summary_path']}",
     ]
-    if result["raw_path"]:
+    if result.get("raw_path"):
         lines.append(f"  Raw:     {result['raw_path']}")
     else:
         lines.append("  Raw:     (not found)")
@@ -384,9 +441,9 @@ def format_gate_report(result: dict) -> str:
         [
             "",
             "Gate Validation:",
-            f"  state:active present: {result['has_state_active']}",
+            f"  state:active present: {result.get('has_state_active', False)}",
             f"  gate type:            {result.get('gate_type', 'unknown')}",
-            f"  gate:review present:  {result['has_gate_review']}",
+            f"  gate:review present:  {result.get('has_gate_review', False)}",
             f"  gate:ci present:      {result.get('has_gate_ci', False)}",
             "",
             "Decision:",
@@ -396,15 +453,15 @@ def format_gate_report(result: dict) -> str:
         ]
     )
 
-    if result["proposed_transition"]:
+    if result.get("proposed_transition"):
         lines.append(f"  Proposed: {result['proposed_transition']}")
 
-    if result["proposed_command"]:
+    if result.get("proposed_command"):
         lines.append("")
         lines.append("Suggested next command:")
         lines.append(f"  {result['proposed_command']}")
 
-    if not result["valid_for_gate"]:
+    if not result.get("valid_for_gate", False):
         lines.append("")
         lines.append("WARNING: This issue does not appear ready for a supported gate decision.")
 
