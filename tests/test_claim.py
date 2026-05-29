@@ -5,6 +5,8 @@ Pure unit tests — no network access.
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from signposter.claim import (
     ClaimDryRunResult,
     ClaimPlan,
@@ -144,3 +146,89 @@ def test_perform_claim_mutation_returns_correct_commands():
     assert "`state:ready → state:active`" in commands[1]
     assert "`route:worker`" in commands[1]
     assert "`gate:ci`" in commands[1]
+
+
+# =============================================================================
+# H023D-A: Label preflight before claim apply
+# =============================================================================
+
+
+def test_claim_apply_refuses_when_required_labels_missing():
+    """H023D-A: claim --apply must refuse before any mutation if labels are missing."""
+    from signposter.claim import ClaimDryRunResult, ClaimPlan, cli_main
+
+    item = LabeledItem(
+        number=42, title="Test", html_url="https://example.com/42",
+        labels=["state:ready"], item_type="issue",
+    )
+    decision = DispatchDecision(
+        item=item, state="ready", proposed_route="worker",
+        proposed_gate=None, phase=None, risk=None, role=None, area=None, reason="test",
+    )
+    plan = ClaimPlan(
+        item=item, dispatch=decision, lease_owner="local-dry-run-worker",
+        proposed_state="active", labels_to_remove=["state:ready"],
+        labels_to_add=["state:active"], reason="test",
+    )
+    fake_result = ClaimDryRunResult(selected=[plan], total_claimable=1, limit=1)
+
+    with patch("signposter.claim.plan_claims", return_value=fake_result), \
+         patch("signposter.claim.check_labels") as mock_check, \
+         patch("signposter.claim.perform_claim_mutation") as mock_mutate:
+
+        mock_check.return_value.missing = ["state:active"]
+        mock_check.return_value.error = None
+
+        rc = cli_main("owner/repo", limit=1, apply=True)
+
+    assert rc == 1
+    mock_mutate.assert_not_called()  # No mutation attempted
+
+
+def test_claim_dry_run_does_not_trigger_label_preflight_mutation():
+    """Dry-run must never reach the label preflight mutation guard."""
+    from signposter.claim import ClaimDryRunResult, cli_main
+
+    fake_result = ClaimDryRunResult(selected=[], total_claimable=0, limit=1)
+
+    with patch("signposter.claim.plan_claims", return_value=fake_result), \
+         patch("signposter.claim.check_labels") as mock_check:
+
+        rc = cli_main("owner/repo", limit=1, apply=False)  # dry-run
+
+    assert rc == 0
+    mock_check.assert_not_called()  # preflight only runs on apply path
+
+
+def test_claim_apply_blocks_on_label_preflight_error():
+    """Preflight failure (e.g. gh error) must block safely with no mutation."""
+    from signposter.claim import ClaimDryRunResult, ClaimPlan, cli_main
+
+    item = LabeledItem(
+        number=99, title="X", html_url="u",
+        labels=["state:ready"], item_type="issue",
+    )
+    decision = DispatchDecision(
+        item=item, state="ready", proposed_route="worker",
+        proposed_gate=None, phase=None, risk=None, role=None, area=None, reason="t",
+    )
+    plan = ClaimPlan(
+        item=item, dispatch=decision, lease_owner="w",
+        proposed_state="active",
+        labels_to_remove=["state:ready"],
+        labels_to_add=["state:active"],
+        reason="t",
+    )
+    fake_result = ClaimDryRunResult(selected=[plan], total_claimable=1, limit=1)
+
+    with patch("signposter.claim.plan_claims", return_value=fake_result), \
+         patch("signposter.claim.check_labels") as mock_check, \
+         patch("signposter.claim.perform_claim_mutation") as mock_mutate:
+
+        mock_check.return_value.missing = []
+        mock_check.return_value.error = "gh label list failed"
+
+        rc = cli_main("owner/repo", limit=1, apply=True)
+
+    assert rc == 1
+    mock_mutate.assert_not_called()
