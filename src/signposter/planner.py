@@ -11,6 +11,11 @@ from typing import Any
 PLAN_VERSION = "planner.v0.1"
 AUTO_CLOSE_RE = re.compile(r"\b(closes|fixes|resolves)\s+#\d+", re.IGNORECASE)
 
+WORKER_ISSUE_PREFERRED_MIN_LINES = 60
+WORKER_ISSUE_PREFERRED_MAX_LINES = 120
+WORKER_ISSUE_HARD_MAX_LINES = 165
+WORKER_ISSUE_HARD_MAX_CHARS = 12000
+
 STOP_CONDITIONS = [
     "ruff check fails",
     "targeted pytest fails",
@@ -392,6 +397,51 @@ def format_planner_next(plan_path: Path, next_plan: dict[str, Any]) -> str:
 
 
 
+def evaluate_worker_issue_body_size(body: str) -> dict[str, Any]:
+    """Evaluate whether a worker issue body fits the bounded task policy."""
+    line_count = len(body.splitlines())
+    char_count = len(body)
+    warnings: list[str] = []
+    errors: list[str] = []
+
+    if line_count > WORKER_ISSUE_HARD_MAX_LINES:
+        errors.append(
+            f"issue body has {line_count} lines; hard max is "
+            f"{WORKER_ISSUE_HARD_MAX_LINES}; split into A/B/C"
+        )
+    elif line_count > WORKER_ISSUE_PREFERRED_MAX_LINES:
+        warnings.append(
+            f"issue body has {line_count} lines; preferred max is "
+            f"{WORKER_ISSUE_PREFERRED_MAX_LINES}"
+        )
+    elif line_count < WORKER_ISSUE_PREFERRED_MIN_LINES:
+        warnings.append(
+            f"issue body has {line_count} lines; preferred min is "
+            f"{WORKER_ISSUE_PREFERRED_MIN_LINES}"
+        )
+
+    if char_count > WORKER_ISSUE_HARD_MAX_CHARS:
+        errors.append(
+            f"issue body has {char_count} chars; hard max is "
+            f"{WORKER_ISSUE_HARD_MAX_CHARS}; split into A/B/C"
+        )
+
+    if errors:
+        status = "blocked"
+    elif warnings:
+        status = "warning"
+    else:
+        status = "pass"
+
+    return {
+        "status": status,
+        "line_count": line_count,
+        "char_count": char_count,
+        "warnings": warnings,
+        "errors": errors,
+    }
+
+
 def format_planner_issue_body(plan: dict[str, Any], issue: dict[str, Any]) -> str:
     """Format a planner task as a bounded GitHub issue body."""
     dependencies = issue.get("depends_on", [])
@@ -497,6 +547,8 @@ def build_planner_seed_plan(plan: dict[str, Any]) -> dict[str, Any]:
 
     issues = []
     for issue in plan["issues"]:
+        body = format_planner_issue_body(plan, issue)
+        body_size = evaluate_worker_issue_body_size(body)
         issues.append(
             {
                 "key": issue["key"],
@@ -508,7 +560,8 @@ def build_planner_seed_plan(plan: dict[str, Any]) -> dict[str, Any]:
                     f"area:{issue['area']}",
                 ],
                 "depends_on": issue["depends_on"],
-                "body": format_planner_issue_body(plan, issue),
+                "body": body,
+                "body_size": body_size,
             }
         )
 
