@@ -11,6 +11,7 @@ from signposter.planner import (
     PLAN_VERSION,
     build_planner_draft,
     build_planner_next,
+    build_planner_seed_manifest,
     build_planner_seed_plan,
     evaluate_worker_issue_body_size,
     format_gh_issue_create_command,
@@ -20,6 +21,7 @@ from signposter.planner import (
     validate_planner_plan,
     write_planner_draft,
     write_planner_seed_issue_bodies,
+    write_planner_seed_manifest,
 )
 
 
@@ -699,3 +701,46 @@ def test_cli_planner_seed_write_bodies_writes_local_files(
     assert (body_dir / "WATCH-001.md").read_text(encoding="utf-8").startswith(
         "Task: WATCH-001"
     )
+
+
+def test_build_planner_seed_manifest_contains_future_issue_mapping(tmp_path: Path) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+
+    first_issue = manifest["issues"][0]
+    assert manifest["version"] == "planner.seed-manifest.v0.1"
+    assert manifest["status"] == "dry-run"
+    assert manifest["repo"] == "ExatronOmega/signposter"
+    assert first_issue["key"] == "WATCH-001"
+    assert first_issue["github_issue"] is None
+    assert first_issue["body_file"].endswith("WATCH-001.md")
+    assert "No GitHub mutation was performed." in manifest["notes"]
+
+
+def test_write_planner_seed_manifest_writes_json(tmp_path: Path) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+
+    write_planner_seed_manifest(manifest, manifest_path)
+
+    saved = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert saved == manifest
+    assert saved["issues"][0]["github_issue"] is None
