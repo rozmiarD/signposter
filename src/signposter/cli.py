@@ -31,12 +31,14 @@ from signposter.merge import (
 from signposter.planner import (
     apply_planner_seed_manifest,
     build_planner_next,
+    build_planner_next_from_status,
     build_planner_seed_manifest,
     build_planner_seed_plan,
     build_planner_status,
     format_planner_draft,
     format_planner_mark_result,
     format_planner_next,
+    format_planner_next_from_status,
     format_planner_roadmap,
     format_planner_seed_apply_result,
     format_planner_seed_plan,
@@ -359,9 +361,20 @@ def main() -> None:
     )
     planner_next_parser.add_argument(
         "--plan",
-        required=True,
+        required=False,
         type=Path,
         help="Path to the local planner JSON draft",
+    )
+    planner_next_parser.add_argument(
+        "--manifest",
+        default=None,
+        type=Path,
+        help="Path to the local planner seed manifest JSON file",
+    )
+    planner_next_parser.add_argument(
+        "--sync-github",
+        action="store_true",
+        help="Fetch current GitHub issue states before choosing the next task",
     )
     planner_next_parser.set_defaults(func=run_planner_next)
 
@@ -1760,7 +1773,29 @@ def run_planner_mark(args: argparse.Namespace) -> int:
 
 
 def run_planner_next(args: argparse.Namespace) -> int:
-    """Choose the next dependency-ready issue from a local planner draft."""
+    """Choose the next dependency-ready issue from a local planner draft or manifest."""
+    if args.manifest is not None:
+        manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+        issue_states = (
+            _fetch_manifest_issue_states(str(manifest.get("repo", "")), manifest)
+            if args.sync_github
+            else {}
+        )
+        status = build_planner_status(manifest, issue_states)
+        next_plan = build_planner_next_from_status(status)
+        print(format_planner_next_from_status(next_plan))
+        return 1 if next_plan["status"] == "blocked" else 0
+
+    if args.plan is None:
+        print("Signposter Planner Next")
+        print()
+        print("Status:")
+        print("  blocked")
+        print()
+        print("Reason:")
+        print("  either --plan or --manifest is required")
+        return 1
+
     plan = load_planner_plan(args.plan)
     next_plan = build_planner_next(plan)
     print(format_planner_next(args.plan, next_plan))
