@@ -13,8 +13,10 @@ from pathlib import Path
 from typing import Any
 
 from signposter.cleanup import _extract_issue_number, _local_branch_exists, _worktree_exists
+from signposter.labels import check_labels
 from signposter.review import _run_gh_pr_view
 from signposter.scan import fetch_issue_by_number, fetch_issue_context
+from signposter.sync import plan_sync
 
 
 @dataclass(frozen=True)
@@ -523,6 +525,15 @@ def format_lifecycle_status(status: LifecycleStatus) -> str:
     return "\n".join(lines)
 
 @dataclass(frozen=True)
+class LifecyclePreflight:
+    """Result of preflight checks before recommending next lifecycle action (H025D-FIX2)."""
+
+    labels_status: str
+    sync_status: str
+    worktree_status: str
+
+
+@dataclass(frozen=True)
 class LifecycleNext:
     """Read-only recommendation for the next safe lifecycle action."""
 
@@ -537,6 +548,8 @@ class LifecycleNext:
     local_branch_exists: bool
     prompt_exists: bool
     worker_summary_exists: bool
+    preflight: LifecyclePreflight
+    blocked_next_action: str | None  # the action that was blocked by preflight, if any
     action: str
     command: str
     status: str
@@ -556,6 +569,61 @@ def _worker_summary_exists(issue: int | None) -> bool:
     return bool(list(Path("artifacts/runs").glob(f"issue-{issue}-*.summary.md")))
 
 
+def _check_required_labels(repo: str) -> str:
+    """H025D-FIX2: Return human-readable labels preflight status."""
+    try:
+        result = check_labels(repo)
+        if result.status.startswith("blocked"):
+            if result.missing:
+                return f"blocked — required labels missing: {', '.join(result.missing)}"
+            return result.status
+        return "pass"
+    except Exception as e:
+        return f"error — {str(e)[:120]}"
+
+
+def _check_working_tree() -> str:
+    """H025D-FIX2: Return working tree cleanliness status."""
+    proc = subprocess.run(
+        ["git", "status", "--porcelain"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    if proc.returncode != 0:
+        return "error — could not check working tree"
+    return "dirty" if proc.stdout.strip() else "clean"
+
+
+def _check_sync_state(repo: str) -> str:
+    """H025D-FIX2: Return sync state using existing sync plan (safe fetch allowed)."""
+    try:
+        plan = plan_sync(repo)
+        if plan.ahead == 0 and plan.behind == 0:
+            return "up-to-date"
+        if plan.ahead > 0 and plan.behind > 0:
+            return "ready — rebase recommended"
+        if plan.ahead == 0 and plan.behind > 0:
+            return "ready — fast-forward recommended"
+        if plan.ahead > 0 and plan.behind == 0:
+            return "warning — push may be needed"
+        return "unknown"
+    except Exception as e:
+        return f"error — {str(e)[:100]}"
+
+
+def _run_preflight_checks(repo: str) -> LifecyclePreflight:
+    """H025D-FIX2: Run all preflight checks for lifecycle next."""
+    labels = _check_required_labels(repo)
+    worktree = _check_working_tree()
+    sync = _check_sync_state(repo)
+    return LifecyclePreflight(
+        labels_status=labels,
+        sync_status=sync,
+        worktree_status=worktree,
+    )
+
+
 def plan_lifecycle_next(
     repo: str,
     *,
@@ -571,6 +639,9 @@ def plan_lifecycle_next(
     prompt_exists = _prompt_exists(issue_number)
     worker_summary_exists = _worker_summary_exists(issue_number)
 
+    # H025D-FIX2: Run preflight checks first (always)
+    preflight = _run_preflight_checks(repo)
+
     notes = [
         "Read-only recommendation only.",
         "No GitHub mutation was performed.",
@@ -584,12 +655,39 @@ def plan_lifecycle_next(
     )
     next_status = "blocked"
     reason: str | None = None
+    blocked_next_action: str | None = None
 
+    # H025D-FIX2: Completed lifecycle always wins (even if preflights have issues)
     if status.status == "complete":
         action = "none"
         command = "(none)"
         next_status = "complete"
         reason = "lifecycle already complete"
+
+    # H025D-FIX2: Preflight blocking logic (only for non-complete lifecycles)
+    elif preflight.labels_status.startswith("blocked"):
+        action = "labels-ensure"
+        command = f"signposter labels ensure --repo {repo} --apply"
+        next_status = "blocked"
+        reason = "required labels must exist before lifecycle mutations"
+        blocked_next_action = "(would have recommended normal next action)"
+
+    elif preflight.worktree_status == "dirty":
+        action = "inspect-working-tree"
+        command = "git status --short --branch"
+        next_status = "blocked"
+        reason = "local working tree must be clean before lifecycle mutation"
+        blocked_next_action = "(would have recommended normal next action)"
+
+    elif preflight.sync_status in (
+        "ready — rebase recommended",
+        "ready — fast-forward recommended",
+    ):
+        action = "sync-rebase"
+        command = f"signposter sync apply --repo {repo} --rebase --apply"
+        next_status = "blocked"
+        reason = "repository is behind or diverged — rebase recommended before mutation"
+        blocked_next_action = "(would have recommended normal next action)"
 
     elif issue_number is None:
         action = "diagnose-mapping"
@@ -675,6 +773,8 @@ def plan_lifecycle_next(
         local_branch_exists=status.local_branch_exists,
         prompt_exists=prompt_exists,
         worker_summary_exists=worker_summary_exists,
+        preflight=preflight,
+        blocked_next_action=blocked_next_action,
         action=action,
         command=command,
         status=next_status,
@@ -703,6 +803,14 @@ def format_lifecycle_next(result: LifecycleNext) -> str:
     lines.append(f"  local branch: {'present' if result.local_branch_exists else 'missing'}")
     lines.append(f"  prompt: {'present' if result.prompt_exists else 'missing'}")
     lines.append(f"  worker summary: {'present' if result.worker_summary_exists else 'missing'}")
+
+    # H025D-FIX2: Always show Preflight section
+    lines.append("\nPreflight:")
+    lines.append(f"  labels: {result.preflight.labels_status}")
+    lines.append(f"  repo sync: {result.preflight.sync_status}")
+    lines.append(f"  working tree: {result.preflight.worktree_status}")
+    if result.blocked_next_action:
+        lines.append(f"  blocked_next_action: {result.blocked_next_action}")
 
     lines.append("\nNext:")
     lines.append(f"  action: {result.action}")
