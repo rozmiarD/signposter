@@ -335,3 +335,74 @@ def format_gate_report(result: dict) -> str:
         lines.append("WARNING: This issue does not appear ready for a supported gate decision.")
 
     return "\n".join(lines)
+
+
+def evaluate_gate_for_complete(repo: str, issue: int) -> tuple[bool, str, str, str]:
+    """H024F: Evaluate whether the current gate for this issue allows 'complete'.
+
+    Returns:
+        (passes: bool, decision: str, reason: str, gate_type: str)
+
+    Reuses existing gate machinery. Only 'gate:ci' is currently enforced for complete.
+    If no supported gate label is present, returns:
+    (True, 'no-gate', 'no gate label present', 'none').
+    """
+    try:
+        issue_state = fetch_issue_state(repo, issue)
+    except Exception as e:
+        return False, "error", f"Failed to fetch issue state: {e}", "error"
+
+    labels = issue_state.get("labels", [])
+    has_gate_ci = "gate:ci" in labels
+    has_gate_review = "gate:review" in labels
+
+    if not has_gate_ci and not has_gate_review:
+        # No gate label present — preserve existing (non-gated) behavior for now
+        return True, "no-gate", "no supported gate label present", "none"
+
+    # Find latest summary artifact for this issue
+    from signposter.cli import _find_latest_summary_for_issue
+
+    summary_path = _find_latest_summary_for_issue(issue)
+    if not summary_path:
+        return (
+            False,
+            "needs-work",
+            (
+                f"No summary artifact found for issue #{issue} "
+                f"(expected artifacts/runs/issue-{issue}-*.summary.md)"
+            ),
+            "ci" if has_gate_ci else "review",
+        )
+
+    try:
+        summary_text = load_summary(summary_path)
+    except Exception as e:
+        return False, "error", f"Failed to load summary: {e}", "ci" if has_gate_ci else "review"
+
+    # Load raw if present for better signals
+    from pathlib import Path
+    raw_path = Path(summary_path).with_name(
+        Path(summary_path).name.replace(".summary.md", ".raw.txt")
+    )
+    raw_text = load_raw_if_exists(raw_path)
+
+    # Extract exit code
+    exit_code = 0
+    for line in summary_text.splitlines():
+        if line.startswith("**Exit Code:**"):
+            try:
+                exit_code = int(line.split(":", 1)[1].strip())
+            except Exception:
+                pass
+            break
+
+    if has_gate_ci:
+        decision = evaluate_ci_gate(exit_code, summary_text, raw_text)
+        gate_type = "ci"
+    else:
+        decision = evaluate_gate(exit_code, summary_text, raw_text)
+        gate_type = "review"
+
+    passes = decision.decision == "pass"
+    return passes, decision.decision, decision.reason, gate_type

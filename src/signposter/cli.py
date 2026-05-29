@@ -12,7 +12,7 @@ from pathlib import Path
 from signposter.claim import cli_main as claim_cli_main
 from signposter.dispatch import cli_main as dispatch_cli_main
 from signposter.doctor import main as doctor_main
-from signposter.gate import format_gate_report, run_gate_dry_run
+from signposter.gate import evaluate_gate_for_complete, format_gate_report, run_gate_dry_run
 from signposter.handoff import format_handoff_plan, plan_handoff_for_issue
 from signposter.integration import (
     apply_integration,
@@ -594,6 +594,32 @@ def run_complete(args: argparse.Namespace) -> int:
     print(format_transition_plan(plan, dry_run=not apply))
 
     if apply and plan.valid:
+        # H024F: Gate preflight before complete mutation
+        try:
+            gate_ok, decision, reason, gate_type = evaluate_gate_for_complete(repo, issue)
+        except Exception as e:
+            print(f"\nStatus: blocked — gate evaluation error: {e}")
+            print("\nNotes:")
+            print("  No labels were changed.")
+            print("  No GitHub mutation was performed.")
+            print("  No issue was closed.")
+            return 1
+
+        if not gate_ok:
+            print(f"\nSignposter Complete — Issue #{issue}")
+            print("\nGate:")
+            print("  status: blocked")
+            print(f"  decision: {decision.upper()}")
+            print(f"  reason: {reason}")
+            print("\nStatus:")
+            print("  blocked — gate did not pass")
+            print("\nNotes:")
+            print("  No labels were changed.")
+            print("  No GitHub mutation was performed.")
+            print("  Issue was not marked done.")
+            return 1
+
+        # Gate passed — proceed with existing mutation (label preflight still runs inside)
         try:
             commands = perform_transition_mutation(plan, repo, dry_run=False)
             print("\n=== APPLYING COMPLETE MUTATION ===\n")
