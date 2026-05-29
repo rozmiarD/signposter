@@ -12,6 +12,7 @@ from signposter.planner import (
     build_planner_draft,
     build_planner_next,
     build_planner_seed_plan,
+    mark_planner_task,
     validate_planner_plan,
     write_planner_draft,
 )
@@ -244,4 +245,69 @@ def test_cli_planner_next_reports_ready(
     assert "Signposter Planner Next" in captured
     assert "Status:\n  ready" in captured
     assert "WATCH-001 — Define lifecycle watch CLI contract" in captured
+    assert "No task execution was performed." in captured
+
+
+def test_mark_planner_task_updates_status_and_next(tmp_path: Path) -> None:
+    plan_path = tmp_path / "plan.json"
+    write_planner_draft("build lifecycle watch", plan_path)
+
+    result = mark_planner_task(
+        plan_path,
+        "WATCH-001",
+        "done",
+        "local validation passed",
+    )
+
+    saved = json.loads(plan_path.read_text(encoding="utf-8"))
+    next_plan = build_planner_next(saved)
+    assert result["status"] == "updated"
+    assert saved["issues"][0]["status"] == "done"
+    assert saved["issues"][0]["status_reason"] == "local validation passed"
+    assert next_plan["next"]["key"] == "WATCH-002"
+
+
+def test_mark_planner_task_blocks_unknown_task(tmp_path: Path) -> None:
+    plan_path = tmp_path / "plan.json"
+    write_planner_draft("build lifecycle watch", plan_path)
+
+    result = mark_planner_task(plan_path, "MISSING-999", "done")
+
+    assert result["status"] == "blocked"
+    assert result["errors"] == ["unknown task MISSING-999"]
+
+
+def test_cli_planner_mark_updates_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    write_planner_draft("build lifecycle watch", plan_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "mark",
+            "--plan",
+            str(plan_path),
+            "--task",
+            "WATCH-001",
+            "--status",
+            "done",
+            "--reason",
+            "local validation passed",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    saved = json.loads(plan_path.read_text(encoding="utf-8"))
+    captured = capsys.readouterr().out
+    assert exc_info.value.code in (None, 0)
+    assert saved["issues"][0]["status"] == "done"
+    assert "Signposter Planner Mark" in captured
     assert "No task execution was performed." in captured

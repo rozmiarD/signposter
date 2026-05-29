@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -138,6 +139,11 @@ def validate_planner_plan(plan: dict[str, Any]) -> list[str]:
         if issue.get("allowed_mutations") != []:
             errors.append(f"{key}: allowed_mutations must be empty for local draft plans")
 
+        status = str(issue.get("status", "pending")).strip().lower()
+        if status not in ALLOWED_TASK_STATUSES:
+            allowed = ", ".join(sorted(ALLOWED_TASK_STATUSES))
+            errors.append(f"{key}: status must be one of {allowed}")
+
         searchable = " ".join(
             str(issue.get(field, "")) for field in ["title", "body", "acceptance"]
         )
@@ -156,8 +162,118 @@ def validate_planner_plan(plan: dict[str, Any]) -> list[str]:
 
 
 
-DONE_STATUSES = {"done", "merged", "completed"}
+DONE_STATUSES = {"done"}
 BLOCKED_STATUSES = {"blocked", "failed"}
+ALLOWED_TASK_STATUSES = {"pending", "active", "done", "blocked", "failed"}
+
+
+
+def mark_planner_task(
+    plan_path: Path,
+    task_key: str,
+    status: str,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    """Update a task status in a local planner JSON file."""
+    status = status.strip().lower()
+    if status not in ALLOWED_TASK_STATUSES:
+        allowed = ", ".join(sorted(ALLOWED_TASK_STATUSES))
+        return {
+            "status": "blocked",
+            "errors": [f"status must be one of {allowed}"],
+            "task": task_key,
+            "task_status": status,
+        }
+
+    plan = load_planner_plan(plan_path)
+    errors = validate_planner_plan(plan)
+    if errors:
+        return {
+            "status": "blocked",
+            "errors": errors,
+            "task": task_key,
+            "task_status": status,
+        }
+
+    target = None
+    for issue in plan["issues"]:
+        if issue["key"] == task_key:
+            target = issue
+            break
+
+    if target is None:
+        return {
+            "status": "blocked",
+            "errors": [f"unknown task {task_key}"],
+            "task": task_key,
+            "task_status": status,
+        }
+
+    target["status"] = status
+    if reason:
+        target["status_reason"] = reason
+    else:
+        target.pop("status_reason", None)
+    target["updated_at"] = datetime.now(UTC).isoformat(timespec="seconds")
+
+    post_errors = validate_planner_plan(plan)
+    if post_errors:
+        return {
+            "status": "blocked",
+            "errors": post_errors,
+            "task": task_key,
+            "task_status": status,
+        }
+
+    plan_path.write_text(
+        json.dumps(plan, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    return {
+        "status": "updated",
+        "errors": [],
+        "task": task_key,
+        "task_status": status,
+        "reason": reason or "",
+    }
+
+
+def format_planner_mark_result(plan_path: Path, result: dict[str, Any]) -> str:
+    """Format local planner mark result."""
+    lines = [
+        "Signposter Planner Mark",
+        "",
+        "Plan:",
+        f"  {plan_path}",
+        "",
+        "Task:",
+        f"  {result['task']}",
+        "",
+        "Status:",
+        f"  {result['status']}",
+        "",
+        "Task status:",
+        f"  {result['task_status']}",
+    ]
+
+    if result.get("reason"):
+        lines.extend(["", "Reason:", f"  {result['reason']}"])
+
+    if result["errors"]:
+        lines.extend(["", "Errors:"])
+        lines.extend(f"  - {error}" for error in result["errors"])
+
+    lines.extend(
+        [
+            "",
+            "Safety:",
+            "  No GitHub mutation was performed.",
+            "  No OpenClaw execution was performed.",
+            "  No GitHub issue was created.",
+            "  No task execution was performed.",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def build_planner_next(plan: dict[str, Any]) -> dict[str, Any]:

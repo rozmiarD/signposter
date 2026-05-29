@@ -30,10 +30,12 @@ from signposter.planner import (
     build_planner_next,
     build_planner_seed_plan,
     format_planner_draft,
+    format_planner_mark_result,
     format_planner_next,
     format_planner_seed_plan,
     format_planner_validation,
     load_planner_plan,
+    mark_planner_task,
     validate_planner_plan,
     write_planner_draft,
 )
@@ -304,6 +306,34 @@ def main() -> None:
         help="Path to the local planner JSON draft",
     )
     planner_next_parser.set_defaults(func=run_planner_next)
+
+    planner_mark_parser = planner_subparsers.add_parser(
+        "mark",
+        help="Update a task status inside a local planner JSON file",
+    )
+    planner_mark_parser.add_argument(
+        "--plan",
+        required=True,
+        type=Path,
+        help="Path to the local planner JSON draft",
+    )
+    planner_mark_parser.add_argument(
+        "--task",
+        required=True,
+        help="Planner task key, e.g. WATCH-001",
+    )
+    planner_mark_parser.add_argument(
+        "--status",
+        required=True,
+        choices=["pending", "active", "done", "blocked", "failed"],
+        help="Local task status to write into the planner JSON file",
+    )
+    planner_mark_parser.add_argument(
+        "--reason",
+        default=None,
+        help="Optional reason stored with the task status",
+    )
+    planner_mark_parser.set_defaults(func=run_planner_mark)
 
     # worktree subcommand group (planning only — HARDENING-007)
     worktree_parser = subparsers.add_parser(
@@ -1561,6 +1591,13 @@ def _register_labels_subcommands(subparsers: argparse._SubParsersAction) -> None
         help="Actually create the missing labels (requires explicit use)",
     )
     ensure_parser.set_defaults(func=run_labels_ensure)
+
+def run_planner_mark(args: argparse.Namespace) -> int:
+    """Update a local planner task status."""
+    result = mark_planner_task(args.plan, args.task, args.status, args.reason)
+    print(format_planner_mark_result(args.plan, result))
+    return 0 if result["status"] == "updated" else 1
+
 
 def run_planner_next(args: argparse.Namespace) -> int:
     """Choose the next dependency-ready issue from a local planner draft."""
