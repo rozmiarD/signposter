@@ -562,11 +562,19 @@ def run_release(args: argparse.Namespace) -> int:
     print(format_transition_plan(plan, dry_run=not apply))
 
     if apply and plan.valid:
-        print("\n=== APPLYING RELEASE MUTATION ===\n")
-        commands = perform_transition_mutation(plan, repo, dry_run=False)
-        for cmd in commands:
-            print(f"  Executed: {cmd}")
-        print("\nRelease mutation complete.")
+        try:
+            commands = perform_transition_mutation(plan, repo, dry_run=False)
+            print("\n=== APPLYING RELEASE MUTATION ===\n")
+            for cmd in commands:
+                print(f"  Executed: {cmd}")
+            print("\nRelease mutation complete.")
+        except RuntimeError as e:
+            print(f"\nStatus: blocked — {e}")
+            print("\nNotes:")
+            print("  No labels were changed.")
+            print("  No GitHub mutation was performed.")
+            print("  No issue was closed.")
+            return 1
     elif apply:
         print("Cannot apply invalid plan.")
 
@@ -586,11 +594,19 @@ def run_complete(args: argparse.Namespace) -> int:
     print(format_transition_plan(plan, dry_run=not apply))
 
     if apply and plan.valid:
-        print("\n=== APPLYING COMPLETE MUTATION ===\n")
-        commands = perform_transition_mutation(plan, repo, dry_run=False)
-        for cmd in commands:
-            print(f"  Executed: {cmd}")
-        print("\nComplete mutation complete.")
+        try:
+            commands = perform_transition_mutation(plan, repo, dry_run=False)
+            print("\n=== APPLYING COMPLETE MUTATION ===\n")
+            for cmd in commands:
+                print(f"  Executed: {cmd}")
+            print("\nComplete mutation complete.")
+        except RuntimeError as e:
+            print(f"\nStatus: blocked — {e}")
+            print("\nNotes:")
+            print("  No labels were changed.")
+            print("  No GitHub mutation was performed.")
+            print("  No issue was closed.")
+            return 1
     elif apply:
         print("Cannot apply invalid plan.")
 
