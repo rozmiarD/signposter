@@ -561,8 +561,12 @@ def format_merge_apply_dry_run(plan: MergePlan) -> str:
     del_branch = "yes" if plan.delete_branch_after_merge else "no"
     lines.append(f"  delete branch after merge: {del_branch}")
 
+    # HARDENING-027B: do not show concrete gh pr merge command for blocked plans
     lines.append("\nCommand:")
-    lines.append(f"  {plan.command_preview}")
+    if plan.status == "ready":
+        lines.append(f"  {plan.command_preview}")
+    else:
+        lines.append(f"  none — merge plan is not ready ({plan.status})")
 
     lines.append("\nStatus:")
     if plan.status == "ready":
