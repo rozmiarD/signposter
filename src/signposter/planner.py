@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -279,6 +280,33 @@ def format_planner_mark_result(plan_path: Path, result: dict[str, Any]) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+
+def format_gh_issue_create_command(
+    *,
+    repo: str,
+    title: str,
+    body_file: Path,
+    labels: list[str],
+) -> str:
+    """Format a future gh issue create command without executing it."""
+    args = [
+        "gh",
+        "issue",
+        "create",
+        "--repo",
+        repo,
+        "--title",
+        title,
+        "--body-file",
+        str(body_file),
+    ]
+    for label in labels:
+        args.extend(["--label", label])
+
+    quoted = [shlex.quote(arg) for arg in args]
+    return " \\\n  ".join(quoted)
 
 
 def build_planner_next(plan: dict[str, Any]) -> dict[str, Any]:
@@ -667,6 +695,7 @@ def build_planner_seed_plan(plan: dict[str, Any]) -> dict[str, Any]:
             {
                 "key": issue["key"],
                 "title": issue["title"],
+                "github_title": f"{issue['key']} — {issue['title']}",
                 "labels": [
                     f"phase:{issue['phase']}",
                     f"risk:{issue['risk']}",
@@ -694,7 +723,9 @@ def format_planner_seed_plan(
     plan_path: Path,
     seed_plan: dict[str, Any],
     *,
+    repo: str = "<owner/repo>",
     show_body: bool = False,
+    show_commands: bool = False,
 ) -> str:
     """Format a dry-run planner seed plan."""
     lines = [
@@ -720,12 +751,29 @@ def format_planner_seed_plan(
             line_count = body_size.get("line_count", "?")
             char_count = body_size.get("char_count", "?")
             lines.append(f"  {issue['key']} — {issue['title']}")
+            lines.append(f"    GitHub title: {issue['github_title']}")
             lines.append(f"    labels: {labels}")
             lines.append(f"    depends on: {deps}")
             lines.append(
                 f"    body size: {size_status} "
                 f"({line_count} lines, {char_count} chars)"
             )
+            if show_commands:
+                body_file = Path("artifacts/plans/issue-bodies") / f"{issue['key']}.md"
+                command = format_gh_issue_create_command(
+                    repo=repo,
+                    title=issue["github_title"],
+                    body_file=body_file,
+                    labels=issue["labels"],
+                )
+                lines.extend(
+                    [
+                        "    command preview:",
+                        "      ----- BEGIN GH COMMAND -----",
+                    ]
+                )
+                lines.extend(f"      {line}" for line in command.splitlines())
+                lines.append("      ----- END GH COMMAND -----")
             if show_body:
                 lines.extend(
                     [
@@ -741,6 +789,8 @@ def format_planner_seed_plan(
             "",
             "Notes:",
             "  Dry-run only.",
+            "  Command previews are not executed.",
+            "  Body-file paths are preview placeholders.",
             "  No GitHub mutation was performed.",
             "  No OpenClaw execution was performed.",
             "  No GitHub issue was created.",

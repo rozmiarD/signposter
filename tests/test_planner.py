@@ -13,6 +13,7 @@ from signposter.planner import (
     build_planner_next,
     build_planner_seed_plan,
     evaluate_worker_issue_body_size,
+    format_gh_issue_create_command,
     format_planner_issue_body,
     format_planner_roadmap,
     mark_planner_task,
@@ -560,3 +561,85 @@ def test_cli_planner_seed_without_show_body_keeps_output_compact(
     assert "body size:" in captured
     assert "----- BEGIN ISSUE BODY -----" not in captured
     assert "Task: WATCH-001" not in captured
+
+
+def test_format_gh_issue_create_command_quotes_args() -> None:
+    command = format_gh_issue_create_command(
+        repo="ExatronOmega/signposter",
+        title="WATCH-001 — Define lifecycle watch CLI contract",
+        body_file=Path("artifacts/plans/issue-bodies/WATCH-001.md"),
+        labels=["phase:build", "risk:low", "role:worker", "area:cli"],
+    )
+
+    assert command.startswith("gh \\\n  issue \\\n  create")
+    assert "--repo \\\n  ExatronOmega/signposter" in command
+    assert "--body-file \\\n  artifacts/plans/issue-bodies/WATCH-001.md" in command
+    assert "--label \\\n  phase:build" in command
+    assert "WATCH-001" in command
+
+
+def test_build_planner_seed_plan_includes_github_title() -> None:
+    plan = build_planner_draft("build lifecycle watch")
+
+    seed_plan = build_planner_seed_plan(plan)
+
+    assert seed_plan["issues"][0]["github_title"] == (
+        "WATCH-001 — Define lifecycle watch CLI contract"
+    )
+
+
+def test_cli_planner_seed_show_commands_prints_gh_preview(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    write_planner_draft("build lifecycle watch", plan_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "seed",
+            "--plan",
+            str(plan_path),
+            "--repo",
+            "ExatronOmega/signposter",
+            "--show-commands",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+    assert exc_info.value.code in (None, 0)
+    assert "GitHub title: WATCH-001" in captured
+    assert "----- BEGIN GH COMMAND -----" in captured
+    assert "gh \\" in captured
+    assert "ExatronOmega/signposter" in captured
+    assert "Command previews are not executed." in captured
+    assert "No GitHub issue was created." in captured
+
+
+def test_cli_planner_seed_without_show_commands_keeps_command_hidden(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    write_planner_draft("build lifecycle watch", plan_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["signposter", "planner", "seed", "--plan", str(plan_path)],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+    assert exc_info.value.code in (None, 0)
+    assert "----- BEGIN GH COMMAND -----" not in captured
+    assert "gh issue create" not in captured
