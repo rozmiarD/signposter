@@ -45,7 +45,9 @@ def _make_plan(**overrides) -> CleanupPlan:
 def test_cleanup_plan_ready_when_all_conditions_met():
     """Ready cleanup plan for merged PR + closed state:merged issue + existing worktree."""
     with patch("signposter.cleanup._run_gh_pr_view") as mock_pr, \
-         patch("signposter.cleanup.fetch_issue_context") as mock_ctx:
+         patch("signposter.cleanup.fetch_issue_context") as mock_ctx, \
+         patch("signposter.cleanup._worktree_exists", return_value=True), \
+         patch("signposter.cleanup._local_branch_exists", return_value=True):
         mock_pr.return_value = {
             "state": "MERGED",
             "headRefName": "work/issue-4-test-task-isolated-worker-readme-note",
