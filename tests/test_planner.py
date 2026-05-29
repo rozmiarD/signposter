@@ -14,6 +14,7 @@ from signposter.planner import (
     build_planner_seed_plan,
     evaluate_worker_issue_body_size,
     format_planner_issue_body,
+    format_planner_roadmap,
     mark_planner_task,
     validate_planner_plan,
     write_planner_draft,
@@ -396,3 +397,38 @@ def test_build_planner_seed_plan_includes_body_size() -> None:
     assert body_size["line_count"] > 0
     assert body_size["char_count"] > 0
     assert body_size["errors"] == []
+
+
+def test_format_planner_roadmap_uses_roadmap_contract() -> None:
+    plan = build_planner_draft("build lifecycle watch")
+
+    roadmap = format_planner_roadmap(plan)
+
+    assert roadmap.startswith("Roadmap: build lifecycle watch")
+    assert "Intent:" in roadmap
+    assert "Outcome:" in roadmap
+    assert "Non-goals:" in roadmap
+    assert "Assumptions:" in roadmap
+    assert "Required capabilities:" in roadmap
+    assert "Milestones:" in roadmap
+    assert "Issue DAG:" in roadmap
+    assert "Task sizing policy:" in roadmap
+    assert "Risk model:" in roadmap
+    assert "Mutation policy:" in roadmap
+    assert "Validation strategy:" in roadmap
+    assert "Stop conditions:" in roadmap
+    assert "Follow-up policy:" in roadmap
+    assert "Done definition:" in roadmap
+    assert "Worker task preferred range: 60–120 lines." in roadmap
+    assert "Do not collapse the whole project into one oversized worker issue." in roadmap
+
+
+def test_format_planner_roadmap_blocks_invalid_plan() -> None:
+    plan = build_planner_draft("build lifecycle watch")
+    plan["issues"][0]["body"] = "Closes #1"
+
+    roadmap = format_planner_roadmap(plan)
+
+    assert "Status:\nblocked" in roadmap
+    assert "Validation errors:" in roadmap
+    assert "WATCH-001: contains auto-close keyword" in roadmap
