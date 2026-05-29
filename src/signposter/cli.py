@@ -1223,7 +1223,9 @@ def _register_cleanup_subcommands(subparsers: argparse._SubParsersAction) -> Non
 # =============================================================================
 
 from signposter.lifecycle import (  # noqa: E402
+    format_lifecycle_next,
     format_lifecycle_status,
+    plan_lifecycle_next,
     plan_lifecycle_status,
 )
 
@@ -1253,8 +1255,30 @@ def run_lifecycle_status(args: argparse.Namespace) -> int:
         return 2
 
 
+
+def run_lifecycle_next(args: argparse.Namespace) -> int:
+    """Handler for `signposter lifecycle next --repo ... (--issue N | --pr P)`."""
+    repo = args.repo
+    issue = args.issue
+    pr = args.pr
+
+    if issue is not None and pr is not None:
+        print("Error: choose exactly one of --issue or --pr", file=sys.stderr)
+        return 2
+    if issue is None and pr is None:
+        print("Error: choose exactly one of --issue or --pr", file=sys.stderr)
+        return 2
+
+    try:
+        result = plan_lifecycle_next(repo, issue=issue, pr=pr)
+        print(format_lifecycle_next(result))
+        return 0 if result.status in ("actionable", "complete") else 1
+    except Exception as e:
+        print(f"Lifecycle next failed: {e}", file=sys.stderr)
+        return 1
+
 def _register_lifecycle_subcommands(subparsers: argparse._SubParsersAction) -> None:
-    """Register the lifecycle command group (status only)."""
+    """Register the lifecycle command group."""
     lifecycle_parser = subparsers.add_parser(
         "lifecycle",
         help="Read-only cross-phase lifecycle status for issue or PR",
@@ -1277,6 +1301,29 @@ def _register_lifecycle_subcommands(subparsers: argparse._SubParsersAction) -> N
         "--pr", type=int, help="PR number (exactly one of --issue or --pr)"
     )
     status_parser.set_defaults(func=run_lifecycle_status)
+
+    next_parser = lifecycle_subparsers.add_parser(
+        "next",
+        help="Show the next recommended lifecycle action (read-only)",
+        description=(
+            "Recommend the next safe operator action for an issue or PR "
+            "without performing mutations."
+        ),
+    )
+    next_parser.add_argument("--repo", required=True)
+    next_parser.add_argument(
+        "--issue",
+        type=int,
+        default=None,
+        help="Issue number to inspect",
+    )
+    next_parser.add_argument(
+        "--pr",
+        type=int,
+        default=None,
+        help="Pull request number to inspect",
+    )
+    next_parser.set_defaults(func=run_lifecycle_next)
 
 
 # =============================================================================
@@ -1355,4 +1402,3 @@ def _register_labels_subcommands(subparsers: argparse._SubParsersAction) -> None
         help="Actually create the missing labels (requires explicit use)",
     )
     ensure_parser.set_defaults(func=run_labels_ensure)
-
