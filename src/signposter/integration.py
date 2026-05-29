@@ -66,6 +66,37 @@ def _get_workflow_state_from_labels(labels: list[str]) -> str | None:
     return None
 
 
+def _is_already_integrated_plan(
+    *,
+    pr_state: str,
+    merge_commit: str | None,
+    associated_issue: int | None,
+    issue_state: str | None,
+    current_workflow_state: str | None,
+) -> bool:
+    """
+    H024A: Return True only for a fully completed integrated lifecycle.
+
+    Criteria (strict):
+    - PR is MERGED
+    - merge commit exists
+    - associated issue exists
+    - issue state is CLOSED
+    - current workflow label is exactly state:merged
+    """
+    if pr_state != "MERGED":
+        return False
+    if not merge_commit:
+        return False
+    if associated_issue is None:
+        return False
+    if issue_state is None or issue_state.upper() != "CLOSED":
+        return False
+    if current_workflow_state != "state:merged":
+        return False
+    return True
+
+
 def _fetch_pr_merge_details(repo: str, pr_number: int) -> dict[str, Any]:
     """Fetch post-merge PR details including merge commit."""
     return _run_gh_pr_view(
@@ -219,6 +250,15 @@ def plan_integration_for_pr(repo: str, pr_number: int) -> IntegrationPlan:
         status = "blocked — merge commit missing"
     elif associated_issue is None:
         status = "blocked — associated issue could not be detected"
+    elif _is_already_integrated_plan(
+        pr_state=pr_state,
+        merge_commit=merge_commit,
+        associated_issue=associated_issue,
+        issue_state=issue_state,
+        current_workflow_state=current_workflow_state,
+    ):
+        # H024A: Idempotent no-op for already-integrated lifecycle
+        status = "completed"
     elif issue_state is not None and issue_state.upper() != "OPEN":
         status = f"blocked — associated issue is already {issue_state.lower()}"
     # We do not require a specific current state label here; the plan just proposes the next one.
