@@ -30,6 +30,7 @@ from signposter.merge import (
 )
 from signposter.planner import (
     apply_planner_seed_manifest,
+    build_planner_advance_plan_from_status,
     build_planner_impact_from_status,
     build_planner_next,
     build_planner_next_from_status,
@@ -37,6 +38,7 @@ from signposter.planner import (
     build_planner_seed_plan,
     build_planner_status,
     build_planner_step_from_next,
+    format_planner_advance_plan,
     format_planner_draft,
     format_planner_impact,
     format_planner_mark_result,
@@ -381,6 +383,34 @@ def main() -> None:
         help="Fetch current GitHub issue states before choosing the next task",
     )
     planner_next_parser.set_defaults(func=run_planner_next)
+
+    planner_advance_parser = planner_subparsers.add_parser(
+        "advance",
+        help="Show dry-run plan to promote downstream planner tasks",
+    )
+    planner_advance_parser.add_argument(
+        "--manifest",
+        required=True,
+        type=Path,
+        help="Path to the local planner seed manifest JSON file",
+    )
+    planner_advance_parser.add_argument(
+        "--issue",
+        required=True,
+        type=int,
+        help="Completed GitHub issue number to advance from",
+    )
+    planner_advance_parser.add_argument(
+        "--sync-github",
+        action="store_true",
+        help="Fetch current GitHub issue states before planning advance",
+    )
+    planner_advance_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Required in this phase: show planned mutations only",
+    )
+    planner_advance_parser.set_defaults(func=run_planner_advance)
 
     planner_impact_parser = planner_subparsers.add_parser(
         "impact",
@@ -1808,6 +1838,58 @@ def run_planner_status(args: argparse.Namespace) -> int:
     status = build_planner_status(manifest, issue_states)
     print(format_planner_status(status))
     return 0
+
+def run_planner_advance(args: argparse.Namespace) -> int:
+    """Show a dry-run plan to promote downstream planner tasks."""
+    if not args.dry_run:
+        print("Signposter Planner Advance")
+        print()
+        print("Status:")
+        print("  blocked")
+        print()
+        print("Reason:")
+        print("  --dry-run is required in this phase")
+        print()
+        print("Notes:")
+        print("  No GitHub mutation was performed.")
+        print("  No manifest mutation was performed.")
+        print("  No OpenClaw execution was performed.")
+        print("  No LLM analysis was performed.")
+        return 1
+
+    if not args.manifest.exists():
+        print(
+            format_planner_advance_plan(
+                {
+                    "status": "blocked",
+                    "issue": args.issue,
+                    "source_task": None,
+                    "targets": [],
+                    "planned_github_mutations": [],
+                    "planned_manifest_mutations": [],
+                    "requires_llm_analysis": False,
+                    "manifest_path": str(args.manifest),
+                    "reasons": [f"manifest file not found: {args.manifest}"],
+                }
+            )
+        )
+        return 1
+
+    manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+    issue_states = (
+        _fetch_manifest_issue_states(str(manifest.get("repo", "")), manifest)
+        if args.sync_github
+        else {}
+    )
+    status = build_planner_status(manifest, issue_states)
+    advance_plan = build_planner_advance_plan_from_status(
+        status,
+        issue=args.issue,
+        manifest_path=str(args.manifest),
+    )
+    print(format_planner_advance_plan(advance_plan))
+    return 1 if advance_plan["status"] == "blocked" else 0
+
 
 def run_planner_impact(args: argparse.Namespace) -> int:
     """Show token-free planner impact scoring for a completed task."""
