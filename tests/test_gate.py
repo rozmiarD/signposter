@@ -553,3 +553,138 @@ No unrelated files were changed.
     decision = evaluate_ci_gate(0, summary)
 
     assert decision.decision == "needs-work"
+
+
+def test_evaluate_human_gate_blocks_without_approval_evidence():
+    from signposter.gate import evaluate_human_gate
+
+    summary = """
+# Signposter Execution Summary
+
+**Exit Code:** 0
+
+Validation passed.
+No GitHub mutation was performed.
+No OpenClaw execution was performed.
+No issue was closed.
+No merge was performed.
+"""
+
+    decision = evaluate_human_gate(0, summary)
+
+    assert decision.decision == "needs-work"
+    assert "approval evidence missing" in decision.reason.lower()
+
+
+def test_evaluate_human_gate_passes_with_explicit_approval_evidence():
+    from signposter.gate import evaluate_human_gate
+
+    summary = """
+# Signposter Human Gate Summary
+
+**Exit Code:** 0
+
+Human gate approval recorded.
+Approval is granted.
+Approved to proceed to PR.
+
+Scope reviewed:
+- src/signposter/gate.py
+- tests/test_gate.py
+
+Validation passed:
+- ruff check .
+- pytest tests/ -q
+
+Safety:
+No GitHub mutation was performed by the implemented code.
+No OpenClaw execution was performed by the implemented code.
+No issue was closed by the implemented code.
+No merge was performed by the implemented code.
+"""
+
+    decision = evaluate_human_gate(0, summary)
+
+    assert decision.decision == "pass"
+    assert decision.confidence == "high"
+    assert decision.proposed_transition == "state:active → state:done"
+
+
+def test_evaluate_human_gate_blocks_ambiguous_approval():
+    from signposter.gate import evaluate_human_gate
+
+    summary = """
+# Signposter Human Gate Summary
+
+**Exit Code:** 0
+
+Looks okay maybe.
+Scope reviewed.
+Validation passed.
+No GitHub mutation was performed.
+No OpenClaw execution was performed.
+No issue was closed.
+No merge was performed.
+"""
+
+    decision = evaluate_human_gate(0, summary)
+
+    assert decision.decision == "needs-work"
+
+
+def test_evaluate_human_gate_blocks_negative_approval_signal():
+    from signposter.gate import evaluate_human_gate
+
+    summary = """
+# Signposter Human Gate Summary
+
+**Exit Code:** 0
+
+Human gate approval recorded.
+Approval is granted.
+Approved to proceed.
+Scope reviewed.
+Validation passed.
+No GitHub mutation was performed.
+No OpenClaw execution was performed.
+No issue was closed.
+No merge was performed.
+
+Critical blocker: policy behavior unclear.
+"""
+
+    decision = evaluate_human_gate(0, summary)
+
+    assert decision.decision == "needs-work"
+    assert "critical blocker" in decision.reason
+
+
+def test_gate_human_output_identifies_supported_human_gate():
+    from signposter.gate import format_gate_report
+
+    result = {
+        "repo": "test/repo",
+        "issue": 23,
+        "issue_title": "H033C — Add formal gate:human issue gate support",
+        "current_state": "OPEN",
+        "labels": ["phase:build", "state:active", "risk:high", "gate:human"],
+        "summary_path": "artifacts/runs/issue-23-worker.summary.md",
+        "raw_path": "artifacts/runs/issue-23-worker.raw.txt",
+        "has_state_active": True,
+        "gate_type": "human",
+        "has_gate_review": False,
+        "has_gate_ci": False,
+        "has_gate_human": True,
+        "decision": "pass",
+        "reason": "Human gate approval evidence found with validation and safety context.",
+        "confidence": "high",
+        "proposed_transition": "state:active → state:done",
+        "proposed_command": "signposter complete --repo test/repo --issue 23 --apply",
+    }
+
+    output = format_gate_report(result)
+
+    assert "gate type:            human" in output
+    assert "gate:human present:   True" in output
+    assert "Decision:" in output
+    assert "PASS" in output

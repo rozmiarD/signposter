@@ -225,6 +225,99 @@ def evaluate_ci_gate(
     )
 
 
+
+
+def evaluate_human_gate(
+    exit_code: int,
+    summary_text: str,
+    raw_text: str | None = None,
+) -> GateDecision:
+    """Decision function for explicit human-gated issues.
+
+    Human gates are intentionally conservative. They pass only when local,
+    auditable evidence clearly records human approval plus validation/safety
+    context. GitHub comments are not parsed here.
+    """
+    text = ((summary_text or "") + "\n" + (raw_text or "")).lower()
+
+    if exit_code != 0:
+        return GateDecision(
+            decision="fail",
+            reason=f"Non-zero exit code from human-gated evidence: {exit_code}",
+            confidence="high",
+            proposed_transition="state:failed",
+            proposed_command=None,
+        )
+
+    disqualifiers = [
+        "human gate rejected",
+        "approval denied",
+        "not approved",
+        "do not proceed",
+        "cannot proceed",
+        "critical blocker",
+        "validation failed",
+        "scope not reviewed",
+        "unrelated files changed",
+    ]
+    for signal in disqualifiers:
+        if signal in text:
+            return GateDecision(
+                decision="needs-work",
+                reason=f"Human gate evidence mentioned: '{signal}'",
+                confidence="high",
+                proposed_transition="state:active (human gate approval required)",
+                proposed_command=None,
+            )
+
+    approval_marker = (
+        "human gate approval" in text
+        or "human gate approved" in text
+        or "manual human gate approval" in text
+    )
+    approved_to_proceed = (
+        "approved to proceed" in text
+        or "approval is granted" in text
+        or "approved to move" in text
+        or "approved to proceed to pr" in text
+    )
+    scope_reviewed = "scope reviewed" in text
+    validation_passed = (
+        "validation passed" in text
+        or ("ruff check ." in text and "pytest tests/ -q" in text)
+        or ("targeted validation passed" in text and "full validation passed" in text)
+    )
+    safety_recorded = (
+        "no github mutation" in text
+        and "no openclaw execution" in text
+        and ("no issue close" in text or "no issue was closed" in text)
+        and ("no merge" in text or "no merge was performed" in text)
+    )
+
+    if all(
+        [
+            approval_marker,
+            approved_to_proceed,
+            scope_reviewed,
+            validation_passed,
+            safety_recorded,
+        ]
+    ):
+        return GateDecision(
+            decision="pass",
+            reason="Human gate approval evidence found with validation and safety context.",
+            confidence="high",
+            proposed_transition="state:active → state:done",
+            proposed_command="signposter complete --repo {repo} --issue {issue} --apply",
+        )
+
+    return GateDecision(
+        decision="needs-work",
+        reason="Human gate approval evidence missing or incomplete.",
+        confidence="high",
+        proposed_transition="state:active (human gate approval required)",
+        proposed_command=None,
+    )
 def _has_scoped_worker_code_completion_evidence(text: str) -> bool:
     """Detect conservative scoped code/CLI worker completion evidence.
 
@@ -562,14 +655,16 @@ def run_gate_dry_run(
     has_active = "state:active" in labels
     has_gate_review = "gate:review" in labels
     has_gate_ci = "gate:ci" in labels
+    has_gate_human = "gate:human" in labels
 
     if has_gate_review:
         gate_type = "review"
     elif has_gate_ci:
         gate_type = "ci"
+    elif has_gate_human:
+        gate_type = "human"
     else:
         gate_type = "unknown"
-
     summary_text = load_summary(summary_path)
 
     # Try to derive raw path and load it for better signals
@@ -592,15 +687,19 @@ def run_gate_dry_run(
         decision = evaluate_ci_gate(exit_code, summary_text, raw_text)
     elif gate_type == "review":
         decision = evaluate_gate(exit_code, summary_text, raw_text)
+    elif gate_type == "human":
+        decision = evaluate_human_gate(exit_code, summary_text, raw_text)
     else:
         decision = GateDecision(
             decision="needs-work",
-            reason="Issue has no supported gate label (expected gate:ci or gate:review).",
+            reason=(
+                "Issue has no supported gate label "
+                "(expected gate:ci, gate:review, or gate:human)."
+            ),
             confidence="high",
             proposed_transition=None,
             proposed_command=None,
         )
-
     # Fill in repo/issue in proposed command if present
     proposed_cmd = None
     if decision.proposed_command:
@@ -615,6 +714,7 @@ def run_gate_dry_run(
         "has_state_active": has_active,
         "has_gate_review": has_gate_review,
         "has_gate_ci": has_gate_ci,
+        "has_gate_human": has_gate_human,
         "gate_type": gate_type,
         "summary_path": str(summary_path),
         "raw_path": str(raw_path) if raw_path.exists() else None,
@@ -681,6 +781,7 @@ def format_gate_report(result: dict) -> str:
             f"  gate type:            {result.get('gate_type', 'unknown')}",
             f"  gate:review present:  {result.get('has_gate_review', False)}",
             f"  gate:ci present:      {result.get('has_gate_ci', False)}",
+            f"  gate:human present:   {result.get('has_gate_human', False)}",
             "",
             "Decision:",
             f"  {result['decision'].upper()}",
@@ -705,14 +806,13 @@ def format_gate_report(result: dict) -> str:
 
 
 def evaluate_gate_for_complete(repo: str, issue: int) -> tuple[bool, str, str, str]:
-    """H024F: Evaluate whether the current gate for this issue allows 'complete'.
+    """Evaluate whether a gated issue can be completed.
 
     Returns:
         (passes: bool, decision: str, reason: str, gate_type: str)
 
-    Reuses existing gate machinery. Only 'gate:ci' is currently enforced for complete.
-    If no supported gate label is present, returns:
-    (True, 'no-gate', 'no gate label present', 'none').
+    Supports gate:ci, gate:review, and gate:human. If no supported gate label
+    is present, preserves existing non-gated behavior.
     """
     try:
         issue_state = fetch_issue_state(repo, issue)
@@ -722,9 +822,15 @@ def evaluate_gate_for_complete(repo: str, issue: int) -> tuple[bool, str, str, s
     labels = issue_state.get("labels", [])
     has_gate_ci = "gate:ci" in labels
     has_gate_review = "gate:review" in labels
+    has_gate_human = "gate:human" in labels
 
-    if not has_gate_ci and not has_gate_review:
-        # No gate label present — preserve existing (non-gated) behavior for now
+    if has_gate_ci:
+        gate_type = "ci"
+    elif has_gate_review:
+        gate_type = "review"
+    elif has_gate_human:
+        gate_type = "human"
+    else:
         return True, "no-gate", "no supported gate label present", "none"
 
     # Find latest summary artifact for this issue
@@ -739,22 +845,21 @@ def evaluate_gate_for_complete(repo: str, issue: int) -> tuple[bool, str, str, s
                 f"No summary artifact found for issue #{issue} "
                 f"(expected artifacts/runs/issue-{issue}-*.summary.md)"
             ),
-            "ci" if has_gate_ci else "review",
+            gate_type,
         )
 
     try:
         summary_text = load_summary(summary_path)
     except Exception as e:
-        return False, "error", f"Failed to load summary: {e}", "ci" if has_gate_ci else "review"
+        return False, "error", f"Failed to load summary: {e}", gate_type
 
     # Load raw if present for better signals
-    from pathlib import Path
     raw_path = Path(summary_path).with_name(
         Path(summary_path).name.replace(".summary.md", ".raw.txt")
     )
     raw_text = load_raw_if_exists(raw_path)
 
-    # Extract exit code
+    # Extract exit code from summary
     exit_code = 0
     for line in summary_text.splitlines():
         if line.startswith("**Exit Code:**"):
@@ -765,11 +870,15 @@ def evaluate_gate_for_complete(repo: str, issue: int) -> tuple[bool, str, str, s
             break
 
     if has_gate_ci:
-        decision = evaluate_ci_gate(exit_code, summary_text, raw_text)
-        gate_type = "ci"
+        gate_decision = evaluate_ci_gate(exit_code, summary_text, raw_text)
+    elif has_gate_review:
+        gate_decision = evaluate_gate(exit_code, summary_text, raw_text)
     else:
-        decision = evaluate_gate(exit_code, summary_text, raw_text)
-        gate_type = "review"
+        gate_decision = evaluate_human_gate(exit_code, summary_text, raw_text)
 
-    passes = decision.decision == "pass"
-    return passes, decision.decision, decision.reason, gate_type
+    return (
+        gate_decision.decision == "pass",
+        gate_decision.decision,
+        gate_decision.reason,
+        gate_type,
+    )
