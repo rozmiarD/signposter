@@ -232,3 +232,58 @@ def test_active_gate_ci_behavior_unchanged_negative():
 
     decision = evaluate_ci_gate(0, "**Exit Code:** 0\nGeneric unclear output.")
     assert decision.decision == "needs-work"
+
+
+def test_evaluate_ci_gate_pass_on_scoped_lifecycle_watch_code_task():
+    """Scoped src+tests worker task with validation evidence should pass CI gate."""
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+# Signposter Execution Summary
+
+**Repository:** ExatronOmega/signposter
+**Issue:** #10 — WATCH-001 — Define lifecycle watch CLI contract
+**Agent:** worker
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+## Files changed
+
+- src/signposter/cli.py
+- tests/test_lifecycle.py
+
+## Implemented behavior
+
+Added lifecycle watch subcommand under existing signposter lifecycle.
+
+## Validation evidence
+
+Targeted validation in isolated worktree passed:
+
+- ruff check src/signposter/cli.py tests/test_lifecycle.py
+- pytest tests/test_lifecycle.py -q
+
+Full validation in isolated worktree passed:
+
+- ruff check .
+- pytest tests/ -q
+
+Manual CLI smoke passed.
+
+## Safety
+
+No GitHub mutation was performed by the implemented command.
+No OpenClaw execution was performed by the implemented command.
+No manifest mutation was performed.
+No unrelated files were changed.
+"""
+
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "pass"
+    assert decision.proposed_transition == "state:active → state:done"
+    assert "scoped code change evidence" in decision.reason
+
+

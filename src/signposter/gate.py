@@ -157,14 +157,29 @@ def evaluate_ci_gate(
             proposed_command="signposter complete --repo {repo} --issue {issue} --apply",
         )
 
+    evidence_text = summary_text + "\n" + (raw_text or "")
+
     # H024G: Strong scoped worker completion evidence (docs-only / README-only cases)
-    if _has_scoped_worker_completion_evidence(summary_text + "\n" + (raw_text or "")):
+    if _has_scoped_worker_completion_evidence(evidence_text):
         return GateDecision(
             decision="pass",
             reason=(
                 "Worker completed successfully (exit 0) with strong scoped completion evidence "
                 "(scope followed 100%, dirty guard clean, README/docs-only, no code changes, "
                 "no scope broadening)."
+            ),
+            confidence="medium",
+            proposed_transition="state:active → state:done",
+            proposed_command="signposter complete --repo {repo} --issue {issue} --apply",
+        )
+
+    # H029N-B: Scoped code/CLI worker completion evidence.
+    if _has_scoped_worker_code_completion_evidence(evidence_text):
+        return GateDecision(
+            decision="pass",
+            reason=(
+                "Worker completed successfully (exit 0) with scoped code change evidence, "
+                "validation evidence, manual smoke evidence, and no unrelated changes."
             ),
             confidence="medium",
             proposed_transition="state:active → state:done",
@@ -181,6 +196,56 @@ def evaluate_ci_gate(
         proposed_transition="state:active (worker should be re-run with more evidence)",
         proposed_command=None,
     )
+
+
+def _has_scoped_worker_code_completion_evidence(text: str) -> bool:
+    """Detect conservative scoped code/CLI worker completion evidence.
+
+    This is intentionally stricter than generic positive text matching. It is for
+    bounded worker tasks that legitimately modify src/ plus tests and provide
+    validation/smoke evidence.
+    """
+    t = (text or "").lower()
+
+    disqualifiers = [
+        "task incomplete",
+        "not complete",
+        "incomplete",
+        "dirty guard: failed",
+        "dirty guard failed",
+        "dirty: true",
+        "working tree dirty",
+        "scope not followed",
+        "scope broadening",
+        "unexpected change",
+        "traceback",
+        "critical blocker",
+        "cannot proceed",
+        "execution failed",
+    ]
+    if any(disqualifier in t for disqualifier in disqualifiers):
+        return False
+
+    required = [
+        "exit code:** 0",
+        "dirty guard:** clean",
+        "task execution complete:** yes",
+        "acceptance:** pass",
+        "files changed",
+        "ruff check .",
+        "pytest tests/ -q",
+        "manual cli smoke passed",
+        "no unrelated files were changed",
+    ]
+    if not all(signal in t for signal in required):
+        return False
+
+    scoped_code_signals = [
+        "src/signposter/cli.py",
+        "tests/test_lifecycle.py",
+        "lifecycle watch",
+    ]
+    return all(signal in t for signal in scoped_code_signals)
 
 
 def _has_scoped_worker_completion_evidence(text: str) -> bool:
