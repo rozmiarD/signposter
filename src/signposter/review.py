@@ -798,7 +798,11 @@ def parse_reviewer_opinion(text: str) -> ReviewerOpinion:
 
 
 def evaluate_review_gate(
-    repo: str, pr_number: int, *, summary_path: str | None = None
+    repo: str,
+    pr_number: int,
+    *,
+    summary_path: str | None = None,
+    allow_medium_risk: bool = False,
 ) -> ReviewGateResult:
     """Read reviewer artifacts and produce a conservative gate decision."""
     if summary_path is None:
@@ -853,12 +857,15 @@ def evaluate_review_gate(
     # Conservative gate logic
     gate_pass = False
     reason = ""
+    risk_allowed = opinion.risk in ("low", "LOW") or (
+        allow_medium_risk and opinion.risk in ("medium", "MEDIUM")
+    )
 
     if opinion.verdict != "APPROVE":
         reason = f"reviewer verdict is {opinion.verdict or 'unknown'}"
     elif opinion.confidence is None or opinion.confidence < 0.85:
         reason = f"confidence below threshold (got {opinion.confidence})"
-    elif opinion.risk not in ("low", "LOW"):
+    elif not risk_allowed:
         reason = f"reviewer risk is {opinion.risk or 'unknown'}"
     elif opinion.scope_match not in ("yes", "YES"):
         reason = "scope match is no"
@@ -868,10 +875,16 @@ def evaluate_review_gate(
         reason = "merge recommendation is no"
     else:
         gate_pass = True
-        reason = (
-            "reviewer approved with high confidence, low risk, green CI, "
-            "and matching scope"
-        )
+        if opinion.risk in ("medium", "MEDIUM"):
+            reason = (
+                "reviewer approved with high confidence, medium risk explicitly allowed, "
+                "green CI, and matching scope"
+            )
+        else:
+            reason = (
+                "reviewer approved with high confidence, low risk, green CI, "
+                "and matching scope"
+            )
 
     automerge_ok = gate_pass and opinion.automerge_eligible in ("yes", "YES")
 
@@ -970,12 +983,21 @@ No merge or issue close is implied by this review.
     return body.strip()
 
 
-def plan_review_submit(repo: str, pr_number: int) -> ReviewSubmitPlan:
+def plan_review_submit(
+    repo: str,
+    pr_number: int,
+    *,
+    allow_medium_risk: bool = False,
+) -> ReviewSubmitPlan:
     """Produce a dry-run plan for submitting a GitHub PR review.
 
     HARDENING-018A: Includes GitHub identity checks and self-review guard.
     """
-    gate = evaluate_review_gate(repo, pr_number)
+    gate = evaluate_review_gate(
+        repo,
+        pr_number,
+        allow_medium_risk=allow_medium_risk,
+    )
 
     notes = [
         "No GitHub review was submitted.",
@@ -1086,13 +1108,23 @@ def format_review_submit_plan(plan: ReviewSubmitPlan) -> str:
     return "\n".join(lines)
 
 
-def submit_review(repo: str, pr_number: int, *, apply: bool = False) -> dict:
+def submit_review(
+    repo: str,
+    pr_number: int,
+    *,
+    apply: bool = False,
+    allow_medium_risk: bool = False,
+) -> dict:
     """Execute (or dry-run) the GitHub PR review submission.
 
     HARDENING-018A: Respects self-review identity guard.
     Only performs the gh mutation when apply=True and the plan is ready for approval.
     """
-    plan = plan_review_submit(repo, pr_number)
+    plan = plan_review_submit(
+        repo,
+        pr_number,
+        allow_medium_risk=allow_medium_risk,
+    )
 
     if not apply:
         return {

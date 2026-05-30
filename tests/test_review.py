@@ -909,3 +909,40 @@ def test_dry_run_still_does_not_call_subprocess():
 
             submit_review("test/repo", 5, apply=False)
             mock_sub.assert_not_called()
+
+
+def test_review_gate_allows_medium_risk_with_explicit_override(tmp_path):
+    from signposter.review import evaluate_review_gate
+
+    summary = tmp_path / "review.md"
+    summary.write_text(
+        """
+Verdict: APPROVE
+Confidence: 0.90
+Risk: medium
+Scope match: yes
+CI considered: yes
+Merge recommendation: yes
+Automerge eligible: no
+Findings:
+  - Medium risk but scoped and reviewed.
+Reasoning summary:
+  Scoped medium-risk change.
+""",
+        encoding="utf-8",
+    )
+
+    blocked = evaluate_review_gate("test/repo", 16, summary_path=str(summary))
+    allowed = evaluate_review_gate(
+        "test/repo",
+        16,
+        summary_path=str(summary),
+        allow_medium_risk=True,
+    )
+
+    assert blocked.gate_pass is False
+    assert blocked.reason == "reviewer risk is medium"
+    assert allowed.gate_pass is True
+    assert allowed.merge_eligible is True
+    assert "medium risk explicitly allowed" in allowed.reason
+
