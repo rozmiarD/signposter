@@ -186,6 +186,20 @@ def evaluate_ci_gate(
             proposed_command="signposter complete --repo {repo} --issue {issue} --apply",
         )
 
+    # H032B: Validated no-op completion evidence.
+    if _has_validated_noop_completion_evidence(evidence_text):
+        return GateDecision(
+            decision="pass",
+            reason=(
+                "Worker completed successfully (exit 0) with validated no-op completion "
+                "evidence: the requested behavior already exists, validation passed, "
+                "manual smoke passed, and no files were changed."
+            ),
+            confidence="medium",
+            proposed_transition="state:active → state:done",
+            proposed_command="signposter complete --repo {repo} --issue {issue} --apply",
+        )
+
     return GateDecision(
         decision="needs-work",
         reason=(
@@ -246,6 +260,82 @@ def _has_scoped_worker_code_completion_evidence(text: str) -> bool:
         "lifecycle watch",
     ]
     return all(signal in t for signal in scoped_code_signals)
+
+
+def _has_validated_noop_completion_evidence(text: str) -> bool:
+    """Detect conservative validated no-op worker completion evidence.
+
+    This is for scoped tasks where the worker finds the requested behavior is
+    already present in the current worktree/main state. It must be backed by
+    validation and manual smoke evidence, and it must not hide dirty worktrees,
+    failures, or unrelated changes.
+    """
+    t = (text or "").lower()
+
+    disqualifiers = [
+        "task incomplete",
+        "not complete",
+        "incomplete",
+        "dirty guard: failed",
+        "dirty guard failed",
+        "dirty: true",
+        "working tree dirty",
+        "scope not followed",
+        "scope broadening",
+        "unexpected change",
+        "traceback",
+        "critical blocker",
+        "cannot proceed",
+        "execution failed",
+        "ruff check fails",
+        "pytest fails",
+        "validation failed",
+    ]
+    if any(disqualifier in t for disqualifier in disqualifiers):
+        return False
+
+    required = [
+        "exit code:** 0",
+        "dirty guard:** clean",
+        "task execution complete:** yes",
+        "acceptance:** pass",
+        "targeted validation",
+        "full validation",
+        "manual cli smoke passed",
+    ]
+    if not all(signal in t for signal in required):
+        return False
+
+    noop_signals = [
+        "no-op completion",
+        "no files were changed",
+        "no files changed",
+        "files changed\n\nno files",
+        "already exists",
+        "already present",
+        "no additional code changes were needed",
+    ]
+    if sum(1 for signal in noop_signals if signal in t) < 2:
+        return False
+
+    behavior_signals = [
+        "requested behavior already exists",
+        "existing implementation",
+        "existing ready output",
+        "existing blocked output",
+        "deterministic",
+        "terminal-friendly",
+    ]
+    if sum(1 for signal in behavior_signals if signal in t) < 2:
+        return False
+
+    safety_signals = [
+        "no github mutation",
+        "no openclaw execution",
+        "no manifest mutation",
+        "no unrelated files",
+    ]
+    return sum(1 for signal in safety_signals if signal in t) >= 3
 
 
 def _has_scoped_worker_completion_evidence(text: str) -> bool:
