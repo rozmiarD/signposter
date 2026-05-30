@@ -362,3 +362,194 @@ The behavior already exists.
 
     assert decision.decision == "needs-work"
 
+
+
+def test_ci_gate_docs_only_allows_no_code_changes_phrase():
+    """Docs-only evidence must not be rejected by the phrase 'no code changes'."""
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+# Signposter Execution Summary
+
+**Repository:** ExatronOmega/signposter
+**Issue:** #14 — WATCH-005 — Document lifecycle watch operator usage
+**Agent:** worker
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+## Scoped completion evidence
+
+Worker completed the requested docs-only task.
+Scope followed: 100%.
+Dirty guard: clean.
+No code changes.
+
+## Files changed
+
+- docs/operator-lifecycle-runbook.md
+
+## Validation evidence
+
+- ruff check .
+- pytest tests/ -q
+
+## Safety
+
+No GitHub mutation was performed by the implemented command.
+No OpenClaw execution was performed by the implemented command.
+No manifest mutation was performed.
+No unrelated files were changed.
+"""
+
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "pass"
+    assert "strong scoped completion evidence" in decision.reason
+
+
+def test_ci_gate_docs_only_allows_no_scope_broadening_phrase():
+    """Docs-only evidence must not be rejected by the phrase 'no scope broadening'."""
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+# Signposter Execution Summary
+
+**Repository:** ExatronOmega/signposter
+**Issue:** #14 — WATCH-005 — Document lifecycle watch operator usage
+**Agent:** worker
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+## Scoped completion evidence
+
+Worker completed the requested docs-only task.
+Scope followed: 100%.
+Dirty guard: clean.
+No scope broadening.
+
+## Files changed
+
+- docs/operator-lifecycle-runbook.md
+
+## Validation evidence
+
+- ruff check .
+- pytest tests/ -q
+
+## Safety
+
+No GitHub mutation was performed by the implemented command.
+No OpenClaw execution was performed by the implemented command.
+No manifest mutation was performed.
+No unrelated files were changed.
+"""
+
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "pass"
+    assert "strong scoped completion evidence" in decision.reason
+
+
+def test_ci_gate_docs_only_blocks_real_modified_src_evidence():
+    """Docs-only helper must still block evidence that admits src modifications."""
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+Worker completed the requested docs-only task.
+Scope followed: 100%.
+Dirty guard: clean.
+Docs-only evidence.
+
+## Files changed
+
+- docs/operator-lifecycle-runbook.md
+- modified src/signposter/gate.py
+
+Validation:
+- ruff check .
+- pytest tests/ -q
+"""
+
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "needs-work"
+
+
+def test_ci_gate_passes_scoped_test_only_completion():
+    """Valid test-only worker completion should pass without fake src changes."""
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+# Signposter Execution Summary
+
+**Repository:** ExatronOmega/signposter
+**Issue:** #19 — H033A — Harden CI gate evidence matching
+**Agent:** worker
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+## Scoped completion evidence
+
+PASS — completed as a narrow test-only task.
+
+## Files changed
+
+- tests/test_gate.py
+
+## Validation evidence
+
+- ruff check .
+- pytest tests/ -q
+
+## Safety
+
+No GitHub mutation was performed by the implemented command.
+No OpenClaw execution was performed by the implemented command.
+No manifest mutation was performed.
+No unrelated files were changed.
+"""
+
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "pass"
+    assert "scoped test-only evidence" in decision.reason
+
+
+def test_ci_gate_blocks_test_only_completion_without_validation():
+    """Test-only claims without validation must remain blocked."""
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+Test-only task completed.
+
+## Files changed
+
+- tests/test_gate.py
+
+## Safety
+
+No GitHub mutation was performed by the implemented command.
+No OpenClaw execution was performed by the implemented command.
+No manifest mutation was performed.
+No unrelated files were changed.
+"""
+
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "needs-work"
