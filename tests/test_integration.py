@@ -507,3 +507,125 @@ def test_integration_apply_dry_run_ready_still_lists_mutations():
     assert "close issue: #4 as completed" in output
     assert "post integration comment: yes" in output
     assert "none —" not in output  # should not use the 'none' wording
+
+
+def test_noop_integration_plan_ready(monkeypatch, tmp_path):
+    from signposter.integration import plan_noop_integration_for_issue
+
+    monkeypatch.chdir(tmp_path)
+    artifact_dir = tmp_path / "artifacts" / "runs"
+    artifact_dir.mkdir(parents=True)
+    (artifact_dir / "issue-12-gate.summary.md").write_text(
+        """
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+WATCH-003 was evaluated as a no-op completion: the requested behavior already exists.
+The existing implementation provides deterministic terminal-friendly output.
+Existing ready output is deterministic and terminal-friendly.
+Existing blocked output is deterministic and terminal-friendly.
+
+No files were changed in the isolated worktree.
+
+Targeted validation in isolated worktree passed.
+Full validation in isolated worktree passed.
+Manual CLI smoke passed.
+
+No GitHub mutation was performed.
+No OpenClaw execution was performed.
+No manifest mutation was performed.
+No unrelated files were changed.
+""",
+        encoding="utf-8",
+    )
+
+    class Proc:
+        def __init__(self, returncode=0, stdout="", stderr=""):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = stderr
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:3] == ["gh", "issue", "view"]:
+            return Proc(
+                stdout=(
+                    '{"number":12,"title":"WATCH-003","state":"OPEN",'
+                    '"labels":[{"name":"state:done"},{"name":"phase:build"}]}'
+                )
+            )
+        if cmd[:3] == ["git", "branch", "--list"]:
+            return Proc(stdout="")
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return Proc(stdout="[]")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    plan = plan_noop_integration_for_issue("test/repo", 12)
+
+    assert plan.status == "ready"
+    assert plan.current_workflow_state == "state:done"
+    assert plan.gate_decision == "pass"
+    assert plan.worktree_exists is False
+    assert plan.local_branch_exists is False
+    assert plan.associated_pr_detected is False
+
+
+def test_noop_integration_plan_blocks_when_worktree_exists(monkeypatch, tmp_path):
+    from signposter.integration import plan_noop_integration_for_issue
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path.parent / "signposter-work" / "12").mkdir(parents=True)
+    artifact_dir = tmp_path / "artifacts" / "runs"
+    artifact_dir.mkdir(parents=True)
+    (artifact_dir / "issue-12-gate.summary.md").write_text(
+        """
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+no-op completion
+requested behavior already exists
+existing implementation
+existing ready output
+existing blocked output
+No files were changed.
+Targeted validation in isolated worktree passed.
+Full validation in isolated worktree passed.
+Manual CLI smoke passed.
+No GitHub mutation was performed.
+No OpenClaw execution was performed.
+No manifest mutation was performed.
+No unrelated files were changed.
+""",
+        encoding="utf-8",
+    )
+
+    class Proc:
+        def __init__(self, returncode=0, stdout="", stderr=""):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = stderr
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:3] == ["gh", "issue", "view"]:
+            return Proc(
+                stdout=(
+                    '{"number":12,"title":"WATCH-003","state":"OPEN",'
+                    '"labels":[{"name":"state:done"}]}'
+                )
+            )
+        if cmd[:3] == ["git", "branch", "--list"]:
+            return Proc(stdout="")
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return Proc(stdout="[]")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    plan = plan_noop_integration_for_issue("test/repo", 12)
+
+    assert "worktree still exists" in plan.status
+

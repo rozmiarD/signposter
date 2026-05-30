@@ -594,3 +594,20 @@ def test_watch002_format_watch_blocked_matches_contract():
     assert "No OpenClaw execution was performed." in out
     assert "Interval requested" not in out
 
+def test_lifecycle_complete_for_validated_noop_without_pr():
+    """CLOSED + state:merged + no PR is complete only with validated no-op evidence."""
+    with (
+        patch("signposter.lifecycle.fetch_issue_by_number") as m_issue,
+        patch("signposter.lifecycle.fetch_issue_context") as m_ctx,
+        patch("signposter.lifecycle._detect_associated_pr_from_issue", return_value=None),
+        patch("signposter.lifecycle._has_validated_noop_lifecycle_evidence", return_value=True),
+    ):
+        m_issue.return_value = type("I", (), {"labels": ["state:merged"]})()
+        m_ctx.return_value = {"state": "CLOSED"}
+
+        status = plan_lifecycle_status("ExatronOmega/signposter", issue=12)
+
+        assert status.status == "complete"
+        assert status.integrated is True
+        assert status.cleanup_complete is True
+
