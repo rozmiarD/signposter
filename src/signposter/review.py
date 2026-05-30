@@ -169,6 +169,8 @@ def _classify_risk_and_size(
         "credential",
         "ci.yml",
         "gate",
+        "review",
+        "merge",
     ]
 
     has_high_risk = any(
@@ -200,7 +202,12 @@ def _extract_issue_from_branch(branch: str) -> int | None:
     return None
 
 
-def plan_review_for_pr(repo: str, pr_number: int) -> ReviewPlan:
+def plan_review_for_pr(
+    repo: str,
+    pr_number: int,
+    *,
+    allow_high_risk: bool = False,
+) -> ReviewPlan:
     """Produce a dry-run ReviewPlan for a pull request."""
     try:
         pr_data = _run_gh_pr_view(
@@ -291,7 +298,7 @@ def plan_review_for_pr(repo: str, pr_number: int) -> ReviewPlan:
     # UNKNOWN is tolerated (common with gh until background computation finishes)
     elif not branch_matches:
         status = "blocked — branch does not match Signposter worker convention (work/issue-N-...)"
-    elif risk == "high":
+    elif risk == "high" and not allow_high_risk:
         status = "blocked — high risk change detected"
     elif associated_issue is None:
         status = "blocked — could not map PR to a Signposter issue number"
@@ -302,6 +309,11 @@ def plan_review_for_pr(repo: str, pr_number: int) -> ReviewPlan:
         "No merge was performed.",
         "No issue was closed.",
     ]
+
+    if allow_high_risk:
+        notes.append("High-risk override explicitly allowed by operator.")
+        if risk == "high":
+            notes.append("High-risk review planning is proceeding via explicit override.")
 
     return ReviewPlan(
         pr_number=pr_number,
@@ -399,6 +411,8 @@ def get_pr_diff(repo: str, pr_number: int, max_lines: int = 150) -> str:
 
 def build_review_prompt(plan: ReviewPlan, pr_body: str, diff: str) -> str:
     """Render the complete reviewer prompt with structured output contract."""
+    plan_notes = "\n".join(f"- {n}" for n in plan.notes) if plan.notes else "- none"
+
     issue_line = (
         f"Issue #{plan.associated_issue}"
         if plan.associated_issue
@@ -419,6 +433,8 @@ def build_review_prompt(plan: ReviewPlan, pr_body: str, diff: str) -> str:
 ## Signposter Workflow Context
 - Associated issue: {issue_line}
 - Branch follows worker convention (work/issue-N-...): {plan.branch_matches_convention}
+- Plan notes:
+{plan_notes}
 
 ## CI / Checks Status
 - Overall status: {plan.checks_status}
@@ -476,13 +492,18 @@ Begin your structured review now.
     return content
 
 
-def write_review_prompt_artifact(repo: str, pr_number: int) -> str:
+def write_review_prompt_artifact(
+    repo: str,
+    pr_number: int,
+    *,
+    allow_high_risk: bool = False,
+) -> str:
     """Generate the review plan, then write the reviewer prompt artifact if ready.
 
     Returns the absolute path of the written file.
     Raises RuntimeError if the review plan status is not "ready".
     """
-    plan = plan_review_for_pr(repo, pr_number)
+    plan = plan_review_for_pr(repo, pr_number, allow_high_risk=allow_high_risk)
 
     if plan.status != "ready":
         raise RuntimeError(f"Refusing to write prompt artifact: {plan.status}")
@@ -571,6 +592,7 @@ def execute_pr_review(
     *,
     profile: str = "reviewer",
     runs_dir: Path | str = "artifacts/runs",
+    allow_high_risk: bool = False,
 ) -> dict:
     """Execute the reviewer agent locally against an existing PR review prompt artifact.
 
@@ -580,7 +602,7 @@ def execute_pr_review(
     Returns a dict with execution result.
     """
     # Guard: plan must be ready
-    plan = plan_review_for_pr(repo, pr_number)
+    plan = plan_review_for_pr(repo, pr_number, allow_high_risk=allow_high_risk)
     if plan.status != "ready":
         return {
             "exit_code": 1,
@@ -803,6 +825,7 @@ def evaluate_review_gate(
     *,
     summary_path: str | None = None,
     allow_medium_risk: bool = False,
+    allow_high_risk: bool = False,
 ) -> ReviewGateResult:
     """Read reviewer artifacts and produce a conservative gate decision."""
     if summary_path is None:
@@ -814,6 +837,9 @@ def evaluate_review_gate(
         "No merge was performed.",
         "No issue was closed.",
     ]
+
+    if allow_high_risk:
+        notes.append("High-risk override explicitly allowed by operator.")
 
     if not os.path.isfile(summary_path):
         # Try raw as fallback for parsing
@@ -857,8 +883,10 @@ def evaluate_review_gate(
     # Conservative gate logic
     gate_pass = False
     reason = ""
-    risk_allowed = opinion.risk in ("low", "LOW") or (
-        allow_medium_risk and opinion.risk in ("medium", "MEDIUM")
+    risk_allowed = (
+        opinion.risk in ("low", "LOW")
+        or (allow_medium_risk and opinion.risk in ("medium", "MEDIUM"))
+        or (allow_high_risk and opinion.risk in ("high", "HIGH"))
     )
 
     if opinion.verdict != "APPROVE":
@@ -875,7 +903,12 @@ def evaluate_review_gate(
         reason = "merge recommendation is no"
     else:
         gate_pass = True
-        if opinion.risk in ("medium", "MEDIUM"):
+        if opinion.risk in ("high", "HIGH"):
+            reason = (
+                "reviewer approved with high confidence, high risk explicitly allowed, "
+                "green CI, and matching scope"
+            )
+        elif opinion.risk in ("medium", "MEDIUM"):
             reason = (
                 "reviewer approved with high confidence, medium risk explicitly allowed, "
                 "green CI, and matching scope"
@@ -988,6 +1021,7 @@ def plan_review_submit(
     pr_number: int,
     *,
     allow_medium_risk: bool = False,
+    allow_high_risk: bool = False,
 ) -> ReviewSubmitPlan:
     """Produce a dry-run plan for submitting a GitHub PR review.
 
@@ -997,6 +1031,7 @@ def plan_review_submit(
         repo,
         pr_number,
         allow_medium_risk=allow_medium_risk,
+        allow_high_risk=allow_high_risk,
     )
 
     notes = [
@@ -1004,6 +1039,9 @@ def plan_review_submit(
         "No merge was performed.",
         "No issue was closed.",
     ]
+
+    if allow_high_risk:
+        notes.append("High-risk review submission override explicitly allowed by operator.")
 
     reviewer_token = _get_reviewer_token()
     token_configured = bool(reviewer_token)
@@ -1114,6 +1152,7 @@ def submit_review(
     *,
     apply: bool = False,
     allow_medium_risk: bool = False,
+    allow_high_risk: bool = False,
 ) -> dict:
     """Execute (or dry-run) the GitHub PR review submission.
 
@@ -1124,6 +1163,7 @@ def submit_review(
         repo,
         pr_number,
         allow_medium_risk=allow_medium_risk,
+        allow_high_risk=allow_high_risk,
     )
 
     if not apply:

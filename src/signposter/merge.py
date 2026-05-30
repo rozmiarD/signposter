@@ -137,7 +137,14 @@ def _classify_size_and_risk(
         size = "large"
 
     high_risk_patterns = [
-        ".github/workflows", "pyproject.toml", "security", "auth", "ci.yml", "gate"
+        ".github/workflows",
+        "pyproject.toml",
+        "security",
+        "auth",
+        "ci.yml",
+        "gate",
+        "review",
+        "merge",
     ]
     has_high = any(
         any(pat.lower() in (p or "").lower() for pat in high_risk_patterns)
@@ -161,6 +168,7 @@ def plan_merge_for_pr(
     *,
     allow_medium_scope: bool = False,
     allow_medium_risk: bool = False,
+    allow_high_risk: bool = False,
 ) -> MergePlan:
     """Produce a dry-run MergePlan for a pull request."""
     notes = [
@@ -169,6 +177,9 @@ def plan_merge_for_pr(
         "No branch was deleted.",
         "Local worktree cleanup is not part of this command.",
     ]
+
+    if allow_high_risk:
+        notes.append("High-risk merge override explicitly allowed by operator.")
 
     try:
         pr_data = _run_gh_pr_view(
@@ -260,6 +271,7 @@ def plan_merge_for_pr(
             repo,
             pr_number,
             allow_medium_risk=allow_medium_risk,
+        allow_high_risk=allow_high_risk,
         )
     except Exception:
         gate = None  # type: ignore
@@ -276,8 +288,10 @@ def plan_merge_for_pr(
     scope_allowed = size == "small" or (
         allow_medium_scope and size == "medium"
     )
-    reviewer_risk_allowed = reviewer_risk in ("low", "LOW") or (
-        allow_medium_risk and reviewer_risk in ("medium", "MEDIUM")
+    reviewer_risk_allowed = (
+        reviewer_risk in ("low", "LOW")
+        or (allow_medium_risk and reviewer_risk in ("medium", "MEDIUM"))
+        or (allow_high_risk and reviewer_risk in ("high", "HIGH"))
     )
 
     # Merge eligibility decision (very conservative)
@@ -508,6 +522,7 @@ def apply_merge(
     apply: bool = False,
     allow_medium_scope: bool = False,
     allow_medium_risk: bool = False,
+    allow_high_risk: bool = False,
 ) -> dict:
     """Execute (or dry-run) a guarded merge of a PR.
 
@@ -520,6 +535,7 @@ def apply_merge(
         pr_number,
         allow_medium_scope=allow_medium_scope,
         allow_medium_risk=allow_medium_risk,
+        allow_high_risk=allow_high_risk,
     )
 
     if not apply:

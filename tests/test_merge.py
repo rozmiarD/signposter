@@ -598,6 +598,7 @@ def test_apply_merge_passes_allow_medium_scope_override():
         15,
         allow_medium_scope=True,
         allow_medium_risk=False,
+            allow_high_risk=False,
     )
     assert result["mode"] == "dry_run"
     assert result["plan"].status == "ready"
@@ -663,3 +664,111 @@ def test_merge_plan_allows_medium_reviewer_risk_with_explicit_override():
     assert allowed.reviewer_risk == "medium"
     assert allowed.size == "medium"
 
+
+
+def test_merge_plan_allows_high_reviewer_risk_with_explicit_override():
+    from signposter.merge import plan_merge_for_pr
+
+    with patch("signposter.merge._run_gh_pr_view") as mock_view, \
+         patch("signposter.merge._fetch_pr_reviews_and_author") as mock_reviews, \
+         patch("signposter.merge.evaluate_review_gate") as mock_gate, \
+         patch("signposter.merge._fetch_pr_checks_for_merge") as mock_checks:
+
+        mock_view.return_value = {
+            "title": "fix: add high-risk override",
+            "state": "OPEN",
+            "baseRefName": "main",
+            "headRefName": "work/issue-21-h033b-add-explicit-high-risk-review-override-path",
+            "mergeable": "MERGEABLE",
+            "reviewDecision": "APPROVED",
+            "body": "Related issue: #21",
+            "author": {"login": "ExatronOmega"},
+            "files": [{"path": "src/signposter/review.py"}],
+            "additions": 30,
+            "deletions": 2,
+        }
+        mock_reviews.return_value = {
+            "pr_author": "ExatronOmega",
+            "review_decision": "APPROVED",
+            "approving_reviewers": ["AlphaExatron"],
+        }
+        mock_gate.return_value = type("G", (), {
+            "gate_pass": True,
+            "opinion": type("O", (), {
+                "verdict": "APPROVE",
+                "confidence": 0.91,
+                "risk": "high",
+            })(),
+        })()
+        mock_checks.return_value = {
+            "status": "pass",
+            "successful": 1,
+            "failing": 0,
+            "pending": 0,
+        }
+
+        blocked = plan_merge_for_pr("test/repo", 21)
+        allowed = plan_merge_for_pr("test/repo", 21, allow_high_risk=True)
+
+    assert blocked.status == "blocked — reviewer risk is high"
+    assert allowed.status == "ready"
+    assert allowed.reviewer_risk == "high"
+    assert allowed.has_non_author_approval is True
+    assert allowed.has_auto_close_keywords is False
+
+
+def test_apply_merge_passes_allow_high_risk_override():
+    from signposter.merge import MergePlan, apply_merge
+
+    with patch("signposter.merge.plan_merge_for_pr") as mock_plan:
+        fake_plan = MergePlan(
+            pr_number=21,
+            title="test",
+            state="OPEN",
+            base_branch="main",
+            head_branch="work/issue-21",
+            mergeable="MERGEABLE",
+            review_decision="APPROVED",
+            checks_status="pass",
+            successful_checks=1,
+            failing_checks=0,
+            pending_checks=0,
+            github_approved=True,
+            approving_reviewers=["AlphaExatron"],
+            has_non_author_approval=True,
+            pr_author="ExatronOmega",
+            reviewer_gate_pass=True,
+            reviewer_verdict="APPROVE",
+            reviewer_confidence=0.91,
+            reviewer_risk="high",
+            associated_issue=21,
+            has_auto_close_keywords=False,
+            files_changed=1,
+            additions=30,
+            deletions=2,
+            risk_level="high",
+            size="small",
+            merge_method="squash",
+            delete_branch_after_merge=True,
+            command_preview="gh pr merge 21 -R test/repo --squash --delete-branch",
+            status="ready",
+            notes=[],
+        )
+        mock_plan.return_value = fake_plan
+
+        result = apply_merge(
+            "test/repo",
+            21,
+            apply=False,
+            allow_high_risk=True,
+        )
+
+    mock_plan.assert_called_once_with(
+        "test/repo",
+        21,
+        allow_medium_scope=False,
+        allow_medium_risk=False,
+        allow_high_risk=True,
+    )
+    assert result["mode"] == "dry_run"
+    assert result["plan"].status == "ready"
