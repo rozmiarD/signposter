@@ -1588,8 +1588,11 @@ def _register_cleanup_subcommands(subparsers: argparse._SubParsersAction) -> Non
 # =============================================================================
 
 from signposter.lifecycle import (  # noqa: E402
+    LifecycleWatchRequest,
+    collect_lifecycle_watch_data,
     format_lifecycle_next,
     format_lifecycle_status,
+    format_lifecycle_watch,
     plan_lifecycle_next,
     plan_lifecycle_status,
 )
@@ -1644,37 +1647,15 @@ def run_lifecycle_next(args: argparse.Namespace) -> int:
 
 def run_lifecycle_watch(args: argparse.Namespace) -> int:
     """Handler for `signposter lifecycle watch --repo ... --issue N [--interval 5]`."""
-    repo = getattr(args, "repo", None)
-    issue = getattr(args, "issue", None)
-    interval = getattr(args, "interval", 5)
-
-    if not repo or issue is None:
-        # Blocked path per contract
-        print("Signposter Lifecycle Watch")
-        print()
-        print("Status:")
-        print("  blocked")
-        print()
-        print("Reason:")
-        print("  --repo and --issue are required")
-        print()
-        print("Notes:")
-        print("  No GitHub mutation was performed.")
-        print("  No OpenClaw execution was performed.")
-        return 1
-
-    # Happy path / ready contract output (WATCH-001 narrow surface)
-    # Note: Actual polling/refresh loop is explicitly out of scope (WATCH-002+)
-    print(f"Signposter Lifecycle Watch — Issue #{issue}")
-    print()
-    print("Status:")
-    print("  ready")
-    print()
-    print("Notes:")
-    print("  No GitHub mutation was performed.")
-    print("  No OpenClaw execution was performed.")
-    print(f"  Interval requested: {interval}s (polling not implemented in this contract surface)")
-    return 0
+    # WATCH-002: use the dedicated read-only data collector
+    req = LifecycleWatchRequest(
+        repo=getattr(args, "repo", None),
+        issue=getattr(args, "issue", None),
+        interval=getattr(args, "interval", 5),
+    )
+    snapshot = collect_lifecycle_watch_data(req)
+    print(format_lifecycle_watch(snapshot))
+    return 0 if snapshot.status == "ready" else 1
 
 def _register_lifecycle_subcommands(subparsers: argparse._SubParsersAction) -> None:
     """Register the lifecycle command group."""
