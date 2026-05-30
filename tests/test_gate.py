@@ -688,3 +688,55 @@ def test_gate_human_output_identifies_supported_human_gate():
     assert "gate:human present:   True" in output
     assert "Decision:" in output
     assert "PASS" in output
+
+
+def test_evaluate_ci_gate_pass_on_general_scoped_code_task():
+    """Scoped src+tests code task should not require lifecycle-watch wording."""
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+# Signposter Execution Summary
+
+**Repository:** ExatronOmega/signposter
+**Issue:** #28 — H033E — Generalize scoped code CI gate evidence
+**Agent:** human/operator
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+## Files changed
+
+- src/signposter/gate.py
+- tests/test_gate.py
+
+## Implemented behavior
+
+Added a conservative general scoped-code CI gate evidence path.
+
+## Validation evidence
+
+Targeted validation passed:
+
+- ruff check src/signposter/gate.py tests/test_gate.py
+- pytest tests/test_gate.py -q
+
+Full validation passed:
+
+- ruff check .
+- pytest tests/ -q
+
+## Safety
+
+No GitHub mutation was performed by the implemented code.
+No OpenClaw execution was performed by the implemented code.
+No issue was closed by the implemented code.
+No merge was performed by the implemented code.
+No unrelated files were changed.
+"""
+
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "pass"
+    assert decision.proposed_transition == "state:active → state:done"
+    assert "scoped code change evidence" in decision.reason
