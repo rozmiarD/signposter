@@ -636,6 +636,11 @@ def main() -> None:
     )
     review_plan_parser.add_argument("--repo", required=True)
     review_plan_parser.add_argument("--pr", type=int, required=True)
+    review_plan_parser.add_argument(
+        "--allow-high-risk",
+        action="store_true",
+        help="Explicitly allow high-risk PR review planning",
+    )
     review_plan_parser.set_defaults(func=run_review_plan)
 
     # write-prompt subcommand (HARDENING-015)
@@ -645,6 +650,11 @@ def main() -> None:
     )
     write_prompt_parser.add_argument("--repo", required=True)
     write_prompt_parser.add_argument("--pr", type=int, required=True)
+    write_prompt_parser.add_argument(
+        "--allow-high-risk",
+        action="store_true",
+        help="Explicitly allow high-risk reviewer prompt generation",
+    )
     write_prompt_parser.set_defaults(func=run_review_write_prompt)
 
     # execute subcommand (HARDENING-016)
@@ -657,6 +667,11 @@ def main() -> None:
     )
     execute_parser.add_argument("--repo", required=True)
     execute_parser.add_argument("--pr", type=int, required=True)
+    execute_parser.add_argument(
+        "--allow-high-risk",
+        action="store_true",
+        help="Explicitly allow high-risk reviewer execution planning",
+    )
     execute_parser.set_defaults(func=run_review_execute)
 
     # gate subcommand (HARDENING-017)
@@ -670,6 +685,11 @@ def main() -> None:
         "--allow-medium-risk",
         action="store_true",
         help="Explicitly allow medium reviewer risk for this gate evaluation",
+    )
+    gate_parser.add_argument(
+        "--allow-high-risk",
+        action="store_true",
+        help="Explicitly allow high reviewer risk for this gate evaluation",
     )
     gate_parser.set_defaults(func=run_review_gate)
 
@@ -689,6 +709,11 @@ def main() -> None:
         "--allow-medium-risk",
         action="store_true",
         help="Explicitly allow medium reviewer risk for review submission",
+    )
+    submit_parser.add_argument(
+        "--allow-high-risk",
+        action="store_true",
+        help="Explicitly allow high reviewer risk for review submission",
     )
     submit_parser.set_defaults(func=run_review_submit)
 
@@ -729,6 +754,11 @@ def main() -> None:
         "--allow-medium-risk",
         action="store_true",
         help="Explicitly allow guarded merge with medium reviewer risk",
+    )
+    merge_apply_parser.add_argument(
+        "--allow-high-risk",
+        action="store_true",
+        help="Explicitly allow guarded merge with high reviewer risk",
     )
     merge_apply_parser.set_defaults(func=run_merge_apply)
 
@@ -1187,7 +1217,11 @@ def run_review_plan(args: argparse.Namespace) -> int:
         return 1
 
     try:
-        plan = plan_review_for_pr(repo, pr)
+        plan = plan_review_for_pr(
+            repo,
+            pr,
+                allow_high_risk=getattr(args, "allow_high_risk", False),
+        )
         print(format_review_plan(plan))
         return 0 if plan.status == "ready" else 1
     except Exception as e:
@@ -1205,7 +1239,11 @@ def run_review_write_prompt(args: argparse.Namespace) -> int:
         return 1
 
     try:
-        path = write_review_prompt_artifact(repo, pr)
+        path = write_review_prompt_artifact(
+            repo,
+            pr,
+                allow_high_risk=getattr(args, "allow_high_risk", False),
+        )
         print(f"Signposter Review Prompt — PR #{pr}")
         print("")
         print("Prompt:")
@@ -1239,7 +1277,11 @@ def run_review_execute(args: argparse.Namespace) -> int:
         return 1
 
     try:
-        result = execute_pr_review(repo, pr)
+        result = execute_pr_review(
+            repo,
+            pr,
+                allow_high_risk=getattr(args, "allow_high_risk", False),
+        )
 
         print(f"Signposter Review Execute — PR #{pr}")
         print("")
@@ -1274,6 +1316,8 @@ def run_review_gate(args: argparse.Namespace) -> int:
     repo = getattr(args, "repo", None)
     pr = getattr(args, "pr", None)
     allow_medium_risk = getattr(args, "allow_medium_risk", False)
+    allow_high_risk = getattr(args, "allow_high_risk", False)
+    allow_high_risk = getattr(args, "allow_high_risk", False)
 
     if not repo or pr is None:
         print("Error: --repo and --pr are required", file=sys.stderr)
@@ -1284,6 +1328,7 @@ def run_review_gate(args: argparse.Namespace) -> int:
             repo,
             pr,
             allow_medium_risk=allow_medium_risk,
+                allow_high_risk=allow_high_risk,
         )
         print(format_review_gate(result))
         return 0 if result.gate_pass else 1
@@ -1298,6 +1343,7 @@ def run_review_submit(args: argparse.Namespace) -> int:
     pr = getattr(args, "pr", None)
     do_apply = getattr(args, "apply", False)
     allow_medium_risk = getattr(args, "allow_medium_risk", False)
+    allow_high_risk = getattr(args, "allow_high_risk", False)
 
     if not repo or pr is None:
         print("Error: --repo and --pr are required", file=sys.stderr)
@@ -1310,6 +1356,7 @@ def run_review_submit(args: argparse.Namespace) -> int:
                 repo,
                 pr,
                 allow_medium_risk=allow_medium_risk,
+                allow_high_risk=allow_high_risk,
             )
             print(format_review_submit_plan(plan))
             return 0 if plan.status in ("ready", "ready-for-request-changes") else 1
@@ -1320,6 +1367,7 @@ def run_review_submit(args: argparse.Namespace) -> int:
                 pr,
                 apply=True,
                 allow_medium_risk=allow_medium_risk,
+                allow_high_risk=allow_high_risk,
             )
             plan = result.get("plan")
 
@@ -1381,6 +1429,7 @@ def run_merge_apply(args: argparse.Namespace) -> int:
     do_apply = getattr(args, "apply", False)
     allow_medium_scope = getattr(args, "allow_medium_scope", False)
     allow_medium_risk = getattr(args, "allow_medium_risk", False)
+    allow_high_risk = getattr(args, "allow_high_risk", False)
 
     if not repo or pr is None:
         print("Error: --repo and --pr are required", file=sys.stderr)
@@ -1393,6 +1442,7 @@ def run_merge_apply(args: argparse.Namespace) -> int:
             apply=do_apply,
             allow_medium_scope=allow_medium_scope,
             allow_medium_risk=allow_medium_risk,
+                allow_high_risk=allow_high_risk,
         )
         plan = result.get("plan")
 

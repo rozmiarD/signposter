@@ -946,3 +946,168 @@ Reasoning summary:
     assert allowed.merge_eligible is True
     assert "medium risk explicitly allowed" in allowed.reason
 
+
+
+def test_review_gate_allows_high_risk_with_explicit_override(tmp_path):
+    from signposter.review import evaluate_review_gate
+
+    summary = tmp_path / "review.md"
+    summary.write_text(
+        """
+Verdict: APPROVE
+Confidence: 0.92
+Risk: high
+Scope match: yes
+CI considered: yes
+Merge recommendation: yes
+Automerge eligible: no
+Findings:
+  - High-risk policy surface but scoped and reviewed.
+Reasoning summary:
+  Scoped high-risk change.
+""",
+        encoding="utf-8",
+    )
+
+    blocked = evaluate_review_gate("test/repo", 21, summary_path=str(summary))
+    allowed = evaluate_review_gate(
+        "test/repo",
+        21,
+        summary_path=str(summary),
+        allow_high_risk=True,
+    )
+
+    assert blocked.gate_pass is False
+    assert blocked.reason == "reviewer risk is high"
+    assert allowed.gate_pass is True
+    assert allowed.merge_eligible is True
+    assert "high risk explicitly allowed" in allowed.reason
+
+
+def test_review_plan_allows_high_risk_with_explicit_override():
+    from signposter.review import plan_review_for_pr
+
+    def fake_view(repo, pr, fields):
+        if fields == ["files"]:
+            return {"files": [{"path": "src/signposter/review.py"}]}
+        return {
+            "title": "fix: add high-risk override",
+            "state": "OPEN",
+            "baseRefName": "main",
+            "headRefName": "work/issue-21-h033b-add-explicit-high-risk-review-override-path",
+            "mergeable": "MERGEABLE",
+            "reviewDecision": None,
+            "body": "Related issue: #21",
+        }
+
+    with patch("signposter.review._run_gh_pr_view", side_effect=fake_view), \
+         patch("signposter.review._fetch_pr_checks") as mock_checks, \
+         patch("signposter.review._fetch_pr_files") as mock_files:
+        mock_checks.return_value = {
+            "status": "pass",
+            "successful": 1,
+            "failing": 0,
+            "pending": 0,
+        }
+        mock_files.return_value = {
+            "files_changed": 1,
+            "additions": 20,
+            "deletions": 2,
+        }
+
+        blocked = plan_review_for_pr("test/repo", 21)
+        allowed = plan_review_for_pr("test/repo", 21, allow_high_risk=True)
+
+    assert blocked.status == "blocked — high risk change detected"
+    assert allowed.status == "ready"
+    assert allowed.risk_level == "high"
+    assert any("High-risk override" in note for note in allowed.notes)
+
+
+def test_review_submit_allows_high_risk_with_explicit_override():
+    from signposter.review import ReviewerOpinion, ReviewGateResult, plan_review_submit
+
+    op = ReviewerOpinion(
+        verdict="APPROVE",
+        confidence=0.95,
+        risk="high",
+        scope_match="yes",
+        ci_considered="yes",
+        merge_recommendation="yes",
+        automerge_eligible="no",
+        findings=["High-risk but scoped."],
+        reasoning="Reviewed.",
+        raw_text="",
+    )
+
+    with patch("signposter.review.evaluate_review_gate") as mock_gate, \
+         patch("signposter.review._fetch_current_gh_user") as mock_user, \
+         patch("signposter.review._fetch_pr_author") as mock_author, \
+         patch("signposter.review._get_reviewer_token") as mock_token:
+        mock_gate.return_value = ReviewGateResult(
+            pr_number=21,
+            status="pass",
+            reason="high risk explicitly allowed",
+            opinion=op,
+            gate_pass=True,
+            merge_eligible=True,
+            automerge_eligible=False,
+            summary_path="artifacts/runs/pr-21-reviewer.summary.md",
+            notes=[],
+        )
+        mock_user.return_value = "AlphaExatron"
+        mock_author.return_value = "ExatronOmega"
+        mock_token.return_value = "fake-token"
+
+        plan = plan_review_submit("test/repo", 21, allow_high_risk=True)
+
+    mock_gate.assert_called_once_with(
+        "test/repo",
+        21,
+        allow_medium_risk=False,
+        allow_high_risk=True,
+    )
+    assert plan.status == "ready"
+    assert plan.action == "approve"
+    assert any("High-risk" in note for note in plan.notes)
+
+
+def test_submit_review_apply_passes_allow_high_risk_to_plan():
+    from signposter.review import ReviewSubmitPlan, submit_review
+
+    with patch("signposter.review.plan_review_submit") as mock_plan, \
+         patch("signposter.review._run_gh_with_token") as mock_gh:
+        fake_plan = ReviewSubmitPlan(
+            pr_number=22,
+            action="approve",
+            body="Signposter reviewer gate: APPROVE",
+            gate_pass=True,
+            gate_reason="high risk explicitly allowed",
+            status="ready",
+            gh_preview="gh pr review 22 -R test/repo --approve --body-file ...",
+            notes=[],
+        )
+        mock_plan.return_value = fake_plan
+
+        class FakeProc:
+            returncode = 0
+            stdout = "Review submitted."
+            stderr = ""
+
+        mock_gh.return_value = FakeProc()
+
+        result = submit_review(
+            "test/repo",
+            22,
+            apply=True,
+            allow_high_risk=True,
+        )
+
+    mock_plan.assert_called_once_with(
+        "test/repo",
+        22,
+        allow_medium_risk=False,
+        allow_high_risk=True,
+    )
+    assert result["mode"] == "apply"
+    assert result["success"] is True
