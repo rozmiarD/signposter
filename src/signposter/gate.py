@@ -186,6 +186,19 @@ def evaluate_ci_gate(
             proposed_command="signposter complete --repo {repo} --issue {issue} --apply",
         )
 
+    # H033A: Scoped test-only worker completion evidence.
+    if _has_scoped_worker_test_completion_evidence(evidence_text):
+        return GateDecision(
+            decision="pass",
+            reason=(
+                "Worker completed successfully (exit 0) with scoped test-only evidence, "
+                "validation evidence, safety evidence, and no unrelated changes."
+            ),
+            confidence="medium",
+            proposed_transition="state:active → state:done",
+            proposed_command="signposter complete --repo {repo} --issue {issue} --apply",
+        )
+
     # H032B: Validated no-op completion evidence.
     if _has_validated_noop_completion_evidence(evidence_text):
         return GateDecision(
@@ -261,6 +274,71 @@ def _has_scoped_worker_code_completion_evidence(text: str) -> bool:
     ]
     return all(signal in t for signal in scoped_code_signals)
 
+
+
+def _has_scoped_worker_test_completion_evidence(text: str) -> bool:
+    """Detect conservative scoped test-only worker completion evidence.
+
+    This is intentionally separate from code/CLI evidence. Test-only tasks should
+    not need to pretend they changed src/ files or provide manual CLI smoke when
+    the scoped work is only test coverage.
+    """
+    t = (text or "").lower()
+
+    disqualifiers = [
+        "task incomplete",
+        "not complete",
+        "incomplete",
+        "dirty guard: failed",
+        "dirty guard failed",
+        "dirty: true",
+        "working tree dirty",
+        "scope not followed",
+        "scope was broadened",
+        "scope broadened",
+        "actual scope broadening",
+        "unexpected scope broadening",
+        "unexpected change",
+        "modified src/",
+        "src/signposter/",
+        "traceback",
+        "critical blocker",
+        "cannot proceed",
+        "execution failed",
+        "ruff check fails",
+        "pytest fails",
+        "validation failed",
+    ]
+    if any(disqualifier in t for disqualifier in disqualifiers):
+        return False
+
+    required = [
+        "exit code:** 0",
+        "dirty guard:** clean",
+        "task execution complete:** yes",
+        "acceptance:** pass",
+        "files changed",
+        "ruff check .",
+        "pytest tests/ -q",
+    ]
+    if not all(signal in t for signal in required):
+        return False
+
+    test_scope_signals = [
+        "test-only",
+        "tests/test_",
+        "tests/",
+    ]
+    if sum(1 for signal in test_scope_signals if signal in t) < 2:
+        return False
+
+    safety_signals = [
+        "no github mutation",
+        "no openclaw execution",
+        "no manifest mutation",
+        "no unrelated files",
+    ]
+    return sum(1 for signal in safety_signals if signal in t) >= 3
 
 def _has_validated_noop_completion_evidence(text: str) -> bool:
     """Detect conservative validated no-op worker completion evidence.
@@ -385,9 +463,12 @@ def _has_scoped_worker_completion_evidence(text: str) -> bool:
         "dirty: true",
         "working tree dirty",
         "scope not followed",
-        "scope broadening",
+        "scope was broadened",
+        "scope broadened",
+        "actual scope broadening",
+        "unexpected scope broadening",
         "unexpected change",
-        "code change",
+        "code files changed",
         "modified python",
         "modified src/",
     ]
