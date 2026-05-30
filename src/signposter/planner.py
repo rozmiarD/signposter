@@ -1086,6 +1086,168 @@ def _seed_manifest_is_applied(manifest: dict[str, Any]) -> bool:
 COMPLETED_PLANNER_STATES = {"closed", "done", "merged"}
 
 
+def _planner_impact_level(score: int) -> str:
+    """Map deterministic impact score to a compact level."""
+    if score >= 60:
+        return "high"
+    if score >= 40:
+        return "medium"
+    if score >= 20:
+        return "low"
+    return "low"
+
+
+def build_planner_impact_from_status(
+    status: dict[str, Any],
+    *,
+    issue: int,
+    manifest_path: str,
+) -> dict[str, Any]:
+    """Build a token-free planner impact assessment from a status summary."""
+    tasks = status.get("tasks", [])
+    task = next((item for item in tasks if item.get("github_issue") == issue), None)
+    if task is None:
+        return {
+            "status": "blocked",
+            "issue": issue,
+            "task": None,
+            "impact": {
+                "score": 0,
+                "level": "unknown",
+                "decision": "issue_not_in_manifest",
+            },
+            "downstream_tasks": [],
+            "requires_llm_analysis": False,
+            "suggested_command": None,
+            "reasons": [f"issue #{issue} is not present in the planner manifest"],
+        }
+
+    state = str(task.get("state", "")).lower()
+    downstream_tasks = [
+        item["key"]
+        for item in tasks
+        if task.get("key") in item.get("depends_on", [])
+    ]
+
+    if state not in COMPLETED_PLANNER_STATES:
+        return {
+            "status": "blocked",
+            "issue": issue,
+            "task": task,
+            "impact": {
+                "score": 0,
+                "level": "none",
+                "decision": "wait_for_completion",
+            },
+            "downstream_tasks": downstream_tasks,
+            "requires_llm_analysis": False,
+            "suggested_command": None,
+            "reasons": [
+                f"issue is not completed: state={task.get('state')}",
+                "impact scoring waits for completed/merged/done tasks",
+            ],
+        }
+
+    score = 10 if downstream_tasks else 0
+    level = _planner_impact_level(score)
+    decision = "advance_mainline" if score < 40 else "requires_reconcile"
+
+    reasons = [
+        f"issue is completed: state={task.get('state')}",
+        "deterministic impact scoring used zero LLM tokens",
+    ]
+    if downstream_tasks:
+        reasons.append("task has downstream dependents")
+    else:
+        reasons.append("task has no downstream dependents")
+
+    suggested_command = None
+    if decision == "advance_mainline":
+        suggested_command = (
+            f"signposter planner advance --manifest {manifest_path} "
+            f"--issue {issue} --dry-run"
+        )
+
+    return {
+        "status": "ready",
+        "issue": issue,
+        "task": task,
+        "impact": {
+            "score": score,
+            "level": level,
+            "decision": decision,
+        },
+        "downstream_tasks": downstream_tasks,
+        "requires_llm_analysis": decision != "advance_mainline",
+        "suggested_command": suggested_command,
+        "reasons": reasons,
+    }
+
+
+def format_planner_impact(result: dict[str, Any]) -> str:
+    """Format a token-free planner impact assessment."""
+    issue = result["issue"]
+    impact = result["impact"]
+    lines = [
+        f"Signposter Planner Impact — Issue #{issue}",
+        "",
+        "Status:",
+        f"  {result['status']}",
+        "",
+        "Impact:",
+        f"  score: {impact['score']}",
+        f"  level: {impact['level']}",
+        f"  decision: {impact['decision']}",
+    ]
+
+    task = result.get("task")
+    if task:
+        lines.extend(
+            [
+                "",
+                "Task:",
+                f"  {task['key']} — state: {task['state']}",
+            ]
+        )
+
+    downstream = result.get("downstream_tasks", [])
+    lines.extend(
+        [
+            "",
+            "Downstream:",
+            f"  downstream: {', '.join(downstream) if downstream else 'none'}",
+            "",
+            "Requires:",
+            f"  LLM analysis: {str(result.get('requires_llm_analysis', False)).lower()}",
+        ]
+    )
+
+    if result.get("suggested_command"):
+        lines.extend(
+            [
+                "",
+                "Suggested next command:",
+                f"  {result['suggested_command']}",
+            ]
+        )
+
+    if result.get("reasons"):
+        lines.extend(["", "Reasons:"])
+        lines.extend(f"  - {reason}" for reason in result["reasons"])
+
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "  No GitHub mutation was performed.",
+            "  No manifest mutation was performed.",
+            "  No OpenClaw execution was performed.",
+            "  No LLM analysis was performed.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def build_planner_next_from_status(status: dict[str, Any]) -> dict[str, Any]:
     """Choose the next dependency-ready task from a planner status summary."""
     tasks = status.get("tasks", [])

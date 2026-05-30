@@ -30,6 +30,7 @@ from signposter.merge import (
 )
 from signposter.planner import (
     apply_planner_seed_manifest,
+    build_planner_impact_from_status,
     build_planner_next,
     build_planner_next_from_status,
     build_planner_seed_manifest,
@@ -37,6 +38,7 @@ from signposter.planner import (
     build_planner_status,
     build_planner_step_from_next,
     format_planner_draft,
+    format_planner_impact,
     format_planner_mark_result,
     format_planner_next,
     format_planner_next_from_status,
@@ -379,6 +381,29 @@ def main() -> None:
         help="Fetch current GitHub issue states before choosing the next task",
     )
     planner_next_parser.set_defaults(func=run_planner_next)
+
+    planner_impact_parser = planner_subparsers.add_parser(
+        "impact",
+        help="Score completed task impact without LLM analysis",
+    )
+    planner_impact_parser.add_argument(
+        "--manifest",
+        required=True,
+        type=Path,
+        help="Path to the local planner seed manifest JSON file",
+    )
+    planner_impact_parser.add_argument(
+        "--issue",
+        required=True,
+        type=int,
+        help="GitHub issue number to score against the planner manifest",
+    )
+    planner_impact_parser.add_argument(
+        "--sync-github",
+        action="store_true",
+        help="Fetch current GitHub issue states before scoring impact",
+    )
+    planner_impact_parser.set_defaults(func=run_planner_impact)
 
     planner_step_parser = planner_subparsers.add_parser(
         "step",
@@ -1783,6 +1808,45 @@ def run_planner_status(args: argparse.Namespace) -> int:
     status = build_planner_status(manifest, issue_states)
     print(format_planner_status(status))
     return 0
+
+def run_planner_impact(args: argparse.Namespace) -> int:
+    """Show token-free planner impact scoring for a completed task."""
+    if not args.manifest.exists():
+        print(
+            format_planner_impact(
+                {
+                    "status": "blocked",
+                    "issue": args.issue,
+                    "task": None,
+                    "impact": {
+                        "score": 0,
+                        "level": "unknown",
+                        "decision": "manifest_not_found",
+                    },
+                    "downstream_tasks": [],
+                    "requires_llm_analysis": False,
+                    "suggested_command": None,
+                    "reasons": [f"manifest file not found: {args.manifest}"],
+                }
+            )
+        )
+        return 1
+
+    manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+    issue_states = (
+        _fetch_manifest_issue_states(str(manifest.get("repo", "")), manifest)
+        if args.sync_github
+        else {}
+    )
+    status = build_planner_status(manifest, issue_states)
+    impact = build_planner_impact_from_status(
+        status,
+        issue=args.issue,
+        manifest_path=str(args.manifest),
+    )
+    print(format_planner_impact(impact))
+    return 1 if impact["status"] == "blocked" else 0
+
 
 def run_planner_step(args: argparse.Namespace) -> int:
     """Show the next safe planner step from a seed manifest."""
