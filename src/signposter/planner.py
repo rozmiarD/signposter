@@ -1200,6 +1200,144 @@ def format_planner_advance_apply_result(result: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def build_planner_run_plan_from_status(
+    status: dict[str, Any],
+    *,
+    manifest_path: str,
+) -> dict[str, Any]:
+    """Build a read-only planner run dashboard from planner status."""
+    next_plan = build_planner_next_from_status(status)
+    step_plan = build_planner_step_from_next(next_plan)
+
+    advance_candidates = []
+    for task in status.get("tasks", []):
+        github_issue = task.get("github_issue")
+        task_state = str(task.get("state", "")).lower()
+        if github_issue is None or task_state not in COMPLETED_PLANNER_STATES:
+            continue
+
+        impact = build_planner_impact_from_status(
+            status,
+            issue=int(github_issue),
+            manifest_path=manifest_path,
+        )
+        if impact.get("status") != "ready":
+            continue
+        if impact.get("impact", {}).get("decision") != "advance_mainline":
+            continue
+
+        advance_plan = build_planner_advance_plan_from_status(
+            status,
+            issue=int(github_issue),
+            manifest_path=manifest_path,
+        )
+        if advance_plan.get("status") != "ready":
+            continue
+
+        advance_candidates.append(
+            {
+                "issue": int(github_issue),
+                "task_key": task["key"],
+                "decision": impact["impact"]["decision"],
+                "suggested_command": impact.get("suggested_command"),
+                "targets": [target["key"] for target in advance_plan["targets"]],
+            }
+        )
+
+    return {
+        "status": "ready",
+        "repo": status.get("repo", ""),
+        "manifest_path": manifest_path,
+        "planner_status": status.get("status", "unknown"),
+        "next": next_plan,
+        "step": step_plan,
+        "advance_candidates": advance_candidates,
+        "requires_llm_analysis": any(
+            candidate.get("requires_llm_analysis", False)
+            for candidate in advance_candidates
+        ),
+        "notes": [
+            "Read-only planner run dashboard.",
+            "No GitHub mutation was performed.",
+            "No manifest mutation was performed.",
+            "No claim was performed.",
+            "No worktree was created.",
+            "No OpenClaw execution was performed.",
+            "No LLM analysis was performed.",
+        ],
+    }
+
+
+def format_planner_run_plan(result: dict[str, Any]) -> str:
+    """Format a read-only planner run dashboard."""
+    lines = [
+        "Signposter Planner Run",
+        "",
+        "Status:",
+        f"  {result['status']}",
+        "",
+        "Repo:",
+        f"  {result.get('repo', '')}",
+        "",
+        "Manifest:",
+        f"  {result.get('manifest_path', '')}",
+        "",
+        "Planner status:",
+        f"  {result.get('planner_status', 'unknown')}",
+    ]
+
+    next_plan = result.get("next", {})
+    next_task = next_plan.get("next")
+    lines.extend(["", "Next task:"])
+    if next_task:
+        deps = ", ".join(next_task.get("depends_on", [])) or "none"
+        lines.extend(
+            [
+                f"  {next_task['key']} — issue: #{next_task['github_issue']} — "
+                f"state: {next_task['state']}",
+                f"  {next_task.get('github_url', '')}",
+                f"  depends on: {deps}",
+            ]
+        )
+    else:
+        lines.append("  none")
+
+    step = result.get("step", {})
+    lines.extend(["", "Suggested step command:"])
+    if step.get("suggested_command"):
+        lines.append(f"  {step['suggested_command']}")
+    else:
+        lines.append("  none")
+
+    candidates = result.get("advance_candidates", [])
+    lines.extend(["", "Advance candidates:"])
+    if candidates:
+        for candidate in candidates:
+            targets = ", ".join(candidate.get("targets", [])) or "none"
+            lines.extend(
+                [
+                    f"  issue #{candidate['issue']} / {candidate['task_key']}:",
+                    f"    decision: {candidate['decision']}",
+                    f"    targets: {targets}",
+                    f"    suggested command: {candidate['suggested_command']}",
+                ]
+            )
+    else:
+        lines.append("  none")
+
+    lines.extend(
+        [
+            "",
+            "Requires:",
+            f"  LLM analysis: {str(result.get('requires_llm_analysis', False)).lower()}",
+        ]
+    )
+
+    lines.extend(["", "Notes:"])
+    lines.extend(f"  {note}" for note in result.get("notes", []))
+    return "\n".join(lines)
+
+
 def build_planner_advance_plan_from_status(
     status: dict[str, Any],
     *,
