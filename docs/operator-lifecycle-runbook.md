@@ -215,3 +215,58 @@ git -C $WORKTREE status
 - SMOKE-003 validated the post-H027 lifecycle path (issue #8).
 - The workflow is intentionally manual and observable at every step.
 - All mutations are explicit and reversible until the final integration step.
+
+## Lifecycle watch operator usage
+
+`signposter lifecycle watch` is a read-only operator-facing status surface for a single issue. It emits the lifecycle watch contract output and does not perform polling-side effects, GitHub mutations, OpenClaw execution, manifest mutation, merge, integration, or cleanup.
+
+Ready-path example command:
+
+    signposter lifecycle watch --repo ExatronOmega/signposter --issue 13 --interval 5
+
+Expected ready-path shape:
+
+    Signposter Lifecycle Watch — Issue #13
+
+    Status:
+      ready
+
+    Notes:
+      No GitHub mutation was performed.
+      No OpenClaw execution was performed.
+      Interval requested: 5s (polling not in this surface)
+
+Blocked-path example command:
+
+    signposter lifecycle watch --issue 13 --interval 5
+
+Expected blocked-path shape:
+
+    Signposter Lifecycle Watch
+
+    Status:
+      blocked
+
+    Reason:
+      --repo and --issue are required
+
+    Notes:
+      No GitHub mutation was performed.
+      No OpenClaw execution was performed.
+
+Operator rules:
+
+- Treat `lifecycle watch` as read-only evidence, not as an execution step.
+- Do not expect it to claim issues, create worktrees, run OpenClaw, merge PRs, integrate issues, or clean local branches.
+- Use `lifecycle status` for the broader cross-phase lifecycle summary.
+- Use `lifecycle next` for the next recommended safe operator action.
+- Use planner commands for dependency advancement and task selection.
+- Keep issue closure owned by the integration flow, not by watch/status commands.
+
+Safety guarantees:
+
+- No GitHub mutation is performed.
+- No OpenClaw execution is performed.
+- No manifest mutation is performed.
+- No local cleanup is performed.
+- Missing preconditions produce a blocked contract output.
