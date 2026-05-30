@@ -317,8 +317,14 @@ def _has_validated_noop_lifecycle_evidence(issue_number: int | None) -> bool:
     except OSError:
         return False
 
+    no_op_signal = "validated no-op" in text or "no-op completion" in text
+    behavior_signal = (
+        "requested behavior already exists" in text
+        or "the requested behavior already exists" in text
+        or "existing implementation" in text
+    )
+
     required = [
-        "validated no-op",
         "no files were changed",
         "targeted validation",
         "full validation",
@@ -326,7 +332,8 @@ def _has_validated_noop_lifecycle_evidence(issue_number: int | None) -> bool:
         "no github mutation",
         "no openclaw execution",
     ]
-    return all(signal in text for signal in required)
+
+    return no_op_signal and behavior_signal and all(signal in text for signal in required)
 
 
 def plan_lifecycle_status(
