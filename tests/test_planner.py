@@ -9,6 +9,7 @@ import pytest
 from signposter.cli import main
 from signposter.planner import (
     PLAN_VERSION,
+    apply_planner_advance_plan,
     apply_planner_seed_manifest,
     build_planner_advance_plan_from_status,
     build_planner_draft,
@@ -1880,6 +1881,119 @@ def test_format_planner_next_from_status_contains_safety_notes(
     assert "No task execution was performed." in output
 
 
+def test_apply_planner_advance_plan_executes_single_ready_mutation(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    calls: list[list[str]] = []
+
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+
+    status = build_planner_status(manifest, {10: "closed", 11: "open"})
+    advance_plan = build_planner_advance_plan_from_status(
+        status,
+        issue=10,
+        manifest_path=str(manifest_path),
+    )
+
+    result = apply_planner_advance_plan(
+        advance_plan,
+        repo="ExatronOmega/signposter",
+        run_command=lambda command: calls.append(command),
+    )
+
+    assert result == {
+        "status": "applied",
+        "issue": 10,
+        "promoted": [
+            {
+                "key": "WATCH-002",
+                "github_issue": 11,
+                "labels_added": ["state:ready"],
+            }
+        ],
+        "commands": [
+            "gh issue edit 11 -R ExatronOmega/signposter --add-label state:ready"
+        ],
+        "errors": [],
+    }
+    assert calls == [
+        ["gh", "issue", "edit", "11", "-R", "ExatronOmega/signposter", "--add-label", "state:ready"]
+    ]
+
+
+def test_apply_planner_advance_plan_refuses_blocked_plan() -> None:
+    advance_plan = {
+        "status": "blocked",
+        "issue": 10,
+        "targets": [],
+        "planned_github_mutations": [],
+        "reasons": ["issue is not completed: state=open"],
+    }
+    calls: list[list[str]] = []
+
+    result = apply_planner_advance_plan(
+        advance_plan,
+        repo="ExatronOmega/signposter",
+        run_command=lambda command: calls.append(command),
+    )
+
+    assert result["status"] == "blocked"
+    assert result["promoted"] == []
+    assert result["commands"] == []
+    assert result["errors"] == ["advance plan is not ready"]
+    assert calls == []
+
+
+def test_apply_planner_advance_plan_requires_exactly_one_target(
+    tmp_path: Path,
+) -> None:
+    advance_plan = {
+        "status": "ready",
+        "issue": 10,
+        "targets": [
+            {
+                "key": "WATCH-002",
+                "github_issue": 11,
+                "labels_to_add": ["state:ready"],
+            },
+            {
+                "key": "WATCH-003",
+                "github_issue": 12,
+                "labels_to_add": ["state:ready"],
+            },
+        ],
+        "planned_github_mutations": [],
+        "reasons": [],
+    }
+    calls: list[list[str]] = []
+
+    result = apply_planner_advance_plan(
+        advance_plan,
+        repo="ExatronOmega/signposter",
+        run_command=lambda command: calls.append(command),
+    )
+
+    assert result["status"] == "blocked"
+    assert result["promoted"] == []
+    assert result["commands"] == []
+    assert result["errors"] == ["expected exactly one advance target, found 2"]
+    assert calls == []
+
+
 def test_build_planner_advance_plan_from_status_promotes_downstream_task(
     tmp_path: Path,
 ) -> None:
@@ -2304,7 +2418,217 @@ def test_cli_planner_advance_dry_run_promotes_downstream_task(
     assert "No LLM analysis was performed." in captured
 
 
-def test_cli_planner_advance_requires_dry_run(
+def test_cli_planner_advance_apply_blocks_open_source_task(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    calls: list[list[str]] = []
+
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> _FakeGhIssueCreateResult:
+        calls.append(command)
+        return _FakeGhIssueCreateResult(0, stdout="OPEN\n")
+
+    monkeypatch.setattr("signposter.cli.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "advance",
+            "--manifest",
+            str(manifest_path),
+            "--issue",
+            "10",
+            "--sync-github",
+            "--apply",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+
+    assert exc_info.value.code == 1
+    assert len(calls) == 5
+    assert "Signposter Planner Advance — Issue #10" in captured
+    assert "Status:\n  blocked" in captured
+    assert "issue is not completed: state=open" in captured
+    assert "gh issue edit 11" not in captured
+
+
+def test_cli_planner_advance_apply_blocks_when_state_ready_label_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    calls: list[list[str]] = []
+
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> _FakeGhIssueCreateResult:
+        calls.append(command)
+        if command[:4] == ["gh", "issue", "view", "10"]:
+            return _FakeGhIssueCreateResult(0, stdout="CLOSED\n")
+        if command[:3] == ["gh", "label", "list"]:
+            return _FakeGhIssueCreateResult(0, stdout="state:active\n")
+        return _FakeGhIssueCreateResult(0, stdout="OPEN\n")
+
+    monkeypatch.setattr("signposter.cli.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "advance",
+            "--manifest",
+            str(manifest_path),
+            "--issue",
+            "10",
+            "--sync-github",
+            "--apply",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+
+    assert exc_info.value.code == 1
+    assert "Planner Advance Label Preflight" in captured
+    assert "Status:\n  blocked" in captured
+    assert "missing GitHub label: state:ready" in captured
+    assert not any(command[:3] == ["gh", "issue", "edit"] for command in calls)
+
+
+def test_cli_planner_advance_apply_executes_single_label_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    calls: list[list[str]] = []
+
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> _FakeGhIssueCreateResult:
+        calls.append(command)
+        if command[:4] == ["gh", "issue", "view", "10"]:
+            return _FakeGhIssueCreateResult(0, stdout="CLOSED\n")
+        if command[:3] == ["gh", "label", "list"]:
+            return _FakeGhIssueCreateResult(0, stdout="state:ready\n")
+        return _FakeGhIssueCreateResult(0, stdout="")
+
+    monkeypatch.setattr("signposter.cli.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "advance",
+            "--manifest",
+            str(manifest_path),
+            "--issue",
+            "10",
+            "--sync-github",
+            "--apply",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+
+    assert exc_info.value.code in (None, 0)
+    edit_calls = [command for command in calls if command[:3] == ["gh", "issue", "edit"]]
+    assert edit_calls == [
+        [
+            "gh",
+            "issue",
+            "edit",
+            "11",
+            "-R",
+            "ExatronOmega/signposter",
+            "--add-label",
+            "state:ready",
+        ]
+    ]
+    assert "Signposter Planner Advance Apply" in captured
+    assert "Status:\n  applied" in captured
+    assert "WATCH-002 -> #11 added labels: state:ready" in captured
+    assert "No manifest mutation was performed." in captured
+    assert "No OpenClaw execution was performed." in captured
+    assert "No LLM analysis was performed." in captured
+
+
+def test_cli_planner_advance_requires_mode(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -2334,7 +2658,7 @@ def test_cli_planner_advance_requires_dry_run(
     assert exc_info.value.code == 1
     assert "Signposter Planner Advance" in captured
     assert "Status:\n  blocked" in captured
-    assert "--dry-run is required in this phase" in captured
+    assert "--dry-run or --apply is required" in captured
     assert "No GitHub mutation was performed." in captured
     assert "No manifest mutation was performed." in captured
     assert "No OpenClaw execution was performed." in captured
