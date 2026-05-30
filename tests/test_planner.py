@@ -1900,7 +1900,33 @@ def test_build_planner_step_from_next_suggests_dry_run_command(
 
     assert result["status"] == "ready"
     assert result["next"]["key"] == "WATCH-001"
-    assert result["suggested_command"] == "signposter run --issue 10 --dry-run"
+    assert result["suggested_command"] == (
+        "signposter run --repo ExatronOmega/signposter --issue 10 --dry-run"
+    )
+    assert result["workflow_hints"] == [
+        {
+            "label": "inspect lifecycle",
+            "command": (
+                "signposter lifecycle status --repo ExatronOmega/signposter --issue 10"
+            ),
+        },
+        {
+            "label": "claim dry-run",
+            "command": "signposter claim --repo ExatronOmega/signposter --dry-run",
+        },
+        {
+            "label": "worktree plan",
+            "command": (
+                "signposter worktree plan --repo ExatronOmega/signposter --issue 10"
+            ),
+        },
+        {
+            "label": "run dry-run",
+            "command": (
+                "signposter run --repo ExatronOmega/signposter --issue 10 --dry-run"
+            ),
+        },
+    ]
     assert result["errors"] == []
 
 
@@ -1930,8 +1956,18 @@ def test_format_planner_step_contains_suggested_command_and_safety_notes(
     assert "Status:\n  ready" in output
     assert "WATCH-001 — issue: #10 — state: open" in output
     assert "Suggested command:" in output
-    assert "signposter run --issue 10 --dry-run" in output
+    assert "signposter run --repo ExatronOmega/signposter --issue 10 --dry-run" in output
+    assert "Workflow hints:" in output
+    assert "inspect lifecycle:" in output
+    assert "signposter lifecycle status --repo ExatronOmega/signposter --issue 10" in output
+    assert "claim dry-run:" in output
+    assert "signposter claim --repo ExatronOmega/signposter --dry-run" in output
+    assert "worktree plan:" in output
+    assert "signposter worktree plan --repo ExatronOmega/signposter --issue 10" in output
+    assert "Hints only; no command above was executed." in output
     assert "No GitHub mutation was performed." in output
+    assert "No claim was performed." in output
+    assert "No worktree was created." in output
     assert "No OpenClaw execution was performed." in output
     assert "No task execution was performed." in output
 
@@ -1995,8 +2031,15 @@ def test_cli_planner_step_manifest_sync_github_suggests_dry_run_command(
     assert "Status:\n  ready" in captured
     assert "WATCH-001 — issue: #10 — state: open" in captured
     assert "Suggested command:" in captured
-    assert "signposter run --issue 10 --dry-run" in captured
+    assert "signposter run --repo ExatronOmega/signposter --issue 10 --dry-run" in captured
+    assert "Workflow hints:" in captured
+    assert "signposter lifecycle status --repo ExatronOmega/signposter --issue 10" in captured
+    assert "signposter claim --repo ExatronOmega/signposter --dry-run" in captured
+    assert "signposter worktree plan --repo ExatronOmega/signposter --issue 10" in captured
+    assert "Hints only; no command above was executed." in captured
     assert "No GitHub mutation was performed." in captured
+    assert "No claim was performed." in captured
+    assert "No worktree was created." in captured
     assert "No OpenClaw execution was performed." in captured
     assert "No task execution was performed." in captured
 
@@ -2031,6 +2074,8 @@ def test_cli_planner_step_missing_manifest_blocks_without_traceback(
     assert f"manifest file not found: {missing_manifest}" in captured
     assert "Traceback" not in captured
     assert "No GitHub mutation was performed." in captured
+    assert "No claim was performed." in captured
+    assert "No worktree was created." in captured
     assert "No OpenClaw execution was performed." in captured
     assert "No task execution was performed." in captured
 
