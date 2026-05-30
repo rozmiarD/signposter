@@ -1610,6 +1610,40 @@ def run_lifecycle_next(args: argparse.Namespace) -> int:
         print(f"Lifecycle next failed: {e}", file=sys.stderr)
         return 1
 
+def run_lifecycle_watch(args: argparse.Namespace) -> int:
+    """Handler for `signposter lifecycle watch --repo ... --issue N [--interval 5]`."""
+    repo = getattr(args, "repo", None)
+    issue = getattr(args, "issue", None)
+    interval = getattr(args, "interval", 5)
+
+    if not repo or issue is None:
+        # Blocked path per contract
+        print("Signposter Lifecycle Watch")
+        print()
+        print("Status:")
+        print("  blocked")
+        print()
+        print("Reason:")
+        print("  --repo and --issue are required")
+        print()
+        print("Notes:")
+        print("  No GitHub mutation was performed.")
+        print("  No OpenClaw execution was performed.")
+        return 1
+
+    # Happy path / ready contract output (WATCH-001 narrow surface)
+    # Note: Actual polling/refresh loop is explicitly out of scope (WATCH-002+)
+    print(f"Signposter Lifecycle Watch — Issue #{issue}")
+    print()
+    print("Status:")
+    print("  ready")
+    print()
+    print("Notes:")
+    print("  No GitHub mutation was performed.")
+    print("  No OpenClaw execution was performed.")
+    print(f"  Interval requested: {interval}s (polling not implemented in this contract surface)")
+    return 0
+
 def _register_lifecycle_subcommands(subparsers: argparse._SubParsersAction) -> None:
     """Register the lifecycle command group."""
     lifecycle_parser = subparsers.add_parser(
@@ -1658,6 +1692,24 @@ def _register_lifecycle_subcommands(subparsers: argparse._SubParsersAction) -> N
     )
     next_parser.set_defaults(func=run_lifecycle_next)
 
+    # WATCH-001: lifecycle watch CLI contract (narrow surface only)
+    watch_parser = lifecycle_subparsers.add_parser(
+        "watch",
+        help="Watch lifecycle events for an issue (read-only contract surface, WATCH-001)",
+        description=(
+            "Emit the defined lifecycle watch CLI contract output. "
+            "Polling implementation is out of scope for this task (WATCH-002+)."
+        ),
+    )
+    watch_parser.add_argument("--repo")
+    watch_parser.add_argument("--issue", type=int)
+    watch_parser.add_argument(
+        "--interval",
+        type=int,
+        default=5,
+        help="Polling interval in seconds (default: 5)",
+    )
+    watch_parser.set_defaults(func=run_lifecycle_watch)
 
 
 # =============================================================================

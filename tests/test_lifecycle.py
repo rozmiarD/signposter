@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import sys
+from argparse import Namespace
 from unittest.mock import patch
 
+import pytest
+
+from signposter.cli import main, run_lifecycle_watch
 from signposter.lifecycle import (
     LifecycleStatus,
     format_lifecycle_status,
@@ -436,3 +441,93 @@ def test_detect_associated_pr_from_issue_falls_back_to_merged_pr():
     second_call_args = run.call_args_list[1].args[0]
     assert "open" in first_call_args
     assert "merged" in second_call_args
+
+
+# =============================================================================
+# WATCH-001: lifecycle watch CLI contract tests
+# =============================================================================
+
+def test_lifecycle_watch_ready_happy_path(capsys):
+    """WATCH-001 happy path: --repo + --issue produces exact ready contract output."""
+    args = Namespace(repo="ExatronOmega/signposter", issue=10, interval=5)
+    rc = run_lifecycle_watch(args)
+
+    captured = capsys.readouterr()
+    out = captured.out
+
+    assert rc == 0
+    assert "Signposter Lifecycle Watch — Issue #10" in out
+    assert "Status:" in out
+    assert "  ready" in out
+    assert "Notes:" in out
+    assert "No GitHub mutation was performed." in out
+    assert "No OpenClaw execution was performed." in out
+    assert "Interval requested: 5s" in out
+
+
+def test_lifecycle_watch_blocked_missing_args(capsys):
+    """WATCH-001 blocked path: missing --repo/--issue produces exact blocked output."""
+    # Missing both
+    args = Namespace(repo=None, issue=None, interval=5)
+    rc = run_lifecycle_watch(args)
+
+    captured = capsys.readouterr()
+    out = captured.out
+
+    assert rc == 1
+    assert "Signposter Lifecycle Watch" in out
+    assert "Status:" in out
+    assert "  blocked" in out
+    assert "Reason:" in out
+    assert "--repo and --issue are required" in out
+    assert "No GitHub mutation was performed." in out
+    assert "No OpenClaw execution was performed." in out
+
+
+def test_lifecycle_watch_cli_missing_issue_reaches_blocked_contract(
+    monkeypatch,
+    capsys,
+):
+    """WATCH-001 real CLI path reaches blocked output instead of argparse usage."""
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "lifecycle",
+            "watch",
+            "--repo",
+            "ExatronOmega/signposter",
+            "--interval",
+            "5",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr()
+
+    assert exc_info.value.code == 1
+    assert "Signposter Lifecycle Watch" in captured.out
+    assert "Status:\n  blocked" in captured.out
+    assert "--repo and --issue are required" in captured.out
+    assert "No GitHub mutation was performed." in captured.out
+    assert "No OpenClaw execution was performed." in captured.out
+    assert "usage:" not in captured.out
+    assert "required" not in captured.err
+
+
+def test_lifecycle_watch_blocked_missing_issue(capsys):
+    """WATCH-001 blocked when only --repo provided."""
+    args = Namespace(repo="ExatronOmega/signposter", issue=None, interval=10)
+    rc = run_lifecycle_watch(args)
+
+    captured = capsys.readouterr()
+    out = captured.out
+
+    assert rc == 1
+    assert "  blocked" in out
+    assert "--repo and --issue are required" in out
+    assert "Interval requested" not in out  # no interval in blocked output
+
