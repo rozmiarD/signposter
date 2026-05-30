@@ -35,6 +35,7 @@ from signposter.planner import (
     build_planner_impact_from_status,
     build_planner_next,
     build_planner_next_from_status,
+    build_planner_run_plan_from_status,
     build_planner_seed_manifest,
     build_planner_seed_plan,
     build_planner_status,
@@ -47,6 +48,7 @@ from signposter.planner import (
     format_planner_next,
     format_planner_next_from_status,
     format_planner_roadmap,
+    format_planner_run_plan,
     format_planner_seed_apply_result,
     format_planner_seed_plan,
     format_planner_status,
@@ -385,6 +387,28 @@ def main() -> None:
         help="Fetch current GitHub issue states before choosing the next task",
     )
     planner_next_parser.set_defaults(func=run_planner_next)
+
+    planner_run_parser = planner_subparsers.add_parser(
+        "run",
+        help="Show read-only planner run dashboard",
+    )
+    planner_run_parser.add_argument(
+        "--manifest",
+        required=True,
+        type=Path,
+        help="Path to the local planner seed manifest JSON file",
+    )
+    planner_run_parser.add_argument(
+        "--sync-github",
+        action="store_true",
+        help="Fetch current GitHub issue states before building the dashboard",
+    )
+    planner_run_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Required: show dashboard only",
+    )
+    planner_run_parser.set_defaults(func=run_planner_run)
 
     planner_advance_parser = planner_subparsers.add_parser(
         "advance",
@@ -1832,6 +1856,59 @@ def _fetch_manifest_issue_states(repo: str, manifest: dict[str, object]) -> dict
             states[int(issue_number)] = state
 
     return states
+
+
+def run_planner_run(args: argparse.Namespace) -> int:
+    """Show a read-only planner run dashboard."""
+    if not args.dry_run:
+        print("Signposter Planner Run")
+        print()
+        print("Status:")
+        print("  blocked")
+        print()
+        print("Reason:")
+        print("  --dry-run is required")
+        print()
+        print("Notes:")
+        print("  No GitHub mutation was performed.")
+        print("  No manifest mutation was performed.")
+        print("  No claim was performed.")
+        print("  No worktree was created.")
+        print("  No OpenClaw execution was performed.")
+        print("  No LLM analysis was performed.")
+        return 1
+
+    if not args.manifest.exists():
+        print("Signposter Planner Run")
+        print()
+        print("Status:")
+        print("  blocked")
+        print()
+        print("Reason:")
+        print(f"  manifest file not found: {args.manifest}")
+        print()
+        print("Notes:")
+        print("  No GitHub mutation was performed.")
+        print("  No manifest mutation was performed.")
+        print("  No claim was performed.")
+        print("  No worktree was created.")
+        print("  No OpenClaw execution was performed.")
+        print("  No LLM analysis was performed.")
+        return 1
+
+    manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+    issue_states = (
+        _fetch_manifest_issue_states(str(manifest.get("repo", "")), manifest)
+        if args.sync_github
+        else {}
+    )
+    status = build_planner_status(manifest, issue_states)
+    run_plan = build_planner_run_plan_from_status(
+        status,
+        manifest_path=str(args.manifest),
+    )
+    print(format_planner_run_plan(run_plan))
+    return 0
 
 
 def run_planner_status(args: argparse.Namespace) -> int:

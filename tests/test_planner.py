@@ -16,6 +16,7 @@ from signposter.planner import (
     build_planner_impact_from_status,
     build_planner_next,
     build_planner_next_from_status,
+    build_planner_run_plan_from_status,
     build_planner_seed_manifest,
     build_planner_seed_plan,
     build_planner_status,
@@ -27,6 +28,7 @@ from signposter.planner import (
     format_planner_issue_body,
     format_planner_next_from_status,
     format_planner_roadmap,
+    format_planner_run_plan,
     format_planner_status,
     format_planner_step,
     format_seed_label_preflight,
@@ -1994,6 +1996,149 @@ def test_apply_planner_advance_plan_requires_exactly_one_target(
     assert calls == []
 
 
+def test_build_planner_run_plan_from_status_reports_next_open_task(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+
+    status = build_planner_status(
+        manifest,
+        {
+            10: "open",
+            11: "open",
+            12: "open",
+            13: "open",
+            14: "open",
+        },
+    )
+
+    result = build_planner_run_plan_from_status(
+        status,
+        manifest_path=str(manifest_path),
+    )
+
+    assert result["status"] == "ready"
+    assert result["planner_status"] == "active"
+    assert result["next"]["status"] == "ready"
+    assert result["next"]["next"]["key"] == "WATCH-001"
+    assert result["step"]["suggested_command"] == (
+        "signposter run --repo ExatronOmega/signposter --issue 10 --dry-run"
+    )
+    assert result["advance_candidates"] == []
+    assert result["requires_llm_analysis"] is False
+
+
+def test_build_planner_run_plan_from_status_reports_advance_candidate(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+
+    status = build_planner_status(
+        manifest,
+        {
+            10: "closed",
+            11: "open",
+            12: "open",
+            13: "open",
+            14: "open",
+        },
+    )
+
+    result = build_planner_run_plan_from_status(
+        status,
+        manifest_path=str(manifest_path),
+    )
+
+    assert result["status"] == "ready"
+    assert result["next"]["next"]["key"] == "WATCH-002"
+    assert result["advance_candidates"] == [
+        {
+            "issue": 10,
+            "task_key": "WATCH-001",
+            "decision": "advance_mainline",
+            "suggested_command": (
+                f"signposter planner advance --manifest {manifest_path} "
+                "--issue 10 --dry-run"
+            ),
+            "targets": ["WATCH-002"],
+        }
+    ]
+    assert result["requires_llm_analysis"] is False
+
+
+def test_format_planner_run_plan_contains_dashboard_sections(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+
+    status = build_planner_status(manifest, {10: "open"})
+
+    output = format_planner_run_plan(
+        build_planner_run_plan_from_status(
+            status,
+            manifest_path=str(manifest_path),
+        )
+    )
+
+    assert "Signposter Planner Run" in output
+    assert "Status:\n  ready" in output
+    assert "Planner status:\n  active" in output
+    assert "Next task:" in output
+    assert "WATCH-001 — issue: #10 — state: open" in output
+    assert "Suggested step command:" in output
+    assert "signposter run --repo ExatronOmega/signposter --issue 10 --dry-run" in output
+    assert "Advance candidates:" in output
+    assert "none" in output
+    assert "No GitHub mutation was performed." in output
+    assert "No manifest mutation was performed." in output
+    assert "No claim was performed." in output
+    assert "No worktree was created." in output
+    assert "No OpenClaw execution was performed." in output
+    assert "No LLM analysis was performed." in output
+
+
 def test_build_planner_advance_plan_from_status_promotes_downstream_task(
     tmp_path: Path,
 ) -> None:
@@ -2344,6 +2489,116 @@ def test_format_planner_step_contains_suggested_command_and_safety_notes(
     assert "No worktree was created." in output
     assert "No OpenClaw execution was performed." in output
     assert "No task execution was performed." in output
+
+
+def test_cli_planner_run_dry_run_shows_dashboard(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    calls: list[list[str]] = []
+
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> _FakeGhIssueCreateResult:
+        calls.append(command)
+        return _FakeGhIssueCreateResult(0, stdout="OPEN\n")
+
+    monkeypatch.setattr("signposter.cli.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "run",
+            "--manifest",
+            str(manifest_path),
+            "--sync-github",
+            "--dry-run",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+
+    assert exc_info.value.code in (None, 0)
+    assert len(calls) == 5
+    assert calls[0][:4] == ["gh", "issue", "view", "10"]
+    assert "Signposter Planner Run" in captured
+    assert "Status:\n  ready" in captured
+    assert "Planner status:\n  active" in captured
+    assert "Next task:" in captured
+    assert "WATCH-001 — issue: #10 — state: open" in captured
+    assert "Suggested step command:" in captured
+    assert "signposter run --repo ExatronOmega/signposter --issue 10 --dry-run" in captured
+    assert "Advance candidates:" in captured
+    assert "none" in captured
+    assert "No GitHub mutation was performed." in captured
+    assert "No manifest mutation was performed." in captured
+    assert "No claim was performed." in captured
+    assert "No worktree was created." in captured
+    assert "No OpenClaw execution was performed." in captured
+    assert "No LLM analysis was performed." in captured
+
+
+def test_cli_planner_run_requires_dry_run(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    manifest_path = tmp_path / "seed-manifest.json"
+    manifest_path.write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "run",
+            "--manifest",
+            str(manifest_path),
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+
+    assert exc_info.value.code == 1
+    assert "Signposter Planner Run" in captured
+    assert "Status:\n  blocked" in captured
+    assert "--dry-run is required" in captured
+    assert "No GitHub mutation was performed." in captured
+    assert "No manifest mutation was performed." in captured
+    assert "No claim was performed." in captured
+    assert "No worktree was created." in captured
+    assert "No OpenClaw execution was performed." in captured
+    assert "No LLM analysis was performed." in captured
 
 
 def test_cli_planner_advance_dry_run_promotes_downstream_task(
