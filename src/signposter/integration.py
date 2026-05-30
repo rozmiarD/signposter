@@ -10,8 +10,10 @@ import json
 import re
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
+from signposter.gate import evaluate_ci_gate
 from signposter.labels import check_labels
 from signposter.review import _run_gh_pr_view
 from signposter.scan import fetch_issue_by_number, fetch_issue_context
@@ -618,3 +620,353 @@ def format_integration_apply_dry_run(plan: IntegrationPlan, repo: str | None = N
     lines.append("  No local worktree was removed.")
 
     return "\n".join(lines)
+
+
+# =============================================================================
+# H032C: Validated no-op integration (no PR required)
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class NoopIntegrationPlan:
+    issue_number: int
+    issue_title: str
+    issue_state: str
+    current_workflow_state: str | None
+    proposed_workflow_state: str
+    close_issue: bool
+    close_reason: str
+    summary_path: str
+    gate_decision: str
+    gate_reason: str
+    worktree_path: str
+    worktree_exists: bool
+    local_branch_exists: bool
+    associated_pr_detected: bool
+    status: str
+    notes: list[str]
+
+
+def _fetch_noop_issue_state(repo: str, issue_number: int) -> dict[str, Any]:
+    result = subprocess.run(
+        [
+            "gh",
+            "issue",
+            "view",
+            str(issue_number),
+            "-R",
+            repo,
+            "--json",
+            "number,title,state,labels",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or f"failed to fetch issue #{issue_number}")
+
+    data = json.loads(result.stdout or "{}")
+    labels = []
+    for label in data.get("labels", []) or []:
+        if isinstance(label, dict):
+            labels.append(label.get("name", ""))
+        elif isinstance(label, str):
+            labels.append(label)
+    data["label_names"] = [label for label in labels if label]
+    return data
+
+
+def _noop_worktree_path(issue_number: int) -> str:
+    return f"../signposter-work/{issue_number}"
+
+
+def _noop_local_branch_exists(issue_number: int) -> bool:
+    result = subprocess.run(
+        ["git", "branch", "--list", f"work/issue-{issue_number}-*"],
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    return bool(result.stdout.strip()) if result.returncode == 0 else True
+
+
+def _noop_associated_pr_detected(repo: str, issue_number: int) -> bool:
+    result = subprocess.run(
+        [
+            "gh",
+            "pr",
+            "list",
+            "-R",
+            repo,
+            "--state",
+            "all",
+            "--limit",
+            "100",
+            "--json",
+            "number,headRefName,state",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if result.returncode != 0:
+        return True
+
+    try:
+        prs = json.loads(result.stdout or "[]")
+    except json.JSONDecodeError:
+        return True
+
+    prefix = f"work/issue-{issue_number}-"
+    for pr in prs if isinstance(prs, list) else []:
+        if isinstance(pr, dict) and str(pr.get("headRefName") or "").startswith(prefix):
+            return True
+    return False
+
+
+def _load_noop_gate_evidence(issue_number: int) -> tuple[str, str, str]:
+    summary_path = f"artifacts/runs/issue-{issue_number}-gate.summary.md"
+    raw_path = f"artifacts/runs/issue-{issue_number}-gate.raw.txt"
+
+    summary = Path(summary_path)
+    raw = Path(raw_path)
+
+    if not summary.is_file():
+        return summary_path, "missing", "validated no-op gate summary artifact missing"
+
+    summary_text = summary.read_text(encoding="utf-8")
+    raw_text = raw.read_text(encoding="utf-8") if raw.is_file() else ""
+    decision = evaluate_ci_gate(0, summary_text, raw_text)
+
+    return summary_path, decision.decision, decision.reason
+
+
+def plan_noop_integration_for_issue(repo: str, issue_number: int) -> NoopIntegrationPlan:
+    notes = [
+        "No issue was closed.",
+        "No labels were changed.",
+        "No local worktree was removed.",
+        "No PR merge was performed.",
+    ]
+
+    try:
+        issue = _fetch_noop_issue_state(repo, issue_number)
+        issue_title = issue.get("title", "unknown")
+        issue_state = issue.get("state", "UNKNOWN")
+        labels = issue.get("label_names", []) or []
+        workflow_state = _get_workflow_state_from_labels(labels)
+    except Exception as exc:
+        return NoopIntegrationPlan(
+            issue_number=issue_number,
+            issue_title="unknown",
+            issue_state="UNKNOWN",
+            current_workflow_state=None,
+            proposed_workflow_state="state:merged",
+            close_issue=True,
+            close_reason="completed",
+            summary_path=f"artifacts/runs/issue-{issue_number}-gate.summary.md",
+            gate_decision="unknown",
+            gate_reason=f"failed to fetch issue: {exc}",
+            worktree_path=_noop_worktree_path(issue_number),
+            worktree_exists=True,
+            local_branch_exists=True,
+            associated_pr_detected=True,
+            status=f"blocked — failed to fetch issue #{issue_number}",
+            notes=notes,
+        )
+
+    worktree_path = _noop_worktree_path(issue_number)
+    worktree_exists = Path(worktree_path).exists()
+    local_branch_exists = _noop_local_branch_exists(issue_number)
+    associated_pr_detected = _noop_associated_pr_detected(repo, issue_number)
+    summary_path, gate_decision, gate_reason = _load_noop_gate_evidence(issue_number)
+
+    status = "ready"
+    if issue_state != "OPEN":
+        status = f"blocked — issue is {issue_state.lower()}"
+    elif workflow_state != "state:done":
+        status = f"blocked — issue workflow state is {workflow_state or 'unknown'}"
+    elif gate_decision != "pass":
+        status = f"blocked — validated no-op gate is not pass ({gate_reason})"
+    elif worktree_exists:
+        status = f"blocked — worktree still exists ({worktree_path})"
+    elif local_branch_exists:
+        status = f"blocked — local work branch still exists for issue #{issue_number}"
+    elif associated_pr_detected:
+        status = f"blocked — associated PR exists for issue #{issue_number}; use PR integration"
+
+    return NoopIntegrationPlan(
+        issue_number=issue_number,
+        issue_title=issue_title,
+        issue_state=issue_state,
+        current_workflow_state=workflow_state,
+        proposed_workflow_state="state:merged",
+        close_issue=True,
+        close_reason="completed",
+        summary_path=summary_path,
+        gate_decision=gate_decision,
+        gate_reason=gate_reason,
+        worktree_path=worktree_path,
+        worktree_exists=worktree_exists,
+        local_branch_exists=local_branch_exists,
+        associated_pr_detected=associated_pr_detected,
+        status=status,
+        notes=notes,
+    )
+
+
+def format_noop_integration_plan(plan: NoopIntegrationPlan) -> str:
+    lines = [f"Signposter No-op Integration Plan — Issue #{plan.issue_number}\n"]
+
+    lines.append("Issue:")
+    lines.append(f"  title: {plan.issue_title}")
+    lines.append(f"  state: {plan.issue_state}")
+    lines.append(f"  current workflow state: {plan.current_workflow_state or 'unknown'}")
+    lines.append(f"  proposed workflow state: {plan.proposed_workflow_state}")
+    lines.append(f"  close issue: {'yes' if plan.close_issue else 'no'}")
+    lines.append(f"  close reason: {plan.close_reason}")
+
+    lines.append("\nEvidence:")
+    lines.append(f"  summary: {plan.summary_path}")
+    lines.append(f"  gate decision: {plan.gate_decision}")
+    lines.append(f"  gate reason: {plan.gate_reason}")
+
+    lines.append("\nNo-PR checks:")
+    lines.append(f"  associated PR detected: {'yes' if plan.associated_pr_detected else 'no'}")
+    lines.append(f"  worktree path: {plan.worktree_path}")
+    lines.append(f"  worktree exists: {'yes' if plan.worktree_exists else 'no'}")
+    lines.append(f"  local branch exists: {'yes' if plan.local_branch_exists else 'no'}")
+
+    lines.append("\nPlanned GitHub mutations:")
+    if plan.status == "ready":
+        lines.append(
+            f"  gh issue edit {plan.issue_number} --add-label state:merged "
+            "--remove-label state:done"
+        )
+        lines.append(
+            f"  gh issue close {plan.issue_number} --reason completed"
+        )
+    else:
+        lines.append(f"  none — no-op integration plan is not ready ({plan.status})")
+
+    lines.append("\nStatus:")
+    lines.append(f"  {plan.status}")
+
+    if plan.notes:
+        lines.append("\nNotes:")
+        for note in plan.notes:
+            lines.append(f"  {note}")
+
+    return "\n".join(lines)
+
+
+def format_noop_integration_apply_dry_run(plan: NoopIntegrationPlan, repo: str) -> str:
+    lines = [f"Signposter No-op Integration Apply Plan — Issue #{plan.issue_number}\n"]
+
+    lines.append("No-op integration plan:")
+    lines.append(f"  status: {plan.status}")
+    lines.append(f"  gate decision: {plan.gate_decision}")
+    lines.append(f"  close issue: {'yes' if plan.close_issue else 'no'}")
+
+    lines.append("\nPlanned GitHub mutations:")
+    if plan.status == "ready":
+        lines.append(
+            f"  gh issue edit {plan.issue_number} -R {repo} "
+            "--add-label state:merged --remove-label state:done"
+        )
+        lines.append(
+            f"  gh issue close {plan.issue_number} -R {repo} --reason completed"
+        )
+    else:
+        lines.append(f"  none — no-op integration plan is not ready ({plan.status})")
+
+    lines.append("\nStatus:")
+    if plan.status == "ready":
+        lines.append("  ready")
+    else:
+        lines.append(f"  blocked — no-op integration plan is not ready ({plan.status})")
+
+    lines.append("\nNotes:")
+    lines.append("  DRY RUN: no issue was closed.")
+    lines.append("  No labels were changed.")
+    lines.append("  No PR merge was performed.")
+    lines.append("  No local worktree was removed.")
+
+    return "\n".join(lines)
+
+
+def apply_noop_integration(
+    repo: str,
+    issue_number: int,
+    *,
+    apply: bool = False,
+) -> dict:
+    plan = plan_noop_integration_for_issue(repo, issue_number)
+
+    if not apply:
+        return {
+            "mode": "dry_run",
+            "plan": plan,
+        }
+
+    if plan.status != "ready":
+        return {
+            "mode": "apply_blocked",
+            "plan": plan,
+            "error": f"Refusing no-op integration apply: {plan.status}",
+        }
+
+    errors: list[str] = []
+
+    edit = subprocess.run(
+        [
+            "gh",
+            "issue",
+            "edit",
+            str(issue_number),
+            "-R",
+            repo,
+            "--add-label",
+            "state:merged",
+            "--remove-label",
+            "state:done",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if edit.returncode != 0:
+        errors.append(f"label transition failed: {edit.stderr.strip()}")
+
+    if not errors:
+        close = subprocess.run(
+            [
+                "gh",
+                "issue",
+                "close",
+                str(issue_number),
+                "-R",
+                repo,
+                "--reason",
+                "completed",
+                "--comment",
+                (
+                    "**Signposter:** completed validated no-op task.\n\n"
+                    "`state:done → state:merged` · no PR required"
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if close.returncode != 0:
+            errors.append(f"issue close failed: {close.stderr.strip()}")
+
+    return {
+        "mode": "apply",
+        "plan": plan,
+        "success": not errors,
+        "errors": errors,
+    }
+

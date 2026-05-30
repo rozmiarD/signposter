@@ -18,9 +18,13 @@ from signposter.gate import evaluate_gate_for_complete, format_gate_report, run_
 from signposter.handoff import format_handoff_plan, plan_handoff_for_issue
 from signposter.integration import (
     apply_integration,
+    apply_noop_integration,
     format_integration_apply_dry_run,
     format_integration_plan,
+    format_noop_integration_apply_dry_run,
+    format_noop_integration_plan,
     plan_integration_for_pr,
+    plan_noop_integration_for_issue,
 )
 from signposter.merge import (
     apply_merge,
@@ -758,6 +762,29 @@ def main() -> None:
     )
     integration_apply_parser.set_defaults(func=run_integration_apply)
 
+    # noop-plan subcommand (H032C — validated no-op integration, no PR)
+    integration_noop_plan_parser = integration_subparsers.add_parser(
+        "noop-plan",
+        help="Produce a dry-run no-op integration plan for an issue without a PR",
+    )
+    integration_noop_plan_parser.add_argument("--repo", required=True)
+    integration_noop_plan_parser.add_argument("--issue", type=int, required=True)
+    integration_noop_plan_parser.set_defaults(func=run_noop_integration_plan)
+
+    # noop-apply subcommand (H032C)
+    integration_noop_apply_parser = integration_subparsers.add_parser(
+        "noop-apply",
+        help="Apply validated no-op issue integration (dry-run by default; --apply to execute)",
+    )
+    integration_noop_apply_parser.add_argument("--repo", required=True)
+    integration_noop_apply_parser.add_argument("--issue", type=int, required=True)
+    integration_noop_apply_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually perform label transition and issue close for validated no-op",
+    )
+    integration_noop_apply_parser.set_defaults(func=run_noop_integration_apply)
+
     # report subcommand (for posting runner summaries back to GitHub)
     report_parser = subparsers.add_parser(
         "report",
@@ -1424,6 +1451,79 @@ def run_integration_plan(args: argparse.Namespace) -> int:
         return 0 if plan.status == "ready" else 1
     except Exception as e:
         print(f"Integration plan failed: {e}", file=sys.stderr)
+        return 2
+
+
+def run_noop_integration_plan(args: argparse.Namespace) -> int:
+    """Handler for `signposter integration noop-plan --repo ... --issue N`."""
+    repo = getattr(args, "repo", None)
+    issue = getattr(args, "issue", None)
+
+    if not repo or issue is None:
+        print("Error: --repo and --issue are required", file=sys.stderr)
+        return 1
+
+    try:
+        plan = plan_noop_integration_for_issue(repo, issue)
+        print(format_noop_integration_plan(plan))
+        return 0 if plan.status == "ready" else 1
+    except Exception as e:
+        print(f"No-op integration plan failed: {e}", file=sys.stderr)
+        return 2
+
+
+def run_noop_integration_apply(args: argparse.Namespace) -> int:
+    """Handler for `signposter integration noop-apply --repo ... --issue N [--apply]`."""
+    repo = getattr(args, "repo", None)
+    issue = getattr(args, "issue", None)
+    do_apply = getattr(args, "apply", False)
+
+    if not repo or issue is None:
+        print("Error: --repo and --issue are required", file=sys.stderr)
+        return 1
+
+    try:
+        result = apply_noop_integration(repo, issue, apply=do_apply)
+        plan = result.get("plan")
+
+        if result.get("mode") == "dry_run":
+            print(format_noop_integration_apply_dry_run(plan, repo))
+            return 0
+        if result.get("mode") == "apply":
+            success = result.get("success", False)
+            print(f"Signposter No-op Integration Apply — Issue #{issue}")
+            print("")
+            print("Issue:")
+            print("  removed label: state:done")
+            print("  added label: state:merged")
+            print(f"  close reason: {plan.close_reason if plan else 'completed'}")
+            print(f"  state: {'CLOSED' if success else 'failed'}")
+            if result.get("errors"):
+                for err in result["errors"]:
+                    print(f"    {err}")
+            print("")
+            print("Status:")
+            print(f"  {'completed' if success else 'failed'}")
+            print("")
+            print("Notes:")
+            print("  No PR merge was performed.")
+            print("  No local worktree was removed.")
+            return 0 if success else 1
+
+        err = result.get("error", plan.status if plan else "unknown")
+        print(f"Signposter No-op Integration Apply — Issue #{issue}")
+        print("")
+        print("Status: blocked")
+        print(f"  reason: {err}")
+        print("")
+        print("Notes:")
+        print("  No issue was closed.")
+        print("  No labels were changed.")
+        print("  No PR merge was performed.")
+        print("  No local worktree was removed.")
+        return 1
+    except Exception as e:
+        print(f"No-op integration apply failed: {e}", file=sys.stderr)
         return 2
 
 

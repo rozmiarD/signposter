@@ -302,6 +302,33 @@ def _get_non_author_approval(reviews: list[dict]) -> tuple[bool, str | None]:
     return False, None
 
 
+
+def _has_validated_noop_lifecycle_evidence(issue_number: int | None) -> bool:
+    """Return True only when local gate evidence proves validated no-op completion."""
+    if issue_number is None:
+        return False
+
+    path = Path(f"artifacts/runs/issue-{issue_number}-gate.summary.md")
+    if not path.is_file():
+        return False
+
+    try:
+        text = path.read_text(encoding="utf-8").lower()
+    except OSError:
+        return False
+
+    required = [
+        "validated no-op",
+        "no files were changed",
+        "targeted validation",
+        "full validation",
+        "manual cli smoke passed",
+        "no github mutation",
+        "no openclaw execution",
+    ]
+    return all(signal in text for signal in required)
+
+
 def plan_lifecycle_status(
     repo: str,
     *,
@@ -467,6 +494,13 @@ def plan_lifecycle_status(
 
     if issue_number is None:
         status = "incomplete — associated issue could not be detected"
+    elif (
+        pr_number is None
+        and integrated
+        and cleanup_complete
+        and _has_validated_noop_lifecycle_evidence(issue_number)
+    ):
+        status = "complete"
     elif pr_number is None:
         status = "incomplete — associated PR could not be detected"
     elif issue_state is None or issue_state.upper() != "CLOSED":
