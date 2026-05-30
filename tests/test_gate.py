@@ -287,3 +287,78 @@ No unrelated files were changed.
     assert "scoped code change evidence" in decision.reason
 
 
+def test_ci_gate_passes_validated_noop_completion():
+    """Validated no-op completion should pass without requiring fake code changes."""
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+# Signposter Execution Summary
+
+**Repository:** ExatronOmega/signposter
+**Issue:** #12 — WATCH-003 — Add simple terminal refresh renderer
+**Agent:** worker
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+## Scoped completion evidence
+
+WATCH-003 was evaluated as a no-op completion: the requested behavior already exists.
+The existing implementation provides deterministic terminal-friendly output.
+Existing ready output is deterministic and terminal-friendly.
+Existing blocked output is deterministic and terminal-friendly.
+
+## Files changed
+
+No files were changed in the isolated worktree.
+
+## Validation evidence
+
+Targeted validation in isolated worktree passed:
+- ruff check src/signposter/cli.py src/signposter/lifecycle.py tests/test_lifecycle.py
+- pytest tests/test_lifecycle.py -q
+
+Full validation in isolated worktree passed:
+- ruff check .
+- pytest tests/ -q
+
+Manual CLI smoke passed.
+
+## Safety
+
+No GitHub mutation was performed by the implemented command.
+No OpenClaw execution was performed by the implemented command.
+No manifest mutation was performed.
+No unrelated files were changed.
+
+## Gate recommendation
+
+PASS — scoped no-op worker task completed with validation evidence.
+"""
+
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "pass"
+    assert "validated no-op completion" in decision.reason
+    assert decision.proposed_transition == "state:active → state:done"
+
+
+def test_ci_gate_blocks_noop_without_validation():
+    """No-op claims without validation/smoke evidence must remain blocked."""
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+No files were changed.
+The behavior already exists.
+"""
+
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "needs-work"
+
