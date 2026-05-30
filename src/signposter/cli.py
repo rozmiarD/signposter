@@ -35,6 +35,7 @@ from signposter.planner import (
     build_planner_seed_manifest,
     build_planner_seed_plan,
     build_planner_status,
+    build_planner_step_from_next,
     format_planner_draft,
     format_planner_mark_result,
     format_planner_next,
@@ -43,6 +44,7 @@ from signposter.planner import (
     format_planner_seed_apply_result,
     format_planner_seed_plan,
     format_planner_status,
+    format_planner_step,
     format_planner_validation,
     format_prepared_seed_manifest,
     format_seed_label_preflight,
@@ -377,6 +379,23 @@ def main() -> None:
         help="Fetch current GitHub issue states before choosing the next task",
     )
     planner_next_parser.set_defaults(func=run_planner_next)
+
+    planner_step_parser = planner_subparsers.add_parser(
+        "step",
+        help="Show the next safe planner step from a seed manifest",
+    )
+    planner_step_parser.add_argument(
+        "--manifest",
+        required=True,
+        type=Path,
+        help="Path to the local planner seed manifest JSON file",
+    )
+    planner_step_parser.add_argument(
+        "--sync-github",
+        action="store_true",
+        help="Fetch current GitHub issue states before suggesting the next command",
+    )
+    planner_step_parser.set_defaults(func=run_planner_step)
 
     planner_mark_parser = planner_subparsers.add_parser(
         "mark",
@@ -1764,6 +1783,35 @@ def run_planner_status(args: argparse.Namespace) -> int:
     status = build_planner_status(manifest, issue_states)
     print(format_planner_status(status))
     return 0
+
+def run_planner_step(args: argparse.Namespace) -> int:
+    """Show the next safe planner step from a seed manifest."""
+    if not args.manifest.exists():
+        print(
+            format_planner_step(
+                {
+                    "status": "blocked",
+                    "reason": f"manifest file not found: {args.manifest}",
+                    "next": None,
+                    "suggested_command": None,
+                    "errors": [],
+                }
+            )
+        )
+        return 1
+
+    manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+    issue_states = (
+        _fetch_manifest_issue_states(str(manifest.get("repo", "")), manifest)
+        if args.sync_github
+        else {}
+    )
+    status = build_planner_status(manifest, issue_states)
+    next_plan = build_planner_next_from_status(status)
+    step_plan = build_planner_step_from_next(next_plan)
+    print(format_planner_step(step_plan))
+    return 1 if step_plan["status"] == "blocked" else 0
+
 
 def run_planner_mark(args: argparse.Namespace) -> int:
     """Update a local planner task status."""

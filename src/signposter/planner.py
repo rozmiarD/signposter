@@ -1225,6 +1225,88 @@ def format_planner_next_from_status(result: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+
+def build_planner_step_from_next(next_result: dict[str, Any]) -> dict[str, Any]:
+    """Build a dry-run planner step plan from a planner next result."""
+    next_task = next_result.get("next")
+    if next_result.get("status") != "ready" or next_task is None:
+        return {
+            "status": next_result.get("status", "blocked"),
+            "reason": next_result.get("reason", "no ready task"),
+            "next": next_task,
+            "suggested_command": None,
+            "errors": next_result.get("errors", []),
+        }
+
+    github_issue = next_task.get("github_issue")
+    if github_issue is None:
+        return {
+            "status": "blocked",
+            "reason": "next task has no GitHub issue number",
+            "next": next_task,
+            "suggested_command": None,
+            "errors": ["next task has no GitHub issue number"],
+        }
+
+    return {
+        "status": "ready",
+        "reason": next_result.get("reason", "next task is ready"),
+        "next": next_task,
+        "suggested_command": f"signposter run --issue {github_issue} --dry-run",
+        "errors": [],
+    }
+
+
+def format_planner_step(result: dict[str, Any]) -> str:
+    """Format a dry-run planner step plan."""
+    lines = [
+        "Signposter Planner Step",
+        "",
+        "Status:",
+        f"  {result['status']}",
+        "",
+        "Reason:",
+        f"  {result.get('reason', '')}",
+    ]
+
+    if result.get("next") is not None:
+        task = result["next"]
+        deps = ", ".join(task["depends_on"]) if task["depends_on"] else "none"
+        lines.extend(
+            [
+                "",
+                "Next task:",
+                f"  {task['key']} — issue: #{task['github_issue']} — state: {task['state']}",
+                f"  {task['github_url']}",
+                f"  depends on: {deps}",
+            ]
+        )
+
+    if result.get("suggested_command"):
+        lines.extend(
+            [
+                "",
+                "Suggested command:",
+                f"  {result['suggested_command']}",
+            ]
+        )
+
+    if result.get("errors"):
+        lines.extend(["", "Errors:"])
+        lines.extend(f"  - {error}" for error in result["errors"])
+
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "  No GitHub mutation was performed.",
+            "  No OpenClaw execution was performed.",
+            "  No task execution was performed.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def build_planner_status(
     manifest: dict[str, Any],
     issue_states: dict[int, str] | None = None,
