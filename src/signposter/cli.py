@@ -1821,6 +1821,28 @@ def run_planner_roadmap(args: argparse.Namespace) -> int:
     return 1 if "Status:\nblocked" in roadmap else 0
 
 
+def _planner_workflow_state_from_issue_payload(payload: dict[str, object]) -> str | None:
+    """Extract Signposter workflow state from GitHub issue labels."""
+    labels = payload.get("labels", [])
+    if not isinstance(labels, list):
+        return None
+
+    for label in labels:
+        if isinstance(label, dict):
+            name = str(label.get("name", ""))
+        else:
+            name = str(label)
+
+        if not name.startswith("state:"):
+            continue
+
+        workflow_state = name.split(":", 1)[1].strip().lower()
+        if workflow_state:
+            return workflow_state
+
+    return None
+
+
 def _fetch_manifest_issue_states(repo: str, manifest: dict[str, object]) -> dict[int, str]:
     """Fetch GitHub issue states for issues listed in a planner manifest."""
     states: dict[int, str] = {}
@@ -1840,9 +1862,7 @@ def _fetch_manifest_issue_states(repo: str, manifest: dict[str, object]) -> dict
                 "-R",
                 repo,
                 "--json",
-                "state",
-                "--jq",
-                ".state",
+                "state,labels",
             ],
             capture_output=True,
             text=True,
@@ -1851,7 +1871,20 @@ def _fetch_manifest_issue_states(repo: str, manifest: dict[str, object]) -> dict
         if result.returncode != 0:
             continue
 
-        state = result.stdout.strip().lower()
+        output = result.stdout.strip()
+        state = ""
+        try:
+            payload = json.loads(output) if output else {}
+            if isinstance(payload, dict):
+                workflow_state = _planner_workflow_state_from_issue_payload(payload)
+                github_state = str(payload.get("state", "")).lower()
+                state = workflow_state or github_state
+            else:
+                state = output.lower()
+        except json.JSONDecodeError:
+            # Backward-compatible fallback for older tests/mocks returning plain OPEN.
+            state = output.lower()
+
         if state:
             states[int(issue_number)] = state
 

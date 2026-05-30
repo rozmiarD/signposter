@@ -1703,7 +1703,7 @@ def build_planner_next_from_status(status: dict[str, Any]) -> dict[str, Any]:
             )
             continue
 
-        if state == "open":
+        if state in {"open", "ready"}:
             return {
                 "status": "ready",
                 "reason": "first dependency-ready open task selected",
