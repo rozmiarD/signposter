@@ -267,3 +267,138 @@ def test_apply_worktree_plan_refuses_blocked_plan():
 
     cmds = apply_worktree_plan(plan, dry_run=False)
     assert cmds == []   # nothing executed or planned when blocked
+
+
+def test_worktree_plan_ready_for_reviewer_route_worker_build_human_gate(monkeypatch):
+    """Reviewer-route build tasks should be eligible when role is worker."""
+    from signposter.dispatch import DispatchDecision
+    from signposter.scan import LabeledItem
+    from signposter.worktree import plan_worktree_for_issue
+
+    item = LabeledItem(
+        number=33,
+        title="H033D — Add worktree planning for human-gated reviewer-route tasks",
+        labels=[
+            "phase:build",
+            "state:active",
+            "risk:high",
+            "role:worker",
+            "area:core",
+            "gate:human",
+        ],
+        html_url="https://github.com/test/repo/issues/33",
+        item_type="issue",
+    )
+
+    monkeypatch.setattr("signposter.worktree.fetch_issue_by_number", lambda r, n: item)
+    monkeypatch.setattr("signposter.worktree.fetch_issue_context", lambda r, n: {"body": ""})
+    monkeypatch.setattr(
+        "signposter.worktree.classify_candidate",
+        lambda i: DispatchDecision(
+            item=i,
+            phase="build",
+            state="active",
+            role="worker",
+            risk="high",
+            area="core",
+            proposed_route="reviewer",
+            proposed_gate="human",
+            reason="high-risk human-gated implementation",
+        ),
+    )
+    monkeypatch.setattr("signposter.worktree.get_current_branch", lambda: "main")
+    monkeypatch.setattr("signposter.worktree.has_blocking_dirty_changes", lambda: False)
+    monkeypatch.setattr("signposter.worktree.branch_exists", lambda b: False)
+    monkeypatch.setattr("signposter.worktree.worktree_path_exists", lambda p: False)
+    monkeypatch.setattr("signposter.worktree.is_dependency_blocked", lambda r, b: (False, ""))
+
+    plan = plan_worktree_for_issue("test/repo", 33)
+
+    assert plan.status == "ready"
+    assert plan.route == "reviewer"
+    assert plan.gate == "human"
+    notes = "\n".join(plan.notes)
+    assert "Reviewer-route build task is supported" in notes
+    assert "Human-gated issue" in notes
+
+
+def test_worktree_plan_blocks_reviewer_route_non_worker_role(monkeypatch):
+    """Reviewer-route worktree planning must stay blocked for non-worker roles."""
+    from signposter.dispatch import DispatchDecision
+    from signposter.scan import LabeledItem
+    from signposter.worktree import plan_worktree_for_issue
+
+    item = LabeledItem(
+        number=34,
+        title="Reviewer only task",
+        labels=[
+            "phase:review",
+            "state:active",
+            "risk:high",
+            "role:reviewer",
+            "area:core",
+            "gate:human",
+        ],
+        html_url="https://github.com/test/repo/issues/34",
+        item_type="issue",
+    )
+
+    monkeypatch.setattr("signposter.worktree.fetch_issue_by_number", lambda r, n: item)
+    monkeypatch.setattr("signposter.worktree.fetch_issue_context", lambda r, n: {"body": ""})
+    monkeypatch.setattr(
+        "signposter.worktree.classify_candidate",
+        lambda i: DispatchDecision(
+            item=i,
+            phase="review",
+            state="active",
+            role="reviewer",
+            risk="high",
+            area="core",
+            proposed_route="reviewer",
+            proposed_gate="human",
+            reason="review-only task",
+        ),
+    )
+    monkeypatch.setattr("signposter.worktree.get_current_branch", lambda: "main")
+    monkeypatch.setattr("signposter.worktree.has_blocking_dirty_changes", lambda: False)
+    monkeypatch.setattr("signposter.worktree.branch_exists", lambda b: False)
+    monkeypatch.setattr("signposter.worktree.worktree_path_exists", lambda p: False)
+    monkeypatch.setattr("signposter.worktree.is_dependency_blocked", lambda r, b: (False, ""))
+
+    plan = plan_worktree_for_issue("test/repo", 34)
+
+    assert plan.status.startswith("blocked — route is 'reviewer'")
+    assert "role:worker phase:build" in plan.status
+
+
+def test_format_worktree_plan_includes_reviewer_route_human_gate_notes():
+    from signposter.worktree import WorktreePlan, format_worktree_plan
+
+    plan = WorktreePlan(
+        issue_number=33,
+        title="H033D",
+        state="active",
+        route="reviewer",
+        gate="human",
+        base_branch="main",
+        proposed_branch="work/issue-33-h033d",
+        proposed_worktree="../signposter-work/33",
+        working_tree_clean=True,
+        branch_exists=False,
+        worktree_exists=False,
+        has_unresolved_dependencies=False,
+        dependency_block_reason=None,
+        status="ready",
+        notes=[
+            "No branches or worktrees were created.",
+            "Reviewer-route build task is supported because role is worker.",
+            "Human-gated issue: local worktree planning is allowed; gate remains separate.",
+        ],
+    )
+
+    output = format_worktree_plan(plan)
+
+    assert "route: reviewer" in output
+    assert "gate: human" in output
+    assert "Reviewer-route build task is supported" in output
+    assert "Human-gated issue" in output
