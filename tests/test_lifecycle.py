@@ -611,3 +611,106 @@ def test_lifecycle_complete_for_validated_noop_without_pr():
         assert status.integrated is True
         assert status.cleanup_complete is True
 
+
+
+# =============================================================================
+# WATCH-004: Lifecycle watch strengthened contract tests
+# =============================================================================
+
+
+def test_watch004_ready_output_is_compact_and_not_blocked():
+    """WATCH-004: ready output is deterministic and contains no blocked wording."""
+    req = LifecycleWatchRequest(repo="ExatronOmega/signposter", issue=13, interval=7)
+    snap = collect_lifecycle_watch_data(req)
+    out = format_lifecycle_watch(snap)
+
+    assert snap.status == "ready"
+    assert snap.reason is None
+    assert out.startswith("Signposter Lifecycle Watch — Issue #13")
+    assert "Status:\n  ready" in out
+    assert "Reason:" not in out
+    assert "  blocked" not in out
+    assert "No GitHub mutation was performed." in out
+    assert "No OpenClaw execution was performed." in out
+    assert "Interval requested: 7s (polling not in this surface)" in out
+
+
+def test_watch004_blocked_output_is_compact_and_not_ready():
+    """WATCH-004: blocked output does not include misleading ready wording."""
+    req = LifecycleWatchRequest(repo="ExatronOmega/signposter", issue=None, interval=7)
+    snap = collect_lifecycle_watch_data(req)
+    out = format_lifecycle_watch(snap)
+
+    assert snap.status == "blocked"
+    assert snap.reason == "--repo and --issue are required"
+    assert out.startswith("Signposter Lifecycle Watch")
+    assert "Status:\n  blocked" in out
+    assert "Reason:\n  --repo and --issue are required" in out
+    assert "  ready" not in out
+    assert "Issue #" not in out
+    assert "Interval requested" not in out
+    assert "No GitHub mutation was performed." in out
+    assert "No OpenClaw execution was performed." in out
+
+
+def test_watch004_cli_ready_path_uses_contract_output(monkeypatch, capsys):
+    """WATCH-004: real CLI ready path emits lifecycle watch contract output."""
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "lifecycle",
+            "watch",
+            "--repo",
+            "ExatronOmega/signposter",
+            "--issue",
+            "13",
+            "--interval",
+            "7",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr()
+
+    assert exc_info.value.code == 0
+    assert "Signposter Lifecycle Watch — Issue #13" in captured.out
+    assert "Status:\n  ready" in captured.out
+    assert "Interval requested: 7s (polling not in this surface)" in captured.out
+    assert "No GitHub mutation was performed." in captured.out
+    assert "No OpenClaw execution was performed." in captured.out
+    assert captured.err == ""
+
+
+def test_watch004_cli_missing_repo_reaches_blocked_contract(monkeypatch, capsys):
+    """WATCH-004: real CLI missing repo path blocks without argparse usage noise."""
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "lifecycle",
+            "watch",
+            "--issue",
+            "13",
+            "--interval",
+            "7",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr()
+
+    assert exc_info.value.code == 1
+    assert "Signposter Lifecycle Watch" in captured.out
+    assert "Status:\n  blocked" in captured.out
+    assert "--repo and --issue are required" in captured.out
+    assert "Status:\n  ready" not in captured.out
+    assert "Interval requested" not in captured.out
+    assert "usage:" not in captured.out
+    assert "required" not in captured.err
