@@ -1218,12 +1218,26 @@ def format_planner_next_from_status(result: dict[str, Any]) -> str:
             "",
             "Notes:",
             "  No GitHub mutation was performed.",
+            "  No claim was performed.",
+            "  No worktree was created.",
             "  No OpenClaw execution was performed.",
             "  No task execution was performed.",
         ]
     )
     return "\n".join(lines)
 
+
+
+def _repo_from_github_url(url: str) -> str | None:
+    """Best-effort owner/repo extraction from a GitHub issue URL."""
+    marker = "github.com/"
+    if marker not in url:
+        return None
+    tail = url.split(marker, 1)[1]
+    parts = tail.split("/")
+    if len(parts) < 2 or not parts[0] or not parts[1]:
+        return None
+    return f"{parts[0]}/{parts[1]}"
 
 
 def build_planner_step_from_next(next_result: dict[str, Any]) -> dict[str, Any]:
@@ -1248,11 +1262,49 @@ def build_planner_step_from_next(next_result: dict[str, Any]) -> dict[str, Any]:
             "errors": ["next task has no GitHub issue number"],
         }
 
+    repo = _repo_from_github_url(str(next_task.get("github_url", "")))
+    run_command = (
+        f"signposter run --repo {repo} --issue {github_issue} --dry-run"
+        if repo
+        else f"signposter run --issue {github_issue} --dry-run"
+    )
+    workflow_hints = [
+        {
+            "label": "inspect lifecycle",
+            "command": (
+                f"signposter lifecycle status --repo {repo} --issue {github_issue}"
+                if repo
+                else f"signposter lifecycle status --issue {github_issue}"
+            ),
+        },
+        {
+            "label": "claim dry-run",
+            "command": (
+                f"signposter claim --repo {repo} --dry-run"
+                if repo
+                else "signposter claim --dry-run"
+            ),
+        },
+        {
+            "label": "worktree plan",
+            "command": (
+                f"signposter worktree plan --repo {repo} --issue {github_issue}"
+                if repo
+                else f"signposter worktree plan --issue {github_issue}"
+            ),
+        },
+        {
+            "label": "run dry-run",
+            "command": run_command,
+        },
+    ]
+
     return {
         "status": "ready",
         "reason": next_result.get("reason", "next task is ready"),
         "next": next_task,
-        "suggested_command": f"signposter run --issue {github_issue} --dry-run",
+        "suggested_command": run_command,
+        "workflow_hints": workflow_hints,
         "errors": [],
     }
 
@@ -1291,6 +1343,18 @@ def format_planner_step(result: dict[str, Any]) -> str:
             ]
         )
 
+    if result.get("workflow_hints"):
+        lines.extend(["", "Workflow hints:"])
+        for hint in result["workflow_hints"]:
+            lines.append(f"  {hint['label']}:")
+            lines.append(f"    {hint['command']}")
+        lines.extend(
+            [
+                "  note:",
+                "    Hints only; no command above was executed.",
+            ]
+        )
+
     if result.get("errors"):
         lines.extend(["", "Errors:"])
         lines.extend(f"  - {error}" for error in result["errors"])
@@ -1300,6 +1364,8 @@ def format_planner_step(result: dict[str, Any]) -> str:
             "",
             "Notes:",
             "  No GitHub mutation was performed.",
+            "  No claim was performed.",
+            "  No worktree was created.",
             "  No OpenClaw execution was performed.",
             "  No task execution was performed.",
         ]
