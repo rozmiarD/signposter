@@ -18,6 +18,93 @@ from signposter.review import _run_gh_pr_view
 from signposter.scan import fetch_issue_by_number, fetch_issue_context
 from signposter.sync import plan_sync
 
+# =============================================================================
+# WATCH-002: Read-only lifecycle watch data collector
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class LifecycleWatchRequest:
+    """Input contract for the lifecycle watch data collector (WATCH-002)."""
+
+    repo: str | None
+    issue: int | None
+    interval: int = 5
+
+
+@dataclass(frozen=True)
+class LifecycleWatchSnapshot:
+    """Structured read-only result from the lifecycle watch data collector.
+
+    This is the narrow data collector surface for WATCH-002.
+    No polling or refresh logic lives here (WATCH-003+).
+    """ 
+
+    request: LifecycleWatchRequest
+    status: str  # "ready" | "blocked"
+    reason: str | None
+    notes: list[str]
+
+
+def collect_lifecycle_watch_data(req: LifecycleWatchRequest) -> LifecycleWatchSnapshot:
+    """Read-only lifecycle watch data collector (WATCH-002).
+
+    Performs only the narrow precondition checks required by the CLI contract.
+    Returns a deterministic snapshot. No GitHub calls, no mutations.
+    """ 
+    if not req.repo or req.issue is None:
+        return LifecycleWatchSnapshot(
+            request=req,
+            status="blocked",
+            reason="--repo and --issue are required",
+            notes=[
+                "No GitHub mutation was performed.",
+                "No OpenClaw execution was performed.",
+            ],
+        )
+
+    # Happy / ready path (WATCH-001 contract surface)
+    return LifecycleWatchSnapshot(
+        request=req,
+        status="ready",
+        reason=None,
+        notes=[
+            "No GitHub mutation was performed.",
+            "No OpenClaw execution was performed.",
+            f"Interval requested: {req.interval}s (polling not in this surface)",
+        ],
+    )
+
+
+def format_lifecycle_watch(snapshot: LifecycleWatchSnapshot) -> str:
+    """Render the exact CLI contract output for lifecycle watch."""
+    if snapshot.status == "blocked":
+        return (
+            "Signposter Lifecycle Watch\n"
+            "\n"
+            "Status:\n"
+            "  blocked\n"
+            "\n"
+            "Reason:\n"
+            f"  {snapshot.reason}\n"
+            "\n"
+            "Notes:\n"
+            + "\n".join(f"  {n}" for n in snapshot.notes)
+        )
+
+    # ready path
+    issue = snapshot.request.issue
+    return (
+        f"Signposter Lifecycle Watch — Issue #{issue}\n"
+        "\n"
+        "Status:\n"
+        "  ready\n"
+        "\n"
+        "Notes:\n"
+        + "\n".join(f"  {n}" for n in snapshot.notes)
+    )
+
+
 
 @dataclass(frozen=True)
 class LifecycleStatus:

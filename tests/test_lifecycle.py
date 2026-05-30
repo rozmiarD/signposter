@@ -11,7 +11,11 @@ import pytest
 from signposter.cli import main, run_lifecycle_watch
 from signposter.lifecycle import (
     LifecycleStatus,
+    LifecycleWatchRequest,
+    LifecycleWatchSnapshot,
+    collect_lifecycle_watch_data,
     format_lifecycle_status,
+    format_lifecycle_watch,
     plan_lifecycle_status,
 )
 
@@ -530,4 +534,63 @@ def test_lifecycle_watch_blocked_missing_issue(capsys):
     assert "  blocked" in out
     assert "--repo and --issue are required" in out
     assert "Interval requested" not in out  # no interval in blocked output
+
+
+# =============================================================================
+# WATCH-002: LifecycleWatchDataCollector targeted tests
+# =============================================================================
+
+
+def test_watch002_collector_ready_path_returns_structured_snapshot():
+    """WATCH-002: collector returns ready snapshot with deterministic fields."""
+    req = LifecycleWatchRequest(repo="ExatronOmega/signposter", issue=42, interval=5)
+    snap = collect_lifecycle_watch_data(req)
+
+    assert isinstance(snap, LifecycleWatchSnapshot)
+    assert snap.status == "ready"
+    assert snap.reason is None
+    assert "No GitHub mutation was performed." in snap.notes
+    assert "No OpenClaw execution was performed." in snap.notes
+    assert "Interval requested: 5s" in snap.notes[2]
+    assert snap.request.repo == "ExatronOmega/signposter"
+    assert snap.request.issue == 42
+
+
+def test_watch002_collector_blocked_path_returns_structured_snapshot():
+    """WATCH-002: collector returns blocked snapshot for missing preconditions."""
+    req = LifecycleWatchRequest(repo=None, issue=None, interval=10)
+    snap = collect_lifecycle_watch_data(req)
+
+    assert snap.status == "blocked"
+    assert snap.reason == "--repo and --issue are required"
+    assert "No GitHub mutation was performed." in snap.notes
+    assert "No OpenClaw execution was performed." in snap.notes
+    assert len(snap.notes) == 2  # no interval note in blocked path
+
+
+def test_watch002_format_watch_ready_matches_contract(capsys):
+    """WATCH-002: format produces exact ready contract output."""
+    req = LifecycleWatchRequest(repo="ExatronOmega/signposter", issue=11, interval=5)
+    snap = collect_lifecycle_watch_data(req)
+    out = format_lifecycle_watch(snap)
+
+    assert "Signposter Lifecycle Watch — Issue #11" in out
+    assert "Status:\n  ready" in out
+    assert "No GitHub mutation was performed." in out
+    assert "No OpenClaw execution was performed." in out
+    assert "Interval requested: 5s (polling not in this surface)" in out
+
+
+def test_watch002_format_watch_blocked_matches_contract():
+    """WATCH-002: format produces exact blocked contract output."""
+    req = LifecycleWatchRequest(repo=None, issue=99, interval=5)
+    snap = collect_lifecycle_watch_data(req)
+    out = format_lifecycle_watch(snap)
+
+    assert "Signposter Lifecycle Watch" in out
+    assert "Status:\n  blocked" in out
+    assert "Reason:\n  --repo and --issue are required" in out
+    assert "No GitHub mutation was performed." in out
+    assert "No OpenClaw execution was performed." in out
+    assert "Interval requested" not in out
 
