@@ -29,6 +29,7 @@ from signposter.merge import (
     plan_merge_for_pr,
 )
 from signposter.planner import (
+    apply_planner_advance_plan,
     apply_planner_seed_manifest,
     build_planner_advance_plan_from_status,
     build_planner_impact_from_status,
@@ -38,6 +39,7 @@ from signposter.planner import (
     build_planner_seed_plan,
     build_planner_status,
     build_planner_step_from_next,
+    format_planner_advance_apply_result,
     format_planner_advance_plan,
     format_planner_draft,
     format_planner_impact,
@@ -408,7 +410,12 @@ def main() -> None:
     planner_advance_parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Required in this phase: show planned mutations only",
+        help="Show planned mutations only",
+    )
+    planner_advance_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually add state:ready to the single downstream issue",
     )
     planner_advance_parser.set_defaults(func=run_planner_advance)
 
@@ -1840,15 +1847,31 @@ def run_planner_status(args: argparse.Namespace) -> int:
     return 0
 
 def run_planner_advance(args: argparse.Namespace) -> int:
-    """Show a dry-run plan to promote downstream planner tasks."""
-    if not args.dry_run:
+    """Show or apply a guarded plan to promote downstream planner tasks."""
+    if args.dry_run and args.apply:
         print("Signposter Planner Advance")
         print()
         print("Status:")
         print("  blocked")
         print()
         print("Reason:")
-        print("  --dry-run is required in this phase")
+        print("  choose either --dry-run or --apply")
+        print()
+        print("Notes:")
+        print("  No GitHub mutation was performed.")
+        print("  No manifest mutation was performed.")
+        print("  No OpenClaw execution was performed.")
+        print("  No LLM analysis was performed.")
+        return 1
+
+    if not args.dry_run and not args.apply:
+        print("Signposter Planner Advance")
+        print()
+        print("Status:")
+        print("  blocked")
+        print()
+        print("Reason:")
+        print("  --dry-run or --apply is required")
         print()
         print("Notes:")
         print("  No GitHub mutation was performed.")
@@ -1876,8 +1899,9 @@ def run_planner_advance(args: argparse.Namespace) -> int:
         return 1
 
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+    repo = str(manifest.get("repo", ""))
     issue_states = (
-        _fetch_manifest_issue_states(str(manifest.get("repo", "")), manifest)
+        _fetch_manifest_issue_states(repo, manifest)
         if args.sync_github
         else {}
     )
@@ -1888,7 +1912,52 @@ def run_planner_advance(args: argparse.Namespace) -> int:
         manifest_path=str(args.manifest),
     )
     print(format_planner_advance_plan(advance_plan))
-    return 1 if advance_plan["status"] == "blocked" else 0
+
+    if advance_plan["status"] == "blocked":
+        return 1
+    if args.dry_run:
+        return 0
+
+    try:
+        existing_labels = _fetch_repo_label_names(repo)
+    except RuntimeError as exc:
+        print()
+        print("Planner Advance Label Preflight")
+        print()
+        print("Status:")
+        print("  blocked")
+        print()
+        print("Errors:")
+        print(f"  - {exc}")
+        return 1
+
+    if "state:ready" not in existing_labels:
+        print()
+        print("Planner Advance Label Preflight")
+        print()
+        print("Status:")
+        print("  blocked")
+        print()
+        print("Missing labels:")
+        print("  - state:ready")
+        print()
+        print("Errors:")
+        print("  - missing GitHub label: state:ready")
+        return 1
+
+    apply_result = apply_planner_advance_plan(
+        advance_plan,
+        repo=repo,
+        run_command=lambda command: subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+        ),
+    )
+    print()
+    print(format_planner_advance_apply_result(apply_result))
+    return 0 if apply_result["status"] == "applied" else 1
 
 
 def run_planner_impact(args: argparse.Namespace) -> int:

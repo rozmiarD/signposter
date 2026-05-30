@@ -1097,6 +1097,109 @@ def _planner_impact_level(score: int) -> str:
     return "low"
 
 
+def apply_planner_advance_plan(
+    advance_plan: dict[str, Any],
+    *,
+    repo: str,
+    run_command,
+) -> dict[str, Any]:
+    """Apply one guarded planner advance label mutation."""
+    if advance_plan.get("status") != "ready":
+        return {
+            "status": "blocked",
+            "issue": advance_plan.get("issue"),
+            "promoted": [],
+            "commands": [],
+            "errors": ["advance plan is not ready"],
+        }
+
+    targets = advance_plan.get("targets", [])
+    if len(targets) != 1:
+        return {
+            "status": "blocked",
+            "issue": advance_plan.get("issue"),
+            "promoted": [],
+            "commands": [],
+            "errors": [f"expected exactly one advance target, found {len(targets)}"],
+        }
+
+    target = targets[0]
+    labels_to_add = target.get("labels_to_add", [])
+    if labels_to_add != ["state:ready"]:
+        return {
+            "status": "blocked",
+            "issue": advance_plan.get("issue"),
+            "promoted": [],
+            "commands": [],
+            "errors": ["advance target must add exactly state:ready"],
+        }
+
+    github_issue = str(target["github_issue"])
+    command = [
+        "gh",
+        "issue",
+        "edit",
+        github_issue,
+        "-R",
+        repo,
+        "--add-label",
+        "state:ready",
+    ]
+    run_command(command)
+
+    return {
+        "status": "applied",
+        "issue": advance_plan.get("issue"),
+        "promoted": [
+            {
+                "key": target["key"],
+                "github_issue": target["github_issue"],
+                "labels_added": labels_to_add,
+            }
+        ],
+        "commands": [" ".join(command)],
+        "errors": [],
+    }
+
+
+def format_planner_advance_apply_result(result: dict[str, Any]) -> str:
+    """Format guarded planner advance apply result."""
+    lines = [
+        "Signposter Planner Advance Apply",
+        "",
+        "Status:",
+        f"  {result['status']}",
+    ]
+
+    if result.get("promoted"):
+        lines.extend(["", "Promoted GitHub issues:"])
+        for item in result["promoted"]:
+            labels = ", ".join(item.get("labels_added", []))
+            lines.append(
+                f"  {item['key']} -> #{item['github_issue']} "
+                f"added labels: {labels}"
+            )
+
+    if result.get("commands"):
+        lines.extend(["", "Executed commands:"])
+        lines.extend(f"  {command}" for command in result["commands"])
+
+    if result.get("errors"):
+        lines.extend(["", "Errors:"])
+        lines.extend(f"  - {error}" for error in result["errors"])
+
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "  No manifest mutation was performed.",
+            "  No OpenClaw execution was performed.",
+            "  No LLM analysis was performed.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def build_planner_advance_plan_from_status(
     status: dict[str, Any],
     *,
