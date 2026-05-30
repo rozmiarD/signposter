@@ -1097,6 +1097,170 @@ def _planner_impact_level(score: int) -> str:
     return "low"
 
 
+def build_planner_advance_plan_from_status(
+    status: dict[str, Any],
+    *,
+    issue: int,
+    manifest_path: str,
+) -> dict[str, Any]:
+    """Build a dry-run plan to promote downstream planner tasks."""
+    tasks = status.get("tasks", [])
+    repo = status.get("repo", "")
+    source_task = next((item for item in tasks if item.get("github_issue") == issue), None)
+
+    if source_task is None:
+        return {
+            "status": "blocked",
+            "issue": issue,
+            "source_task": None,
+            "targets": [],
+            "planned_github_mutations": [],
+            "planned_manifest_mutations": [],
+            "requires_llm_analysis": False,
+            "manifest_path": manifest_path,
+            "reasons": [f"issue #{issue} is not present in the planner manifest"],
+        }
+
+    source_state = str(source_task.get("state", "")).lower()
+    if source_state not in COMPLETED_PLANNER_STATES:
+        return {
+            "status": "blocked",
+            "issue": issue,
+            "source_task": source_task,
+            "targets": [],
+            "planned_github_mutations": [],
+            "planned_manifest_mutations": [],
+            "requires_llm_analysis": False,
+            "manifest_path": manifest_path,
+            "reasons": [
+                f"issue is not completed: state={source_task.get('state')}",
+                "advance waits for completed/merged/done source tasks",
+            ],
+        }
+
+    source_key = source_task.get("key")
+    downstream = [
+        task
+        for task in tasks
+        if source_key in task.get("depends_on", [])
+    ]
+
+    targets = []
+    planned_github_mutations = []
+    for task in downstream:
+        github_issue = task.get("github_issue")
+        state = str(task.get("state", "")).lower()
+        labels = set(task.get("labels", []))
+        if github_issue is None:
+            continue
+        if state not in {"open", "unknown"}:
+            continue
+        if "state:ready" in labels:
+            continue
+
+        target = {
+            "key": task["key"],
+            "github_issue": github_issue,
+            "github_url": task.get("github_url", ""),
+            "state": task.get("state"),
+            "labels_to_add": ["state:ready"],
+        }
+        targets.append(target)
+
+        command = f"gh issue edit {github_issue}"
+        if repo:
+            command += f" -R {repo}"
+        command += " --add-label state:ready"
+        planned_github_mutations.append(command)
+
+    status_value = "ready" if targets else "blocked"
+    reasons = [
+        f"source issue is completed: state={source_task.get('state')}",
+        "advance dry-run used zero LLM tokens",
+    ]
+    if targets:
+        reasons.append("one or more downstream tasks can be promoted")
+    elif downstream:
+        reasons.append("no downstream task is currently promotable")
+    else:
+        reasons.append("source task has no downstream dependents")
+
+    return {
+        "status": status_value,
+        "issue": issue,
+        "source_task": source_task,
+        "targets": targets,
+        "planned_github_mutations": planned_github_mutations,
+        "planned_manifest_mutations": [],
+        "requires_llm_analysis": False,
+        "manifest_path": manifest_path,
+        "reasons": reasons,
+    }
+
+
+def format_planner_advance_plan(result: dict[str, Any]) -> str:
+    """Format a dry-run planner advance plan."""
+    issue = result["issue"]
+    lines = [
+        f"Signposter Planner Advance — Issue #{issue}",
+        "",
+        "Status:",
+        f"  {result['status']}",
+    ]
+
+    source_task = result.get("source_task")
+    if source_task:
+        lines.extend(
+            [
+                "",
+                "Source task:",
+                f"  {source_task['key']} — state: {source_task['state']}",
+            ]
+        )
+
+    targets = result.get("targets", [])
+    lines.extend(["", "Would promote:"])
+    if targets:
+        for target in targets:
+            lines.append(
+                f"  {target['key']} — issue: #{target['github_issue']} — "
+                f"state: {target['state']}"
+            )
+    else:
+        lines.append("  none")
+
+    lines.extend(["", "Planned GitHub mutations:"])
+    mutations = result.get("planned_github_mutations", [])
+    if mutations:
+        lines.extend(f"  {mutation}" for mutation in mutations)
+    else:
+        lines.append("  none")
+
+    lines.extend(["", "Planned manifest mutations:"])
+    manifest_mutations = result.get("planned_manifest_mutations", [])
+    if manifest_mutations:
+        lines.extend(f"  {mutation}" for mutation in manifest_mutations)
+    else:
+        lines.append("  none")
+
+    if result.get("reasons"):
+        lines.extend(["", "Reasons:"])
+        lines.extend(f"  - {reason}" for reason in result["reasons"])
+
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "  Dry-run only.",
+            "  No GitHub mutation was performed.",
+            "  No manifest mutation was performed.",
+            "  No OpenClaw execution was performed.",
+            "  No LLM analysis was performed.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def build_planner_impact_from_status(
     status: dict[str, Any],
     *,
