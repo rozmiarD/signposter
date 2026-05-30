@@ -706,6 +706,11 @@ def main() -> None:
         action="store_true",
         help="Actually perform the merge (default is dry-run)",
     )
+    merge_apply_parser.add_argument(
+        "--allow-medium-scope",
+        action="store_true",
+        help="Explicitly allow guarded merge of a medium-scope PR",
+    )
     merge_apply_parser.set_defaults(func=run_merge_apply)
 
     # integration subcommand group (HARDENING-021A — post-merge integration planning, dry-run only)
@@ -1317,13 +1322,19 @@ def run_merge_apply(args: argparse.Namespace) -> int:
     repo = getattr(args, "repo", None)
     pr = getattr(args, "pr", None)
     do_apply = getattr(args, "apply", False)
+    allow_medium_scope = getattr(args, "allow_medium_scope", False)
 
     if not repo or pr is None:
         print("Error: --repo and --pr are required", file=sys.stderr)
         return 1
 
     try:
-        result = apply_merge(repo, pr, apply=do_apply)
+        result = apply_merge(
+            repo,
+            pr,
+            apply=do_apply,
+            allow_medium_scope=allow_medium_scope,
+        )
         plan = result.get("plan")
 
         if result.get("mode") == "dry_run":

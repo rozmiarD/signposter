@@ -489,3 +489,115 @@ def test_merge_apply_dry_run_ready_still_shows_command():
     assert "gh pr merge 5 -R test/repo --squash --delete-branch" in output
     assert "none —" not in output
 
+
+def test_merge_plan_allows_medium_scope_with_explicit_override():
+    """Medium scope remains blocked by default but can be explicitly allowed."""
+    with patch("signposter.merge._run_gh_pr_view") as mock_view, \
+         patch("signposter.merge._fetch_pr_reviews_and_author") as mock_reviews, \
+         patch("signposter.merge.evaluate_review_gate") as mock_gate, \
+         patch("signposter.merge._fetch_pr_checks_for_merge") as mock_checks:
+
+        mock_view.return_value = {
+            "title": "work: watch-001-define-lifecycle-watch-cli-contract",
+            "state": "OPEN",
+            "baseRefName": "main",
+            "headRefName": "work/issue-10-watch-001-define-lifecycle-watch-cli-contract",
+            "mergeable": "MERGEABLE",
+            "reviewDecision": "APPROVED",
+            "body": "Related issue: #10",
+            "files": [
+                {"path": "src/signposter/cli.py"},
+                {"path": "tests/test_lifecycle.py"},
+            ],
+            "additions": 147,
+            "deletions": 0,
+        }
+        mock_reviews.return_value = {
+            "pr_author": "ExatronOmega",
+            "review_decision": "APPROVED",
+            "approving_reviewers": ["AlphaExatron"],
+        }
+        mock_gate.return_value = type("G", (), {
+            "gate_pass": True,
+            "opinion": type("O", (), {
+                "verdict": "APPROVE",
+                "confidence": 0.87,
+                "risk": "low",
+            })(),
+        })()
+        mock_checks.return_value = {
+            "status": "pass",
+            "successful": 1,
+            "failing": 0,
+            "pending": 0,
+        }
+
+        blocked = plan_merge_for_pr("test/repo", 15)
+        allowed = plan_merge_for_pr(
+            "test/repo",
+            15,
+            allow_medium_scope=True,
+        )
+
+    assert blocked.status == "blocked — PR scope is medium"
+    assert blocked.size == "medium"
+    assert allowed.status == "ready"
+    assert allowed.size == "medium"
+    assert allowed.has_non_author_approval is True
+    assert allowed.has_auto_close_keywords is False
+
+
+def test_apply_merge_passes_allow_medium_scope_override():
+    from signposter.merge import apply_merge
+
+    with patch("signposter.merge.plan_merge_for_pr") as mock_plan:
+        fake_plan = MergePlan(
+            pr_number=15,
+            title="test",
+            state="OPEN",
+            base_branch="main",
+            head_branch="work/issue-10",
+            mergeable="MERGEABLE",
+            review_decision="APPROVED",
+            checks_status="pass",
+            successful_checks=1,
+            failing_checks=0,
+            pending_checks=0,
+            github_approved=True,
+            approving_reviewers=["AlphaExatron"],
+            has_non_author_approval=True,
+            pr_author="ExatronOmega",
+            reviewer_gate_pass=True,
+            reviewer_verdict="APPROVE",
+            reviewer_confidence=0.87,
+            reviewer_risk="low",
+            associated_issue=10,
+            has_auto_close_keywords=False,
+            files_changed=2,
+            additions=147,
+            deletions=0,
+            risk_level="medium",
+            size="medium",
+            merge_method="squash",
+            delete_branch_after_merge=True,
+            command_preview="gh pr merge 15 -R test/repo --squash --delete-branch",
+            status="ready",
+            notes=[],
+        )
+        mock_plan.return_value = fake_plan
+
+        result = apply_merge(
+            "test/repo",
+            15,
+            apply=False,
+            allow_medium_scope=True,
+        )
+
+    mock_plan.assert_called_once_with(
+        "test/repo",
+        15,
+        allow_medium_scope=True,
+    )
+    assert result["mode"] == "dry_run"
+    assert result["plan"].status == "ready"
+

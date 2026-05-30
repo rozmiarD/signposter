@@ -155,7 +155,12 @@ def _classify_size_and_risk(
     return risk, size
 
 
-def plan_merge_for_pr(repo: str, pr_number: int) -> MergePlan:
+def plan_merge_for_pr(
+    repo: str,
+    pr_number: int,
+    *,
+    allow_medium_scope: bool = False,
+) -> MergePlan:
     """Produce a dry-run MergePlan for a pull request."""
     notes = [
         "No merge was performed.",
@@ -263,6 +268,10 @@ def plan_merge_for_pr(repo: str, pr_number: int) -> MergePlan:
     associated_issue = _extract_issue_from_branch_or_body(head, body)
     has_auto_close = _has_auto_close_keywords(body)
 
+    scope_allowed = size == "small" or (
+        allow_medium_scope and size == "medium"
+    )
+
     # Merge eligibility decision (very conservative)
     status = "ready"
     if state != "OPEN":
@@ -287,7 +296,7 @@ def plan_merge_for_pr(repo: str, pr_number: int) -> MergePlan:
         status = "blocked — reviewer confidence below threshold"
     elif reviewer_risk not in ("low", "LOW"):
         status = f"blocked — reviewer risk is {reviewer_risk or 'unknown'}"
-    elif size not in ("small",):
+    elif not scope_allowed:
         status = f"blocked — PR scope is {size}"
     elif associated_issue is None:
         status = "blocked — associated Signposter issue could not be detected"
@@ -485,7 +494,11 @@ def _fetch_pr_checks_for_merge(repo: str, pr: int) -> dict[str, Any]:
 
 
 def apply_merge(
-    repo: str, pr_number: int, *, apply: bool = False
+    repo: str,
+    pr_number: int,
+    *,
+    apply: bool = False,
+    allow_medium_scope: bool = False,
 ) -> dict:
     """Execute (or dry-run) a guarded merge of a PR.
 
@@ -493,7 +506,11 @@ def apply_merge(
     Uses squash merge + --delete-branch for the remote branch.
     Never closes issues, never touches local worktrees/branches.
     """
-    plan = plan_merge_for_pr(repo, pr_number)
+    plan = plan_merge_for_pr(
+        repo,
+        pr_number,
+        allow_medium_scope=allow_medium_scope,
+    )
 
     if not apply:
         # Pure dry-run
