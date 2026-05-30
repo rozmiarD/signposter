@@ -319,12 +319,8 @@ def evaluate_human_gate(
         proposed_command=None,
     )
 def _has_scoped_worker_code_completion_evidence(text: str) -> bool:
-    """Detect conservative scoped code/CLI worker completion evidence.
-
-    This is intentionally stricter than generic positive text matching. It is for
-    bounded worker tasks that legitimately modify src/ plus tests and provide
-    validation/smoke evidence.
-    """
+    # Detect conservative scoped code/CLI worker completion evidence.
+    # Supports legacy lifecycle-watch evidence plus general src+tests scoped-code evidence.
     t = (text or "").lower()
 
     disqualifiers = [
@@ -336,17 +332,27 @@ def _has_scoped_worker_code_completion_evidence(text: str) -> bool:
         "dirty: true",
         "working tree dirty",
         "scope not followed",
-        "scope broadening",
+        "scope was broadened",
+        "scope broadened",
+        "actual scope broadening",
+        "unexpected scope broadening",
         "unexpected change",
         "traceback",
         "critical blocker",
         "cannot proceed",
         "execution failed",
+        "validation failed",
+        "pytest failed",
+        "pytest fails",
+        "ruff failed",
     ]
     if any(disqualifier in t for disqualifier in disqualifiers):
         return False
 
-    required = [
+    if "unrelated files changed:" in t or "unrelated files were changed:" in t:
+        return False
+
+    required_core = [
         "exit code:** 0",
         "dirty guard:** clean",
         "task execution complete:** yes",
@@ -354,20 +360,34 @@ def _has_scoped_worker_code_completion_evidence(text: str) -> bool:
         "files changed",
         "ruff check .",
         "pytest tests/ -q",
-        "manual cli smoke passed",
         "no unrelated files were changed",
     ]
-    if not all(signal in t for signal in required):
+    if not all(signal in t for signal in required_core):
         return False
 
-    scoped_code_signals = [
+    legacy_lifecycle_watch_signals = [
         "src/signposter/cli.py",
         "tests/test_lifecycle.py",
         "lifecycle watch",
     ]
-    return all(signal in t for signal in scoped_code_signals)
+    if all(signal in t for signal in legacy_lifecycle_watch_signals):
+        return True
 
+    validation_signals = ["targeted validation", "full validation"]
+    if not all(signal in t for signal in validation_signals):
+        return False
 
+    scoped_code_signals = ["src/signposter/", "tests/test_"]
+    if not all(signal in t for signal in scoped_code_signals):
+        return False
+
+    safety_signals = [
+        "no github mutation",
+        "no openclaw execution",
+        "no issue was closed",
+        "no merge was performed",
+    ]
+    return all(signal in t for signal in safety_signals)
 
 def _has_scoped_worker_test_completion_evidence(text: str) -> bool:
     """Detect conservative scoped test-only worker completion evidence.
