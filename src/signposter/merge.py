@@ -160,6 +160,7 @@ def plan_merge_for_pr(
     pr_number: int,
     *,
     allow_medium_scope: bool = False,
+    allow_medium_risk: bool = False,
 ) -> MergePlan:
     """Produce a dry-run MergePlan for a pull request."""
     notes = [
@@ -255,7 +256,11 @@ def plan_merge_for_pr(
 
     # Local reviewer gate
     try:
-        gate: ReviewGateResult = evaluate_review_gate(repo, pr_number)
+        gate: ReviewGateResult = evaluate_review_gate(
+            repo,
+            pr_number,
+            allow_medium_risk=allow_medium_risk,
+        )
     except Exception:
         gate = None  # type: ignore
 
@@ -270,6 +275,9 @@ def plan_merge_for_pr(
 
     scope_allowed = size == "small" or (
         allow_medium_scope and size == "medium"
+    )
+    reviewer_risk_allowed = reviewer_risk in ("low", "LOW") or (
+        allow_medium_risk and reviewer_risk in ("medium", "MEDIUM")
     )
 
     # Merge eligibility decision (very conservative)
@@ -294,7 +302,7 @@ def plan_merge_for_pr(
         status = f"blocked — reviewer verdict is {reviewer_verdict or 'unknown'}"
     elif reviewer_confidence is None or reviewer_confidence < 0.85:
         status = "blocked — reviewer confidence below threshold"
-    elif reviewer_risk not in ("low", "LOW"):
+    elif not reviewer_risk_allowed:
         status = f"blocked — reviewer risk is {reviewer_risk or 'unknown'}"
     elif not scope_allowed:
         status = f"blocked — PR scope is {size}"
@@ -499,6 +507,7 @@ def apply_merge(
     *,
     apply: bool = False,
     allow_medium_scope: bool = False,
+    allow_medium_risk: bool = False,
 ) -> dict:
     """Execute (or dry-run) a guarded merge of a PR.
 
@@ -510,6 +519,7 @@ def apply_merge(
         repo,
         pr_number,
         allow_medium_scope=allow_medium_scope,
+        allow_medium_risk=allow_medium_risk,
     )
 
     if not apply:

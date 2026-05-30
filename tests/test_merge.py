@@ -597,7 +597,69 @@ def test_apply_merge_passes_allow_medium_scope_override():
         "test/repo",
         15,
         allow_medium_scope=True,
+        allow_medium_risk=False,
     )
     assert result["mode"] == "dry_run"
     assert result["plan"].status == "ready"
+
+
+def test_merge_plan_allows_medium_reviewer_risk_with_explicit_override():
+    """Medium reviewer risk remains blocked by default but can be explicitly allowed."""
+    with patch("signposter.merge._run_gh_pr_view") as mock_view, \
+         patch("signposter.merge._fetch_pr_reviews_and_author") as mock_reviews, \
+         patch("signposter.merge.evaluate_review_gate") as mock_gate, \
+         patch("signposter.merge._fetch_pr_checks_for_merge") as mock_checks:
+
+        mock_view.return_value = {
+            "title": "work: watch-002-add-read-only-lifecycle-watch-data-collector",
+            "state": "OPEN",
+            "baseRefName": "main",
+            "headRefName": "work/issue-11-watch-002-add-read-only-lifecycle-watch-data-colle",
+            "mergeable": "MERGEABLE",
+            "reviewDecision": "APPROVED",
+            "body": "Related issue: #11",
+            "files": [
+                {"path": "src/signposter/cli.py"},
+                {"path": "src/signposter/lifecycle.py"},
+                {"path": "tests/test_lifecycle.py"},
+            ],
+            "additions": 162,
+            "deletions": 31,
+        }
+        mock_reviews.return_value = {
+            "pr_author": "ExatronOmega",
+            "review_decision": "APPROVED",
+            "approving_reviewers": ["AlphaExatron"],
+        }
+        mock_gate.return_value = type("G", (), {
+            "gate_pass": True,
+            "opinion": type("O", (), {
+                "verdict": "APPROVE",
+                "confidence": 0.90,
+                "risk": "medium",
+            })(),
+        })()
+        mock_checks.return_value = {
+            "status": "pass",
+            "successful": 1,
+            "failing": 0,
+            "pending": 0,
+        }
+
+        blocked = plan_merge_for_pr(
+            "test/repo",
+            16,
+            allow_medium_scope=True,
+        )
+        allowed = plan_merge_for_pr(
+            "test/repo",
+            16,
+            allow_medium_scope=True,
+            allow_medium_risk=True,
+        )
+
+    assert blocked.status == "blocked — reviewer risk is medium"
+    assert allowed.status == "ready"
+    assert allowed.reviewer_risk == "medium"
+    assert allowed.size == "medium"
 

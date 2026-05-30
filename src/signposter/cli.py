@@ -662,6 +662,11 @@ def main() -> None:
     )
     gate_parser.add_argument("--repo", required=True)
     gate_parser.add_argument("--pr", type=int, required=True)
+    gate_parser.add_argument(
+        "--allow-medium-risk",
+        action="store_true",
+        help="Explicitly allow medium reviewer risk for this gate evaluation",
+    )
     gate_parser.set_defaults(func=run_review_gate)
 
     # submit subcommand (HARDENING-018 — GitHub review submission)
@@ -675,6 +680,11 @@ def main() -> None:
         "--apply",
         action="store_true",
         help="Actually submit the review to GitHub (default is dry-run)",
+    )
+    submit_parser.add_argument(
+        "--allow-medium-risk",
+        action="store_true",
+        help="Explicitly allow medium reviewer risk for review submission",
     )
     submit_parser.set_defaults(func=run_review_submit)
 
@@ -710,6 +720,11 @@ def main() -> None:
         "--allow-medium-scope",
         action="store_true",
         help="Explicitly allow guarded merge of a medium-scope PR",
+    )
+    merge_apply_parser.add_argument(
+        "--allow-medium-risk",
+        action="store_true",
+        help="Explicitly allow guarded merge with medium reviewer risk",
     )
     merge_apply_parser.set_defaults(func=run_merge_apply)
 
@@ -1231,13 +1246,18 @@ def run_review_gate(args: argparse.Namespace) -> int:
     """Handler for `signposter review gate --repo ... --pr N` (HARDENING-017)."""
     repo = getattr(args, "repo", None)
     pr = getattr(args, "pr", None)
+    allow_medium_risk = getattr(args, "allow_medium_risk", False)
 
     if not repo or pr is None:
         print("Error: --repo and --pr are required", file=sys.stderr)
         return 1
 
     try:
-        result = evaluate_review_gate(repo, pr)
+        result = evaluate_review_gate(
+            repo,
+            pr,
+            allow_medium_risk=allow_medium_risk,
+        )
         print(format_review_gate(result))
         return 0 if result.gate_pass else 1
     except Exception as e:
@@ -1250,6 +1270,7 @@ def run_review_submit(args: argparse.Namespace) -> int:
     repo = getattr(args, "repo", None)
     pr = getattr(args, "pr", None)
     do_apply = getattr(args, "apply", False)
+    allow_medium_risk = getattr(args, "allow_medium_risk", False)
 
     if not repo or pr is None:
         print("Error: --repo and --pr are required", file=sys.stderr)
@@ -1258,12 +1279,21 @@ def run_review_submit(args: argparse.Namespace) -> int:
     try:
         if not do_apply:
             # Dry-run path (default)
-            plan = plan_review_submit(repo, pr)
+            plan = plan_review_submit(
+                repo,
+                pr,
+                allow_medium_risk=allow_medium_risk,
+            )
             print(format_review_submit_plan(plan))
             return 0 if plan.status in ("ready", "ready-for-request-changes") else 1
         else:
             # Mutation path
-            result = submit_review(repo, pr, apply=True)
+            result = submit_review(
+                repo,
+                pr,
+                apply=True,
+                allow_medium_risk=allow_medium_risk,
+            )
             plan = result.get("plan")
 
             if result.get("mode") == "apply":
@@ -1323,6 +1353,7 @@ def run_merge_apply(args: argparse.Namespace) -> int:
     pr = getattr(args, "pr", None)
     do_apply = getattr(args, "apply", False)
     allow_medium_scope = getattr(args, "allow_medium_scope", False)
+    allow_medium_risk = getattr(args, "allow_medium_risk", False)
 
     if not repo or pr is None:
         print("Error: --repo and --pr are required", file=sys.stderr)
@@ -1334,6 +1365,7 @@ def run_merge_apply(args: argparse.Namespace) -> int:
             pr,
             apply=do_apply,
             allow_medium_scope=allow_medium_scope,
+            allow_medium_risk=allow_medium_risk,
         )
         plan = result.get("plan")
 
