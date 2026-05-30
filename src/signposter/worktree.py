@@ -99,6 +99,8 @@ def plan_worktree_for_issue(repo: str, issue_number: int) -> WorktreePlan:
     state = dispatch.state
     route = dispatch.proposed_route
     gate = dispatch.proposed_gate
+    role = dispatch.role
+    phase = dispatch.phase
 
     # Git context
     base_branch = get_current_branch() or "main"
@@ -118,7 +120,23 @@ def plan_worktree_for_issue(repo: str, issue_number: int) -> WorktreePlan:
     notes: list[str] = ["No branches or worktrees were created."]
     status = "ready"
 
-    if state in ("done", "failed"):
+    supports_worker_route = route == "worker"
+    supports_reviewer_worker_route = (
+        route == "reviewer"
+        and role == "worker"
+        and phase == "build"
+    )
+    supported_route = supports_worker_route or supports_reviewer_worker_route
+
+    if supports_reviewer_worker_route:
+        notes.append("Reviewer-route build task is supported because role is worker.")
+    if gate == "human":
+        notes.append(
+            "Human-gated issue: local worktree planning is allowed; "
+            "gate remains separate."
+        )
+
+    if state in ("done", "failed", "merged"):
         status = f"blocked — issue is state:{state}"
     elif blocked_by_deps:
         status = f"blocked — {dep_reason}"
@@ -128,8 +146,14 @@ def plan_worktree_for_issue(repo: str, issue_number: int) -> WorktreePlan:
         status = f"blocked — proposed branch already exists: {proposed_branch}"
     elif worktree_exists_flag:
         status = f"blocked — proposed worktree path already exists: {proposed_worktree}"
-    elif route != "worker":
-        status = f"blocked — route is '{route}' (worktree planning currently targets worker)"
+    elif not supported_route:
+        status = (
+            f"blocked — route is '{route}' "
+            "("
+            "worktree planning requires route:worker or route:reviewer "
+            "with role:worker phase:build"
+            ")"
+        )
     else:
         status = "ready"
 
