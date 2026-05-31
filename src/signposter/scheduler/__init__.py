@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
-from signposter.dependencies import is_dependency_blocked
+from signposter.dependencies import is_dependency_blocked, parse_depends_on
 from signposter.scan import LabeledItem, fetch_issue_context, fetch_open_issues
 
 TERMINAL_STATES = {"done", "merged", "blocked", "failed"}
+ISSUE_REF_RE = re.compile(r"#(\d+)")
 
 
 @dataclass(frozen=True)
@@ -20,6 +22,53 @@ class SchedulerNext:
     reason: str
     skipped: list[str]
     notes: list[str]
+
+
+@dataclass(frozen=True)
+class GraphMetadata:
+    """Graph metadata parsed from a GitHub issue body."""
+
+    depends_on: list[int]
+    mainline: str | None
+    parent: int | None
+    return_to: int | None
+    side_task: bool
+
+
+def parse_graph_metadata(body: str | None) -> GraphMetadata:
+    """Parse simple graph metadata from an issue body."""
+    depends_on = parse_depends_on(body)
+    mainline: str | None = None
+    parent: int | None = None
+    return_to: int | None = None
+    side_task = False
+
+    for raw_line in (body or "").splitlines():
+        line = raw_line.strip()
+        lower = line.lower()
+        if lower.startswith("mainline:"):
+            value = line.split(":", 1)[1].strip()
+            mainline = value or None
+        elif lower.startswith("parent:"):
+            parent = _first_issue_ref(line)
+        elif lower.startswith("return-to:"):
+            return_to = _first_issue_ref(line)
+        elif lower.startswith("side-task"):
+            value = line.split(":", 1)[1].strip().lower() if ":" in line else "yes"
+            side_task = value in {"1", "true", "yes", "y"}
+
+    return GraphMetadata(
+        depends_on=depends_on,
+        mainline=mainline,
+        parent=parent,
+        return_to=return_to,
+        side_task=side_task,
+    )
+
+
+def _first_issue_ref(text: str) -> int | None:
+    match = ISSUE_REF_RE.search(text)
+    return int(match.group(1)) if match else None
 
 
 def _state(labels: list[str]) -> str | None:

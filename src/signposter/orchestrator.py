@@ -20,6 +20,7 @@ MUTATION_REQUIRED_ACTIONS = {
     "sync-rebase",
     "create-worktree",
     "claim-issue",
+    "write-prompt",
     "create-pr",
     "review-pr",
     "merge-pr",

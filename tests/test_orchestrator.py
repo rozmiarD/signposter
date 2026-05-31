@@ -226,6 +226,26 @@ def test_orchestrator_step_apply_runs_allowlisted_command() -> None:
     ][-5:]
 
 
+def test_orchestrator_step_allows_write_prompt_action() -> None:
+    lifecycle_next = _next(
+        workflow_state="state:active",
+        action="write-prompt",
+        command="signposter run --repo ExatronOmega/signposter --issue 46 --write-prompt",
+    )
+    proc = type("Proc", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
+
+    with patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next):
+        result = run_orchestrator_step(
+            "ExatronOmega/signposter",
+            issue=46,
+            apply=True,
+            run_command=Mock(return_value=proc),
+        )
+
+    assert result.status == "applied"
+    assert result.applied is True
+
+
 def test_orchestrator_step_blocks_execute_without_flag() -> None:
     with patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()):
         result = run_orchestrator_step(
