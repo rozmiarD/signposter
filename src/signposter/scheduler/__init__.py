@@ -101,6 +101,7 @@ def _state(labels: list[str]) -> str | None:
 def select_next_issue(repo: str, *, limit: int = 50) -> SchedulerNext:
     """Select the first dependency-clear open issue labeled state:ready."""
     skipped: list[str] = []
+    ready_mainline: LabeledItem | None = None
 
     for issue in sorted(fetch_open_issues(repo, limit=limit), key=lambda item: item.number):
         state = _state(issue.labels)
@@ -110,15 +111,36 @@ def select_next_issue(repo: str, *, limit: int = 50) -> SchedulerNext:
             continue
 
         context = fetch_issue_context(repo, issue.number) or {}
+        metadata = parse_graph_metadata(context.get("body"))
         blocked, reason = is_dependency_blocked(repo, context.get("body"))
         if blocked:
             skipped.append(f"#{issue.number}: {reason}")
             continue
 
+        if metadata.side_task:
+            return SchedulerNext(
+                repo=repo,
+                status="ready",
+                issue=issue,
+                reason="first open unblocked side-task selected",
+                skipped=skipped,
+                notes=[
+                    "Read-only scheduler selection.",
+                    "No GitHub mutation was performed.",
+                    "No worktree was created.",
+                    "No OpenClaw execution was performed.",
+                ],
+            )
+
+        if ready_mainline is not None:
+            continue
+        ready_mainline = issue
+
+    if ready_mainline is not None:
         return SchedulerNext(
             repo=repo,
             status="ready",
-            issue=issue,
+            issue=ready_mainline,
             reason="first open state:ready issue with clear dependencies",
             skipped=skipped,
             notes=[
