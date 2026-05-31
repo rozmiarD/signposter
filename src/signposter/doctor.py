@@ -6,6 +6,7 @@ No side effects. Designed to be testable.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -140,6 +141,37 @@ def check_command_available(name: str) -> CheckResult:
             status=CheckStatus.WARN,
             message=f"{name} not found in PATH",
         )
+
+
+def check_reviewer_token_present() -> CheckResult:
+    """Check reviewer token presence without printing the token."""
+    if os.environ.get("SIGNPOSTER_REVIEWER_GH_TOKEN"):
+        return CheckResult(
+            name="reviewer-token",
+            status=CheckStatus.OK,
+            message="SIGNPOSTER_REVIEWER_GH_TOKEN is present",
+        )
+    return CheckResult(
+        name="reviewer-token",
+        status=CheckStatus.WARN,
+        message="SIGNPOSTER_REVIEWER_GH_TOKEN is not set",
+    )
+
+
+def check_virtualenv_active() -> CheckResult:
+    """Check whether Signposter appears to be running from a virtualenv."""
+    if sys.prefix != sys.base_prefix:
+        return CheckResult(
+            name="venv",
+            status=CheckStatus.OK,
+            message="virtualenv is active",
+            details=sys.prefix,
+        )
+    return CheckResult(
+        name="venv",
+        status=CheckStatus.WARN,
+        message="virtualenv is not active",
+    )
 
 
 def check_gh_auth() -> CheckResult:
@@ -322,6 +354,20 @@ def run_doctor_checks() -> list[CheckResult]:
     return results
 
 
+def run_automation_doctor_checks() -> list[CheckResult]:
+    """Run read-only automation prerequisite checks."""
+    return [
+        check_working_directory(),
+        check_is_git_repository(),
+        check_git_status(),
+        check_virtualenv_active(),
+        check_command_available("gh"),
+        check_gh_auth(),
+        check_command_available("openclaw"),
+        check_reviewer_token_present(),
+    ]
+
+
 def format_check(result: CheckResult) -> str:
     """Format a single check result for human-readable output."""
     status_symbol = {
@@ -356,6 +402,28 @@ def print_doctor_report(results: list[CheckResult]) -> None:
         print("\nEnvironment is mostly ready, but some warnings exist.")
     else:
         print("\nEnvironment looks good for Signposter development.")
+
+
+def format_automation_doctor_report(results: list[CheckResult]) -> str:
+    """Format automation doctor checks without exposing secrets."""
+    lines = ["Signposter Automation Doctor", ""]
+    lines.extend(format_check(result) for result in results)
+    ok = sum(1 for r in results if r.status == CheckStatus.OK)
+    warn = sum(1 for r in results if r.status == CheckStatus.WARN)
+    fail = sum(1 for r in results if r.status == CheckStatus.FAIL)
+    lines.extend(
+        [
+            "",
+            f"Summary: {ok} OK, {warn} warnings, {fail} failures",
+            "",
+            "Notes:",
+            "  Read-only automation preflight.",
+            "  No secrets were printed.",
+            "  No GitHub mutation was performed.",
+            "  No OpenClaw execution was performed.",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def main() -> int:

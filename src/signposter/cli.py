@@ -21,7 +21,14 @@ from signposter.artifact import (
 )
 from signposter.claim import cli_main as claim_cli_main
 from signposter.dispatch import cli_main as dispatch_cli_main
-from signposter.doctor import main as doctor_main
+from signposter.doctor import (
+    CheckStatus,
+    format_automation_doctor_report,
+    run_automation_doctor_checks,
+)
+from signposter.doctor import (
+    main as doctor_main,
+)
 from signposter.gate import evaluate_gate_for_complete, format_gate_report, run_gate_dry_run
 from signposter.handoff import format_handoff_plan, plan_handoff_for_issue
 from signposter.integration import (
@@ -163,6 +170,11 @@ def main() -> None:
         "doctor",
         help="Run environment preflight checks (read-only)",
         description="Perform read-only checks on the local environment and project structure.",
+    )
+    doctor_parser.add_argument(
+        "--automation",
+        action="store_true",
+        help="Run read-only automation prerequisite checks only",
     )
     doctor_parser.set_defaults(func=run_doctor)
 
@@ -1112,8 +1124,12 @@ def _find_latest_summary_for_issue(issue: int) -> str | None:
     return str(newest)
 
 
-def run_doctor(_args: argparse.Namespace) -> int:
+def run_doctor(args: argparse.Namespace) -> int:
     """Execute the doctor command."""
+    if getattr(args, "automation", False):
+        results = run_automation_doctor_checks()
+        print(format_automation_doctor_report(results))
+        return 1 if any(result.status == CheckStatus.FAIL for result in results) else 0
     return doctor_main()
 
 
