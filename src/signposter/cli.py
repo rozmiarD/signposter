@@ -731,6 +731,11 @@ def main() -> None:
     )
     merge_plan_parser.add_argument("--repo", required=True)
     merge_plan_parser.add_argument("--pr", type=int, required=True)
+    merge_plan_parser.add_argument(
+        "--allow-high-risk",
+        action="store_true",
+        help="Explicitly allow high reviewer risk for planning only",
+    )
     merge_plan_parser.set_defaults(func=run_merge_plan)
 
     # apply subcommand (HARDENING-020)
@@ -1408,13 +1413,14 @@ def run_merge_plan(args: argparse.Namespace) -> int:
     """Handler for `signposter merge plan --repo ... --pr N` (HARDENING-019)."""
     repo = getattr(args, "repo", None)
     pr = getattr(args, "pr", None)
+    allow_high_risk = getattr(args, "allow_high_risk", False)
 
     if not repo or pr is None:
         print("Error: --repo and --pr are required", file=sys.stderr)
         return 1
 
     try:
-        plan = plan_merge_for_pr(repo, pr)
+        plan = plan_merge_for_pr(repo, pr, allow_high_risk=allow_high_risk)
         print(format_merge_plan(plan))
         return 0 if plan.status == "ready" else 1
     except Exception as e:
