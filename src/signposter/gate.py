@@ -129,13 +129,21 @@ def evaluate_ci_gate(
             proposed_command=None,
         )
 
+    if _has_actual_traceback_signal(text):
+        return GateDecision(
+            decision="needs-work",
+            reason="Worker output contains actual Python exception output",
+            confidence="high",
+            proposed_transition="state:active (worker should be re-run)",
+            proposed_command=None,
+        )
+
     negative_signals = [
         "critical blocker",
         "cannot proceed",
         "missing required evidence",
         "execution failed",
         "error:",
-        "traceback",
     ]
     for signal in negative_signals:
         if signal in text:
@@ -349,7 +357,6 @@ def _has_scoped_worker_code_completion_evidence(text: str) -> bool:
         "actual scope broadening",
         "unexpected scope broadening",
         "unexpected change",
-        "traceback",
         "critical blocker",
         "cannot proceed",
         "execution failed",
@@ -359,6 +366,8 @@ def _has_scoped_worker_code_completion_evidence(text: str) -> bool:
         "ruff failed",
     ]
     if any(disqualifier in t for disqualifier in disqualifiers):
+        return False
+    if _has_actual_traceback_signal(t):
         return False
 
     if "unrelated files changed:" in t or "unrelated files were changed:" in t:
@@ -400,6 +409,28 @@ def _has_scoped_worker_code_completion_evidence(text: str) -> bool:
         "no merge was performed",
     ]
     return all(signal in t for signal in safety_signals)
+
+
+def _has_actual_traceback_signal(text: str) -> bool:
+    """Detect traceback only when it looks like real Python exception output."""
+    t = (text or "").lower()
+    traceback_markers = [
+        "traceback (most recent call last):",
+        'file "',
+        "raise ",
+    ]
+    exception_markers = [
+        "exception:",
+        "runtimeerror:",
+        "valueerror:",
+        "typeerror:",
+        "keyerror:",
+        "modulenotfounderror:",
+    ]
+    return "traceback" in t and (
+        any(marker in t for marker in traceback_markers)
+        or any(marker in t for marker in exception_markers)
+    )
 
 def _has_scoped_worker_test_completion_evidence(text: str) -> bool:
     """Detect conservative scoped test-only worker completion evidence.
