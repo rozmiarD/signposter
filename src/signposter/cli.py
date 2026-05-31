@@ -82,12 +82,14 @@ from signposter.report import report_main
 from signposter.review import (
     evaluate_review_gate,
     execute_pr_review,
+    format_review_artifact_validation,
     format_review_gate,
     format_review_plan,
     format_review_submit_plan,
     plan_review_for_pr,
     plan_review_submit,
     submit_review,
+    validate_review_artifact,
     write_review_prompt_artifact,
 )
 from signposter.runner import cli_main as runner_cli_main
@@ -698,6 +700,18 @@ def main() -> None:
         help="Explicitly allow high reviewer risk for this gate evaluation",
     )
     gate_parser.set_defaults(func=run_review_gate)
+
+    validate_artifact_parser = review_subparsers.add_parser(
+        "validate-artifact",
+        help="Validate a local reviewer summary artifact (read-only)",
+    )
+    validate_artifact_parser.add_argument("--pr", type=int, required=True)
+    validate_artifact_parser.add_argument(
+        "--summary",
+        default=None,
+        help="Path to reviewer summary artifact (default: artifacts/runs/pr-N-reviewer.summary.md)",
+    )
+    validate_artifact_parser.set_defaults(func=run_review_validate_artifact)
 
     # submit subcommand (HARDENING-018 — GitHub review submission)
     submit_parser = review_subparsers.add_parser(
@@ -1479,6 +1493,22 @@ def run_review_gate(args: argparse.Namespace) -> int:
         return 0 if result.gate_pass else 1
     except Exception as e:
         print(f"Review gate failed: {e}", file=sys.stderr)
+        return 2
+
+
+def run_review_validate_artifact(args: argparse.Namespace) -> int:
+    """Handler for `signposter review validate-artifact --pr N`."""
+    pr = getattr(args, "pr", None)
+    if pr is None:
+        print("Error: --pr is required", file=sys.stderr)
+        return 1
+
+    try:
+        result = validate_review_artifact(pr, summary_path=getattr(args, "summary", None))
+        print(format_review_artifact_validation(result))
+        return 0 if result.status == "ready" else 1
+    except Exception as e:
+        print(f"Review artifact validation failed: {e}", file=sys.stderr)
         return 2
 
 

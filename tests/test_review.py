@@ -1166,3 +1166,54 @@ def test_submit_review_apply_passes_allow_high_risk_to_plan():
     )
     assert result["mode"] == "apply"
     assert result["success"] is True
+
+
+def test_validate_review_artifact_ready(tmp_path):
+    from signposter.artifact import plan_review_summary, write_manual_artifact
+    from signposter.review import validate_review_artifact
+
+    plan = plan_review_summary(pr=38, risk="medium", runs_dir=tmp_path)
+    write_manual_artifact(plan, apply=True)
+
+    result = validate_review_artifact(38, summary_path=plan.path)
+
+    assert result.status == "ready"
+    assert result.errors == []
+    assert result.opinion.verdict == "APPROVE"
+
+
+def test_validate_review_artifact_blocks_missing_summary(tmp_path):
+    from signposter.review import validate_review_artifact
+
+    result = validate_review_artifact(38, summary_path=str(tmp_path / "missing.md"))
+
+    assert result.status == "blocked"
+    assert "summary artifact missing" in result.errors[0]
+
+
+def test_validate_review_artifact_blocks_malformed_fields(tmp_path):
+    from signposter.review import validate_review_artifact
+
+    path = tmp_path / "pr-38-reviewer.summary.md"
+    path.write_text("Verdict: MAYBE\nConfidence: nope\nRisk: severe\n", encoding="utf-8")
+
+    result = validate_review_artifact(38, summary_path=str(path))
+
+    assert result.status == "blocked"
+    assert any("Verdict" in error for error in result.errors)
+    assert any("Confidence" in error for error in result.errors)
+    assert any("Risk" in error for error in result.errors)
+
+
+def test_format_review_artifact_validation_contains_status(tmp_path):
+    from signposter.artifact import plan_review_summary, write_manual_artifact
+    from signposter.review import format_review_artifact_validation, validate_review_artifact
+
+    plan = plan_review_summary(pr=38, risk="medium", runs_dir=tmp_path)
+    write_manual_artifact(plan, apply=True)
+    result = validate_review_artifact(38, summary_path=plan.path)
+
+    output = format_review_artifact_validation(result)
+
+    assert "Signposter Review Artifact Validation — PR #38" in output
+    assert "ready" in output
