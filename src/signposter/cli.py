@@ -2020,6 +2020,7 @@ from signposter.lifecycle import (  # noqa: E402
     collect_lifecycle_watch_data,
     format_lifecycle_next,
     format_lifecycle_status,
+    format_lifecycle_status_summary,
     format_lifecycle_watch,
     plan_lifecycle_next,
     plan_lifecycle_status,
@@ -2041,7 +2042,10 @@ def run_lifecycle_status(args: argparse.Namespace) -> int:
 
     try:
         status = plan_lifecycle_status(repo, issue=issue, pr=pr)
-        print(format_lifecycle_status(status))
+        if getattr(args, "summary", False):
+            print(format_lifecycle_status_summary(status))
+        else:
+            print(format_lifecycle_status(status))
         # Non-zero exit only for clearly blocked cases
         if "could not be detected" in status.status or status.status.startswith("incomplete"):
             return 1
@@ -2107,6 +2111,11 @@ def _register_lifecycle_subcommands(subparsers: argparse._SubParsersAction) -> N
     )
     status_parser.add_argument(
         "--pr", type=int, help="PR number (exactly one of --issue or --pr)"
+    )
+    status_parser.add_argument(
+        "--summary",
+        action="store_true",
+        help="Show concise one-screen lifecycle status output",
     )
     status_parser.set_defaults(func=run_lifecycle_status)
 
