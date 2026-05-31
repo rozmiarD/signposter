@@ -14,6 +14,7 @@ from signposter.orchestrator import (
     plan_orchestrator_run_next,
     plan_orchestrator_tail,
     run_orchestrator_loop,
+    run_orchestrator_run_next,
     run_orchestrator_step,
 )
 from signposter.scan import LabeledItem
@@ -337,6 +338,7 @@ def test_orchestrator_run_next_plans_scheduler_selected_issue() -> None:
     assert result.scheduler.issue.number == 55
     assert result.next is not None
     assert result.next.action == "create-worktree"
+    assert result.step is None
 
 
 def test_orchestrator_run_next_handles_no_scheduler_issue() -> None:
@@ -385,3 +387,70 @@ def test_format_orchestrator_run_next_contains_selection_and_action() -> None:
     assert "selected: #55" in out
     assert "action: execute-worker" in out
     assert "No lifecycle command was executed." in out
+
+
+def test_orchestrator_run_next_apply_runs_one_step() -> None:
+    issue = LabeledItem(
+        number=56,
+        title="Issue 56",
+        html_url="https://github.com/example/repo/issues/56",
+        labels=["state:ready"],
+        item_type="issue",
+    )
+    scheduler = SchedulerNext(
+        repo="example/repo",
+        status="ready",
+        issue=issue,
+        reason="first ready",
+        skipped=[],
+        notes=[],
+    )
+    lifecycle_next = _next(
+        issue_number=56,
+        action="create-worktree",
+        command="signposter worktree apply --repo example/repo --issue 56 --apply",
+    )
+    proc = type("Proc", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", return_value=scheduler),
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next),
+    ):
+        result = run_orchestrator_run_next(
+            "example/repo",
+            apply=True,
+            run_command=Mock(return_value=proc),
+        )
+
+    assert result.step is not None
+    assert result.step.status == "applied"
+    assert result.status == "applied"
+
+
+def test_orchestrator_run_next_apply_blocks_execute_without_flag() -> None:
+    issue = LabeledItem(
+        number=56,
+        title="Issue 56",
+        html_url="https://github.com/example/repo/issues/56",
+        labels=["state:ready"],
+        item_type="issue",
+    )
+    scheduler = SchedulerNext(
+        repo="example/repo",
+        status="ready",
+        issue=issue,
+        reason="first ready",
+        skipped=[],
+        notes=[],
+    )
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", return_value=scheduler),
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()),
+    ):
+        result = run_orchestrator_run_next("example/repo", apply=True)
+
+    assert result.step is not None
+    assert result.step.status == "blocked"
+    assert result.status == "blocked"
+    assert result.step.stop_reason == "OpenClaw execution requires explicit --execute"

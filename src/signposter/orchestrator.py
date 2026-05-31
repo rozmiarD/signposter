@@ -83,6 +83,7 @@ class OrchestratorRunNext:
 
     scheduler: SchedulerNext
     next: OrchestratorNext | None
+    step: OrchestratorStep | None
     status: str
     notes: list[str]
 
@@ -316,6 +317,7 @@ def plan_orchestrator_run_next(
     return OrchestratorRunNext(
         scheduler=scheduler,
         next=planned,
+        step=None,
         status=status,
         notes=[
             "Read-only run-next planning.",
@@ -323,6 +325,38 @@ def plan_orchestrator_run_next(
             "No GitHub mutation was performed.",
             "No local mutation was performed.",
             "No OpenClaw execution was performed.",
+        ],
+    )
+
+
+def run_orchestrator_run_next(
+    repo: str,
+    *,
+    limit: int = 50,
+    apply: bool = False,
+    execute: bool = False,
+    run_command=subprocess.run,
+) -> OrchestratorRunNext:
+    """Select the next scheduler issue and optionally run one lifecycle step."""
+    planned = plan_orchestrator_run_next(repo, limit=limit, allow_execute=execute)
+    if planned.scheduler.issue is None or not apply:
+        return planned
+
+    step = run_orchestrator_step(
+        repo,
+        issue=planned.scheduler.issue.number,
+        apply=True,
+        execute=execute,
+        run_command=run_command,
+    )
+    return OrchestratorRunNext(
+        scheduler=planned.scheduler,
+        next=step.next,
+        step=step,
+        status=step.status,
+        notes=[
+            "Run-next one-step execution.",
+            "No command is executed unless --apply is present.",
         ],
     )
 
@@ -454,6 +488,18 @@ def format_orchestrator_run_next(result: OrchestratorRunNext) -> str:
             lines.append(f"  stop: {result.next.stop_reason}")
     else:
         lines.append("  none")
+
+    if result.step:
+        lines.extend(
+            [
+                "",
+                "Step:",
+                f"  applied: {'yes' if result.step.applied else 'no'}",
+                f"  status: {result.step.status}",
+            ]
+        )
+        if result.step.stop_reason:
+            lines.append(f"  stop: {result.step.stop_reason}")
 
     lines.extend(["", "Status:", f"  {result.status}"])
     lines.extend(["", "Notes:"])
