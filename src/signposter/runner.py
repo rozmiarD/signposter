@@ -512,6 +512,20 @@ def render_prompt(
         "included in this prompt."
     )
 
+    if d.role == "worker" and not evidence_bundle:
+        return _render_compact_worker_prompt(
+            repo=repo,
+            item=item,
+            dispatch=d,
+            plan=plan,
+            labels_str=labels_str,
+            body_text=body_text,
+            comments_text=comments_text,
+            issue_state=issue_state,
+            task_instruction=task_instruction,
+            private_rule=private_rule,
+        )
+
     # Evidence Bundle (only for reviewer/gatekeeper)
     evidence_section = ""
     if evidence_bundle and d.role in ("reviewer", "gatekeeper"):
@@ -601,6 +615,60 @@ def render_prompt(
 Begin execution following the constraints and role profile above.
 """
     return content
+
+
+def _render_compact_worker_prompt(
+    *,
+    repo: str,
+    item: LabeledItem,
+    dispatch: DispatchDecision,
+    plan: RunnerPlan,
+    labels_str: str,
+    body_text: str,
+    comments_text: str,
+    issue_state: str,
+    task_instruction: str,
+    private_rule: str,
+) -> str:
+    """Render a compact self-contained prompt for scoped worker tasks."""
+    workflow = (
+        f"{dispatch.proposed_route}/{dispatch.phase}/{dispatch.role}/"
+        f"{dispatch.risk}/{dispatch.area}/{dispatch.proposed_gate}"
+    )
+    return f"""# Signposter Worker Prompt
+
+## Context
+- Repository: {repo}
+- Issue: #{item.number} — {item.title}
+- URL reference only: {item.html_url}
+- State: {issue_state}
+- Labels: {labels_str}
+- Route/phase/role/risk/area/gate: {workflow}
+- Working directory: {plan.proposed_working_dir}
+- Prompt artifact: {plan.proposed_prompt_path}
+
+## Issue Body
+{body_text}
+
+## Recent Comments
+{comments_text}
+
+## Rules
+- {private_rule}
+- Implement only this scoped issue.
+- Do not mutate GitHub unless a later command explicitly asks.
+- Do not commit unless explicitly instructed.
+- Keep raw OpenClaw output local under artifacts/runs/.
+- Report changed files, validation, safety notes, and remaining risks.
+
+## Task
+{task_instruction}
+
+## Validation
+- Run targeted validation for changed files.
+- Run full validation when risk or shared behavior warrants it.
+- If OpenClaw/provider execution is unavailable, use the manual artifact fallback.
+"""
 
 
 def write_prompt_artifact(plan: RunnerPlan, repo: str) -> str:
