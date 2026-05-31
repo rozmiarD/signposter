@@ -362,3 +362,35 @@ def test_format_scheduler_graph_shows_key_fields() -> None:
     assert "depends on: #51" in out
     assert "mainline: H036" in out
     assert "No GitHub mutation was performed." in out
+
+
+def test_format_scheduler_graph_shows_side_task_return_status() -> None:
+    issues = [
+        _issue(52, ["state:active"]),
+        _issue(53, ["state:ready"]),
+        _issue(54, ["state:ready"]),
+    ]
+    bodies = {
+        52: {"body": "Side-Task: yes\nParent: #53\nReturn-To: #54"},
+        53: {"body": ""},
+        54: {"body": ""},
+    }
+
+    with (
+        patch("signposter.scheduler.fetch_open_issues", return_value=issues),
+        patch(
+            "signposter.scheduler.fetch_issue_context",
+            side_effect=lambda repo, number: bodies[number],
+        ),
+    ):
+        graph = build_scheduler_graph("example/repo")
+
+    out = format_scheduler_graph(graph)
+
+    assert "#52 — Issue 52" in out
+    assert "parent: #53" in out
+    assert "parent state: ready" in out
+    assert "return-to: #54" in out
+    assert "return state: ready" in out
+    assert "return ready: yes" in out
+    assert "side-task: yes" in out
