@@ -753,6 +753,61 @@ def test_format_review_gate_contains_safety_notes():
     assert "merge eligible: yes" in output
 
 
+def test_validate_review_artifact_blocks_unsafe_marker(tmp_path):
+    from signposter.review import validate_review_artifact
+
+    path = tmp_path / "pr-73-reviewer.summary.md"
+    path.write_text(
+        "Verdict: APPROVE\n"
+        "Confidence: 0.95\n"
+        "Risk: low\n"
+        "Scope match: yes\n"
+        "CI considered: yes\n"
+        "Merge recommendation: yes\n"
+        "Automerge eligible: no\n"
+        "Model unavailable.\n",
+        encoding="utf-8",
+    )
+
+    result = validate_review_artifact(73, summary_path=str(path))
+
+    assert result.status == "blocked"
+    assert "unsafe execution marker" in result.errors[0]
+
+
+def test_format_review_artifact_validation_summary_is_concise(tmp_path):
+    from signposter.review import (
+        format_review_artifact_validation_summary,
+        validate_review_artifact,
+    )
+
+    path = tmp_path / "pr-73-reviewer.summary.md"
+    path.write_text(
+        "Verdict: APPROVE\n"
+        "Confidence: 0.91\n"
+        "Risk: medium\n"
+        "Scope match: yes\n"
+        "CI considered: yes\n"
+        "Merge recommendation: yes\n"
+        "Automerge eligible: no\n",
+        encoding="utf-8",
+    )
+
+    result = validate_review_artifact(73, summary_path=str(path))
+    out = format_review_artifact_validation_summary(result)
+
+    assert out.splitlines() == [
+        "Signposter Review Artifact Summary",
+        "pr: #73",
+        "status: ready",
+        "verdict: APPROVE",
+        "confidence: 0.91",
+        "risk: medium",
+        "error: none",
+    ]
+    assert "Notes:" not in out
+
+
 # =============================================================================
 # HARDENING-018 tests: GitHub PR review submit plan + apply guard
 # =============================================================================

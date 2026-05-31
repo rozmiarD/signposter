@@ -881,7 +881,10 @@ def validate_review_artifact(
         text = f.read()
     opinion = parse_reviewer_opinion(text)
     errors: list[str] = []
+    stale_signal = find_stale_or_failover_signal(text)
 
+    if stale_signal:
+        errors.append(f"Artifact contains unsafe execution marker: {stale_signal}")
     if opinion.verdict not in ("APPROVE", "NEEDS_CHANGES", "BLOCK"):
         errors.append("Verdict must be APPROVE, NEEDS_CHANGES, or BLOCK")
     if opinion.confidence is None:
@@ -934,6 +937,22 @@ def format_review_artifact_validation(result: ReviewArtifactValidation) -> str:
     lines.append("")
     lines.append("Notes:")
     lines.extend(f"  {note}" for note in result.notes)
+    return "\n".join(lines)
+
+
+def format_review_artifact_validation_summary(result: ReviewArtifactValidation) -> str:
+    """Format concise review artifact validation output for automation logs."""
+    o = result.opinion
+    first_error = result.errors[0] if result.errors else "none"
+    lines = [
+        "Signposter Review Artifact Summary",
+        f"pr: #{result.pr_number}",
+        f"status: {result.status}",
+        f"verdict: {o.verdict or 'unknown'}",
+        f"confidence: {o.confidence if o.confidence is not None else 'unknown'}",
+        f"risk: {o.risk or 'unknown'}",
+        f"error: {first_error}",
+    ]
     return "\n".join(lines)
 
 
