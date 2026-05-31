@@ -11,6 +11,8 @@ from signposter.orchestrator import (
     format_orchestrator_next,
     format_orchestrator_run_next,
     format_orchestrator_run_next_loop,
+    format_orchestrator_run_next_loop_summary,
+    format_orchestrator_run_next_summary,
     plan_orchestrator_next,
     plan_orchestrator_run_next,
     plan_orchestrator_tail,
@@ -391,6 +393,42 @@ def test_format_orchestrator_run_next_contains_selection_and_action() -> None:
     assert "No lifecycle command was executed." in out
 
 
+def test_format_orchestrator_run_next_summary_is_concise() -> None:
+    issue = LabeledItem(
+        number=55,
+        title="Issue 55",
+        html_url="https://github.com/example/repo/issues/55",
+        labels=["state:ready"],
+        item_type="issue",
+    )
+    scheduler = SchedulerNext(
+        repo="example/repo",
+        status="ready",
+        issue=issue,
+        reason="first ready",
+        skipped=[],
+        notes=[],
+    )
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", return_value=scheduler),
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()),
+    ):
+        result = plan_orchestrator_run_next("example/repo")
+
+    out = format_orchestrator_run_next_summary(result)
+
+    assert out.splitlines() == [
+        "Signposter Automation Summary",
+        "selected: #55",
+        "action: execute-worker",
+        "status: blocked",
+        "stop: OpenClaw execution requires explicit --execute",
+    ]
+    assert "command:" not in out
+    assert "Notes:" not in out
+
+
 def test_orchestrator_run_next_apply_runs_one_step() -> None:
     issue = LabeledItem(
         number=56,
@@ -603,3 +641,41 @@ def test_format_orchestrator_run_next_loop_contains_limits_and_steps() -> None:
     assert "Signposter Orchestrator Run Next Loop" in out
     assert "cycles requested: 1" in out
     assert "1. issue #57: execute-worker -> blocked" in out
+
+
+def test_format_orchestrator_run_next_loop_summary_is_concise() -> None:
+    active = LabeledItem(
+        number=57,
+        title="Issue 57",
+        html_url="https://github.com/example/repo/issues/57",
+        labels=["state:active"],
+        item_type="issue",
+    )
+    scheduler = SchedulerNext(
+        repo="example/repo",
+        status="completed",
+        issue=None,
+        reason="none",
+        skipped=[],
+        notes=[],
+    )
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", return_value=scheduler),
+        patch("signposter.orchestrator.fetch_open_issues", return_value=[active]),
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next(issue_number=57)),
+    ):
+        result = run_orchestrator_run_next_loop("example/repo", max_cycles=1, apply=True)
+
+    out = format_orchestrator_run_next_loop_summary(result)
+
+    assert out.splitlines() == [
+        "Signposter Automation Summary",
+        "selected: #57",
+        "action: execute-worker",
+        "status: stopped",
+        "stop: OpenClaw execution requires explicit --execute",
+        "steps: 1",
+    ]
+    assert "command:" not in out
+    assert "Notes:" not in out

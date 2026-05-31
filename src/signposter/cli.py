@@ -43,6 +43,8 @@ from signposter.orchestrator import (
     format_orchestrator_next,
     format_orchestrator_run_next,
     format_orchestrator_run_next_loop,
+    format_orchestrator_run_next_loop_summary,
+    format_orchestrator_run_next_summary,
     format_orchestrator_step,
     plan_orchestrator_next,
     plan_orchestrator_tail,
@@ -2208,7 +2210,10 @@ def run_orchestrator_run_next(args: argparse.Namespace) -> int:
             apply=getattr(args, "apply", False),
             execute=getattr(args, "execute", False),
         )
-        print(format_orchestrator_run_next(result))
+        if getattr(args, "summary", False):
+            print(format_orchestrator_run_next_summary(result))
+        else:
+            print(format_orchestrator_run_next(result))
         return 0 if result.status in (
             "ready",
             "actionable",
@@ -2237,7 +2242,10 @@ def run_orchestrator_run_next_loop_cli(args: argparse.Namespace) -> int:
             apply=getattr(args, "apply", False),
             execute=getattr(args, "execute", False),
         )
-        print(format_orchestrator_run_next_loop(result))
+        if getattr(args, "summary", False):
+            print(format_orchestrator_run_next_loop_summary(result))
+        else:
+            print(format_orchestrator_run_next_loop(result))
         return 0 if result.status in ("completed", "limit-reached") else 1
     except Exception as e:
         print(f"Orchestrator run-next-loop failed: {e}", file=sys.stderr)
@@ -2332,6 +2340,7 @@ def _register_orchestrator_subcommands(
     run_next_parser.add_argument("--limit", type=int, default=50)
     run_next_parser.add_argument("--apply", action="store_true")
     run_next_parser.add_argument("--execute", action="store_true")
+    run_next_parser.add_argument("--summary", action="store_true")
     run_next_parser.set_defaults(func=run_orchestrator_run_next)
 
     run_next_loop_parser = orchestrator_subparsers.add_parser(
@@ -2344,6 +2353,7 @@ def _register_orchestrator_subcommands(
     run_next_loop_parser.add_argument("--max-tasks", type=int, default=1)
     run_next_loop_parser.add_argument("--apply", action="store_true")
     run_next_loop_parser.add_argument("--execute", action="store_true")
+    run_next_loop_parser.add_argument("--summary", action="store_true")
     run_next_loop_parser.set_defaults(func=run_orchestrator_run_next_loop_cli)
 
 
