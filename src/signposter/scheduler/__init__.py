@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from signposter.dependencies import is_dependency_blocked, parse_depends_on
 from signposter.scan import LabeledItem, fetch_issue_context, fetch_open_issues
@@ -22,6 +24,7 @@ class SchedulerNext:
     reason: str
     skipped: list[str]
     notes: list[str]
+    active_notes: list[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -101,6 +104,7 @@ def _state(labels: list[str]) -> str | None:
 def select_next_issue(repo: str, *, limit: int = 50) -> SchedulerNext:
     """Select the first dependency-clear open issue labeled state:ready."""
     skipped: list[str] = []
+    active_notes: list[str] = []
     ready_mainline: LabeledItem | None = None
 
     for issue in sorted(fetch_open_issues(repo, limit=limit), key=lambda item: item.number):
@@ -108,6 +112,8 @@ def select_next_issue(repo: str, *, limit: int = 50) -> SchedulerNext:
         if state != "ready":
             if state in TERMINAL_STATES or state == "active":
                 skipped.append(f"#{issue.number}: state:{state}")
+            if state == "active":
+                active_notes.append(_active_issue_note(issue))
             continue
 
         context = fetch_issue_context(repo, issue.number) or {}
@@ -130,6 +136,7 @@ def select_next_issue(repo: str, *, limit: int = 50) -> SchedulerNext:
                     "No worktree was created.",
                     "No OpenClaw execution was performed.",
                 ],
+                active_notes=active_notes,
             )
 
         if ready_mainline is not None:
@@ -149,6 +156,7 @@ def select_next_issue(repo: str, *, limit: int = 50) -> SchedulerNext:
                 "No worktree was created.",
                 "No OpenClaw execution was performed.",
             ],
+            active_notes=active_notes,
         )
 
     return SchedulerNext(
@@ -163,7 +171,62 @@ def select_next_issue(repo: str, *, limit: int = 50) -> SchedulerNext:
             "No worktree was created.",
             "No OpenClaw execution was performed.",
         ],
+        active_notes=active_notes,
     )
+
+
+def _active_issue_note(
+    issue: LabeledItem,
+    *,
+    stale_after: timedelta = timedelta(days=2),
+    now: datetime | None = None,
+) -> str:
+    checks: list[str] = []
+    prompt = Path("artifacts") / "prompts" / f"issue-{issue.number}.md"
+    worktree_exists = _active_issue_worktree_exists(issue.number)
+    prompt_exists = prompt.exists()
+    checks.append(f"worktree={'present' if worktree_exists else 'missing'}")
+    checks.append(f"prompt={'present' if prompt_exists else 'missing'}")
+
+    age = _issue_age(issue.updated_at, now=now)
+    if age is None:
+        checks.append("activity_age=unknown")
+    elif age > stale_after:
+        checks.append(f"activity_age=stale({age.days}d)")
+    else:
+        checks.append("activity_age=fresh")
+
+    can_resume = worktree_exists or prompt_exists
+    checks.append(f"resume={'possible' if can_resume else 'needs inspection'}")
+    return f"#{issue.number}: " + ", ".join(checks)
+
+
+def _active_issue_worktree_exists(issue_number: int) -> bool:
+    cwd = Path.cwd()
+    candidates = [
+        Path("..") / "signposter-work" / str(issue_number),
+    ]
+    if cwd.name == str(issue_number):
+        candidates.append(cwd)
+    if cwd.parent.name == "signposter-work":
+        candidates.append(cwd.parent / str(issue_number))
+    return any(path.exists() for path in candidates)
+
+
+def _issue_age(updated_at: str | None, *, now: datetime | None = None) -> timedelta | None:
+    if not updated_at:
+        return None
+    current = now or datetime.now(UTC)
+    text = updated_at.strip()
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        updated = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if updated.tzinfo is None:
+        updated = updated.replace(tzinfo=UTC)
+    return current - updated
 
 
 def build_scheduler_graph(repo: str, *, limit: int = 50) -> SchedulerGraph:
@@ -219,6 +282,9 @@ def format_scheduler_next(result: SchedulerNext) -> str:
     if result.skipped:
         lines.extend(["", "Skipped:"])
         lines.extend(f"  {item}" for item in result.skipped)
+    if result.active_notes:
+        lines.extend(["", "Active issues:"])
+        lines.extend(f"  {item}" for item in result.active_notes)
     lines.extend(["", "Notes:"])
     lines.extend(f"  {note}" for note in result.notes)
     return "\n".join(lines)
@@ -244,6 +310,12 @@ def format_scheduler_explain(result: SchedulerNext) -> str:
     lines.extend(["", "Skipped:"])
     if result.skipped:
         lines.extend(f"  {item}" for item in result.skipped)
+    else:
+        lines.append("  none")
+
+    lines.extend(["", "Active issues:"])
+    if result.active_notes:
+        lines.extend(f"  {item}" for item in result.active_notes)
     else:
         lines.append("  none")
 
