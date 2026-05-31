@@ -1,6 +1,9 @@
 """Tests for merge planning (HARDENING-019)."""
 
+import sys
 from unittest.mock import patch
+
+import pytest
 
 from signposter.merge import (
     MergePlan,
@@ -715,6 +718,114 @@ def test_merge_plan_allows_high_reviewer_risk_with_explicit_override():
     assert allowed.reviewer_risk == "high"
     assert allowed.has_non_author_approval is True
     assert allowed.has_auto_close_keywords is False
+    assert "High-risk override explicitly allowed by operator for planning only." in allowed.notes
+
+
+def test_format_merge_plan_includes_high_risk_planning_override_note():
+    plan = MergePlan(
+        pr_number=21,
+        title="fix: add high-risk override",
+        state="OPEN",
+        base_branch="main",
+        head_branch="work/issue-21",
+        mergeable="MERGEABLE",
+        review_decision="APPROVED",
+        checks_status="pass",
+        successful_checks=1,
+        failing_checks=0,
+        pending_checks=0,
+        github_approved=True,
+        approving_reviewers=["AlphaExatron"],
+        has_non_author_approval=True,
+        pr_author="ExatronOmega",
+        reviewer_gate_pass=True,
+        reviewer_verdict="APPROVE",
+        reviewer_confidence=0.91,
+        reviewer_risk="high",
+        associated_issue=21,
+        has_auto_close_keywords=False,
+        files_changed=1,
+        additions=30,
+        deletions=2,
+        risk_level="high",
+        size="small",
+        merge_method="squash",
+        delete_branch_after_merge=True,
+        command_preview="gh pr merge 21 -R test/repo --squash --delete-branch",
+        status="ready",
+        notes=[
+            "No merge was performed.",
+            "No issue was closed.",
+            "No branch was deleted.",
+            "High-risk override explicitly allowed by operator for planning only.",
+        ],
+    )
+
+    output = format_merge_plan(plan)
+
+    assert "High-risk override explicitly allowed by operator for planning only." in output
+
+
+def test_cli_merge_plan_accepts_and_passes_allow_high_risk(monkeypatch, capsys):
+    from signposter.cli import main
+
+    fake_plan = MergePlan(
+        pr_number=21,
+        title="fix: add high-risk override",
+        state="OPEN",
+        base_branch="main",
+        head_branch="work/issue-21",
+        mergeable="MERGEABLE",
+        review_decision="APPROVED",
+        checks_status="pass",
+        successful_checks=1,
+        failing_checks=0,
+        pending_checks=0,
+        github_approved=True,
+        approving_reviewers=["AlphaExatron"],
+        has_non_author_approval=True,
+        pr_author="ExatronOmega",
+        reviewer_gate_pass=True,
+        reviewer_verdict="APPROVE",
+        reviewer_confidence=0.91,
+        reviewer_risk="high",
+        associated_issue=21,
+        has_auto_close_keywords=False,
+        files_changed=1,
+        additions=30,
+        deletions=2,
+        risk_level="high",
+        size="small",
+        merge_method="squash",
+        delete_branch_after_merge=True,
+        command_preview="gh pr merge 21 -R test/repo --squash --delete-branch",
+        status="ready",
+        notes=["High-risk override explicitly allowed by operator for planning only."],
+    )
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "merge",
+            "plan",
+            "--repo",
+            "test/repo",
+            "--pr",
+            "21",
+            "--allow-high-risk",
+        ],
+    )
+
+    with patch("signposter.cli.plan_merge_for_pr", return_value=fake_plan) as mock_plan, \
+         pytest.raises(SystemExit) as exc:
+        main()
+
+    out = capsys.readouterr().out
+    assert exc.value.code == 0
+    mock_plan.assert_called_once_with("test/repo", 21, allow_high_risk=True)
+    assert "High-risk override explicitly allowed by operator for planning only." in out
 
 
 def test_apply_merge_passes_allow_high_risk_override():
