@@ -68,6 +68,28 @@ def test_select_runner_profile_default():
     assert profile == "worker"
 
 
+def test_openclaw_session_key_uses_refreshed_default_namespace():
+    from signposter.runner import build_openclaw_session_key
+
+    assert build_openclaw_session_key(
+        target_kind="issue",
+        target_number=42,
+        profile="worker",
+        env={},
+    ) == "signposter-v2-issue-42-worker"
+
+
+def test_openclaw_session_key_namespace_can_be_overridden():
+    from signposter.runner import build_openclaw_session_key
+
+    assert build_openclaw_session_key(
+        target_kind="pr",
+        target_number=7,
+        profile="reviewer",
+        env={"SIGNPOSTER_OPENCLAW_SESSION_NAMESPACE": "models-20260531"},
+    ) == "signposter-models-20260531-pr-7-reviewer"
+
+
 # --- Prompt rendering tests ---
 
 

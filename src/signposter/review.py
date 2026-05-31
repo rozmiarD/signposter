@@ -20,6 +20,7 @@ from signposter.openclaw_preflight import (
     check_openclaw_preflight,
     format_openclaw_preflight_block,
 )
+from signposter.runner import build_openclaw_session_key
 
 
 @dataclass(frozen=True)
@@ -657,7 +658,11 @@ def execute_pr_review(
             "success": False,
         }
 
-    session_key = f"signposter-pr-{pr_number}-reviewer"
+    session_key = build_openclaw_session_key(
+        target_kind="pr",
+        target_number=pr_number,
+        profile=profile,
+    )
 
     exec_cmd = [
         "openclaw", "agent",
