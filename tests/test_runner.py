@@ -68,6 +68,48 @@ def test_select_runner_profile_default():
     assert profile == "worker"
 
 
+def test_openclaw_session_key_uses_refreshed_default_namespace():
+    from signposter.runner import build_openclaw_session_key
+
+    assert build_openclaw_session_key(
+        target_kind="issue",
+        target_number=42,
+        profile="worker",
+        env={},
+    ) == "signposter-v2-issue-42-worker"
+
+
+def test_openclaw_session_key_namespace_can_be_overridden():
+    from signposter.runner import build_openclaw_session_key
+
+    assert build_openclaw_session_key(
+        target_kind="pr",
+        target_number=7,
+        profile="reviewer",
+        env={"SIGNPOSTER_OPENCLAW_SESSION_NAMESPACE": "models-20260531"},
+    ) == "signposter-models-20260531-pr-7-reviewer"
+
+
+def test_active_prompt_runner_plan_uses_refreshed_session_namespace(tmp_path, monkeypatch):
+    from unittest.mock import patch
+
+    from signposter.runner import plan_active_runner_from_prompts
+
+    prompt_dir = tmp_path / "artifacts" / "prompts"
+    prompt_dir.mkdir(parents=True)
+    (prompt_dir / "issue-42.md").write_text("mock prompt", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    fake_item = make_item(42, ["state:active", "role:worker", "phase:build"])
+
+    with patch("signposter.runner.fetch_issue_by_number", return_value=fake_item):
+        plans = plan_active_runner_from_prompts("test/repo")
+
+    assert len(plans) == 1
+    assert "--session-key signposter-v2-issue-42-worker" in plans[0].proposed_command_shape
+    assert "signposter-issue-42-worker" not in plans[0].proposed_command_shape
+
+
 # --- Prompt rendering tests ---
 
 

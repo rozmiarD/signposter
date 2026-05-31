@@ -21,6 +21,9 @@ from signposter.openclaw_preflight import (
 from signposter.scan import LabeledItem, fetch_issue_by_number, fetch_issue_context
 from signposter.worktree import get_worktree_status_for_issue
 
+DEFAULT_OPENCLAW_SESSION_NAMESPACE = "v2"
+OPENCLAW_SESSION_NAMESPACE_ENV = "SIGNPOSTER_OPENCLAW_SESSION_NAMESPACE"
+
 
 @dataclass(frozen=True)
 class RunnerPlan:
@@ -34,6 +37,29 @@ class RunnerPlan:
     proposed_prompt_path: str
     proposed_command_shape: str
     reason: str
+
+
+def openclaw_session_namespace(env: dict[str, str] | None = None) -> str:
+    """Return Signposter's OpenClaw session namespace.
+
+    OpenClaw stores model/provider pins on existing session keys. Keep the key
+    namespace versioned so Signposter can move to current OpenClaw agent config
+    without duplicating model names here.
+    """
+    source = env if env is not None else os.environ
+    namespace = source.get(OPENCLAW_SESSION_NAMESPACE_ENV, "").strip()
+    return namespace or DEFAULT_OPENCLAW_SESSION_NAMESPACE
+
+
+def build_openclaw_session_key(
+    *,
+    target_kind: str,
+    target_number: int,
+    profile: str,
+    env: dict[str, str] | None = None,
+) -> str:
+    namespace = openclaw_session_namespace(env)
+    return f"signposter-{namespace}-{target_kind}-{target_number}-{profile}"
 
 
 def _select_runner_and_profile(dispatch: DispatchDecision) -> tuple[str, str]:
@@ -79,9 +105,14 @@ def plan_runner(repo: str, *, limit: int = 1) -> list[RunnerPlan]:
         #   or routing binding that has the appropriate skills loaded.
         # - Prompt content is passed via --message (or heredoc in real scripts).
         # - Working directory is typically managed via the prompt instructions or agent workspace.
+        session_key = build_openclaw_session_key(
+            target_kind="issue",
+            target_number=item.number,
+            profile=profile,
+        )
         command_shape = (
             f"openclaw agent --agent {profile} "
-            f"--session-key signposter-issue-{item.number} "
+            f"--session-key {session_key} "
             f"--message \"$(cat {prompt_path})\" --local"
         )
 
@@ -130,9 +161,14 @@ def plan_runner_for_issue(repo: str, issue: int) -> RunnerPlan | None:
 
     prompt_path = f"artifacts/prompts/issue-{item.number}.md"
 
+    session_key = build_openclaw_session_key(
+        target_kind="issue",
+        target_number=item.number,
+        profile=profile,
+    )
     command_shape = (
         f"openclaw agent --agent {profile} "
-        f"--session-key signposter-issue-{item.number}-{profile} "
+        f"--session-key {session_key} "
         f"--message \"$(cat {prompt_path})\" --local"
     )
 
@@ -194,9 +230,14 @@ def plan_active_runner_from_prompts(repo: str, *, limit: int = 1) -> list[Runner
 
         working_dir = f"~/projects/signposter-work/{item.number}"
         prompt_path_str = str(prompt_path)
+        session_key = build_openclaw_session_key(
+            target_kind="issue",
+            target_number=item.number,
+            profile=profile,
+        )
         command_shape = (
             f"openclaw agent --agent {profile} "
-            f"--session-key signposter-issue-{item.number}-{profile} "
+            f"--session-key {session_key} "
             f'--message "$(cat {prompt_path_str})" --local'
         )
 
@@ -1004,7 +1045,11 @@ def execute_plan(
     item = plan.item
     profile = plan.proposed_profile or "worker"
     prompt_path = plan.proposed_prompt_path
-    session_key = f"signposter-issue-{item.number}-{profile}"
+    session_key = build_openclaw_session_key(
+        target_kind="issue",
+        target_number=item.number,
+        profile=profile,
+    )
 
     # HARDENING-006 + HARDENING-010: Worker isolation guard (respects worktree cwd)
     effective_cwd = worktree_cwd or "."
