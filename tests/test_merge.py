@@ -877,8 +877,90 @@ def test_cli_merge_plan_accepts_and_passes_allow_high_risk(monkeypatch, capsys):
 
     out = capsys.readouterr().out
     assert exc.value.code == 0
-    mock_plan.assert_called_once_with("test/repo", 21, allow_high_risk=True)
+    mock_plan.assert_called_once_with(
+        "test/repo",
+        21,
+        allow_medium_scope=False,
+        allow_large_scope=False,
+        allow_medium_risk=False,
+        allow_high_risk=True,
+    )
     assert "High-risk override explicitly allowed by operator for planning only." in out
+
+
+def test_cli_merge_plan_accepts_apply_override_flags(monkeypatch, capsys):
+    from signposter.cli import main
+
+    fake_plan = MergePlan(
+        pr_number=22,
+        title="automation",
+        state="OPEN",
+        base_branch="main",
+        head_branch="work/issue-22",
+        mergeable="MERGEABLE",
+        review_decision="APPROVED",
+        checks_status="pass",
+        successful_checks=1,
+        failing_checks=0,
+        pending_checks=0,
+        github_approved=True,
+        approving_reviewers=["AlphaExatron"],
+        has_non_author_approval=True,
+        pr_author="ExatronOmega",
+        reviewer_gate_pass=True,
+        reviewer_verdict="APPROVE",
+        reviewer_confidence=0.91,
+        reviewer_risk="medium",
+        associated_issue=22,
+        has_auto_close_keywords=False,
+        files_changed=7,
+        additions=200,
+        deletions=10,
+        risk_level="medium",
+        size="medium",
+        merge_method="squash",
+        delete_branch_after_merge=True,
+        command_preview="gh pr merge 22 -R test/repo --squash --delete-branch",
+        status="ready",
+        notes=[
+            "Medium-risk override explicitly allowed by operator for planning only.",
+            "Medium-scope override explicitly allowed by operator for planning only.",
+            "Large-scope override explicitly allowed by operator for planning only.",
+        ],
+    )
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "merge",
+            "plan",
+            "--repo",
+            "test/repo",
+            "--pr",
+            "22",
+            "--allow-medium-risk",
+            "--allow-medium-scope",
+            "--allow-large-scope",
+        ],
+    )
+
+    with patch("signposter.cli.plan_merge_for_pr", return_value=fake_plan) as mock_plan, \
+         pytest.raises(SystemExit) as exc:
+        main()
+
+    out = capsys.readouterr().out
+    assert exc.value.code == 0
+    mock_plan.assert_called_once_with(
+        "test/repo",
+        22,
+        allow_medium_scope=True,
+        allow_large_scope=True,
+        allow_medium_risk=True,
+        allow_high_risk=False,
+    )
+    assert "Medium-risk override explicitly allowed by operator for planning only." in out
 
 
 def test_apply_merge_passes_allow_high_risk_override():
