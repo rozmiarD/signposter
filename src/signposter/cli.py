@@ -102,6 +102,7 @@ from signposter.review import (
     evaluate_review_gate,
     execute_pr_review,
     format_review_artifact_validation,
+    format_review_artifact_validation_summary,
     format_review_gate,
     format_review_plan,
     format_review_submit_plan,
@@ -736,6 +737,11 @@ def main() -> None:
         "--summary",
         default=None,
         help="Path to reviewer summary artifact (default: artifacts/runs/pr-N-reviewer.summary.md)",
+    )
+    validate_artifact_parser.add_argument(
+        "--summary-output",
+        action="store_true",
+        help="Print compact validation output for automation logs",
     )
     validate_artifact_parser.set_defaults(func=run_review_validate_artifact)
 
@@ -1570,7 +1576,10 @@ def run_review_validate_artifact(args: argparse.Namespace) -> int:
 
     try:
         result = validate_review_artifact(pr, summary_path=getattr(args, "summary", None))
-        print(format_review_artifact_validation(result))
+        if getattr(args, "summary_output", False):
+            print(format_review_artifact_validation_summary(result))
+        else:
+            print(format_review_artifact_validation(result))
         return 0 if result.status == "ready" else 1
     except Exception as e:
         print(f"Review artifact validation failed: {e}", file=sys.stderr)
