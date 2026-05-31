@@ -8,13 +8,14 @@ from unittest.mock import patch
 
 import pytest
 
-from signposter.cli import main, run_lifecycle_watch
+from signposter.cli import main, run_lifecycle_status, run_lifecycle_watch
 from signposter.lifecycle import (
     LifecycleStatus,
     LifecycleWatchRequest,
     LifecycleWatchSnapshot,
     collect_lifecycle_watch_data,
     format_lifecycle_status,
+    format_lifecycle_status_summary,
     format_lifecycle_watch,
     plan_lifecycle_status,
 )
@@ -277,6 +278,60 @@ def test_output_contains_no_mutation_notes():
     assert "No GitHub mutation was performed" in out
     assert "No local cleanup was performed" in out
     assert "Read-only status only" in out
+
+
+def test_lifecycle_status_summary_complete_is_concise():
+    s = _make_complete_status()
+    out = format_lifecycle_status_summary(s)
+
+    assert "Signposter Lifecycle Summary" in out
+    assert "target: issue #4" in out
+    assert "issue: #4 CLOSED state:merged" in out
+    assert "pr: #5 MERGED" in out
+    assert "status: complete" in out
+    assert "review: APPROVED non-author-approval=yes" in out
+    assert "integration: complete" in out
+    assert "cleanup: complete" in out
+    assert "stop: none" in out
+    assert "Issue:" not in out
+    assert "Cleanup:" not in out
+
+
+def test_lifecycle_status_summary_incomplete_shows_stop_reason():
+    s = _make_complete_status(
+        issue_state="OPEN",
+        pr_state="OPEN",
+        pr_merged=False,
+        integrated=False,
+        cleanup_complete=False,
+        status="incomplete — PR #5 is not merged",
+    )
+    out = format_lifecycle_status_summary(s)
+
+    assert "target: issue #4" in out
+    assert "pr: #5 OPEN" in out
+    assert "status: incomplete — PR #5 is not merged" in out
+    assert "integration: pending" in out
+    assert "cleanup: pending" in out
+    assert "stop: incomplete — PR #5 is not merged" in out
+
+
+def test_lifecycle_status_handler_summary_output(capsys):
+    args = Namespace(
+        repo="ExatronOmega/signposter",
+        issue=4,
+        pr=None,
+        summary=True,
+    )
+
+    with patch("signposter.cli.plan_lifecycle_status", return_value=_make_complete_status()):
+        rc = run_lifecycle_status(args)
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "Signposter Lifecycle Summary" in captured.out
+    assert "target: issue #4" in captured.out
+    assert "Issue:" not in captured.out
 
 
 def test_lifecycle_status_shows_branch_pattern_source():
