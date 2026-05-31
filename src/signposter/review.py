@@ -753,6 +753,16 @@ class ReviewGateResult:
     notes: list[str]
 
 
+@dataclass(frozen=True)
+class ReviewArtifactValidation:
+    pr_number: int
+    summary_path: str
+    status: str
+    errors: list[str]
+    opinion: ReviewerOpinion
+    notes: list[str]
+
+
 def parse_reviewer_opinion(text: str) -> ReviewerOpinion:
     """Parse the structured reviewer contract from raw or summary text.
 
@@ -834,6 +844,92 @@ def parse_reviewer_opinion(text: str) -> ReviewerOpinion:
         reasoning=reasoning,
         raw_text=text,
     )
+
+
+def validate_review_artifact(
+    pr_number: int,
+    *,
+    summary_path: str | None = None,
+    confidence_threshold: float = 0.85,
+) -> ReviewArtifactValidation:
+    """Validate the structured reviewer summary contract without side effects."""
+    if summary_path is None:
+        summary_path = f"artifacts/runs/pr-{pr_number}-reviewer.summary.md"
+
+    notes = [
+        "No GitHub review was submitted.",
+        "No merge was performed.",
+        "No issue was closed.",
+    ]
+
+    if not os.path.isfile(summary_path):
+        return ReviewArtifactValidation(
+            pr_number=pr_number,
+            summary_path=summary_path,
+            status="blocked",
+            errors=[f"summary artifact missing: {summary_path}"],
+            opinion=ReviewerOpinion(None, None, None, None, None, None, None, [], None, ""),
+            notes=notes,
+        )
+
+    with open(summary_path, encoding="utf-8") as f:
+        text = f.read()
+    opinion = parse_reviewer_opinion(text)
+    errors: list[str] = []
+
+    if opinion.verdict not in ("APPROVE", "NEEDS_CHANGES", "BLOCK"):
+        errors.append("Verdict must be APPROVE, NEEDS_CHANGES, or BLOCK")
+    if opinion.confidence is None:
+        errors.append("Confidence must be present and parseable")
+    elif opinion.confidence < confidence_threshold:
+        errors.append(f"Confidence below threshold ({opinion.confidence} < {confidence_threshold})")
+    if opinion.risk not in ("low", "medium", "high"):
+        errors.append("Risk must be low, medium, or high")
+    if opinion.scope_match not in ("yes", "no"):
+        errors.append("Scope match must be yes or no")
+    if opinion.ci_considered not in ("yes", "no"):
+        errors.append("CI considered must be yes or no")
+    if opinion.merge_recommendation not in ("yes", "no"):
+        errors.append("Merge recommendation must be yes or no")
+    if opinion.automerge_eligible not in ("yes", "no"):
+        errors.append("Automerge eligible must be yes or no")
+
+    return ReviewArtifactValidation(
+        pr_number=pr_number,
+        summary_path=summary_path,
+        status="ready" if not errors else "blocked",
+        errors=errors,
+        opinion=opinion,
+        notes=notes,
+    )
+
+
+def format_review_artifact_validation(result: ReviewArtifactValidation) -> str:
+    """Format review artifact validation output."""
+    o = result.opinion
+    lines = [f"Signposter Review Artifact Validation — PR #{result.pr_number}\n"]
+    lines.append("Artifact:")
+    lines.append(f"  summary: {result.summary_path}")
+    lines.append("")
+    lines.append("Parsed fields:")
+    lines.append(f"  verdict: {o.verdict or 'unknown'}")
+    lines.append(f"  confidence: {o.confidence if o.confidence is not None else 'unknown'}")
+    lines.append(f"  risk: {o.risk or 'unknown'}")
+    lines.append(f"  scope match: {o.scope_match or 'unknown'}")
+    lines.append(f"  ci considered: {o.ci_considered or 'unknown'}")
+    lines.append(f"  merge recommendation: {o.merge_recommendation or 'unknown'}")
+    lines.append(f"  automerge eligible: {o.automerge_eligible or 'unknown'}")
+    lines.append("")
+    lines.append("Status:")
+    lines.append(f"  {result.status}")
+    if result.errors:
+        lines.append("")
+        lines.append("Errors:")
+        lines.extend(f"  - {error}" for error in result.errors)
+    lines.append("")
+    lines.append("Notes:")
+    lines.extend(f"  {note}" for note in result.notes)
+    return "\n".join(lines)
 
 
 def evaluate_review_gate(
