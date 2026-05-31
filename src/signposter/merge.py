@@ -167,6 +167,7 @@ def plan_merge_for_pr(
     pr_number: int,
     *,
     allow_medium_scope: bool = False,
+    allow_large_scope: bool = False,
     allow_medium_risk: bool = False,
     allow_high_risk: bool = False,
 ) -> MergePlan:
@@ -287,6 +288,8 @@ def plan_merge_for_pr(
 
     scope_allowed = size == "small" or (
         allow_medium_scope and size == "medium"
+    ) or (
+        allow_large_scope and size == "large"
     )
     reviewer_risk_allowed = (
         reviewer_risk in ("low", "LOW")
@@ -521,6 +524,7 @@ def apply_merge(
     *,
     apply: bool = False,
     allow_medium_scope: bool = False,
+    allow_large_scope: bool = False,
     allow_medium_risk: bool = False,
     allow_high_risk: bool = False,
 ) -> dict:
@@ -534,6 +538,7 @@ def apply_merge(
         repo,
         pr_number,
         allow_medium_scope=allow_medium_scope,
+        allow_large_scope=allow_large_scope,
         allow_medium_risk=allow_medium_risk,
         allow_high_risk=allow_high_risk,
     )
