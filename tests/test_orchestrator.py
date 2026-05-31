@@ -9,11 +9,15 @@ from signposter.cli import main
 from signposter.lifecycle import LifecycleNext, LifecyclePreflight
 from signposter.orchestrator import (
     format_orchestrator_next,
+    format_orchestrator_run_next,
     plan_orchestrator_next,
+    plan_orchestrator_run_next,
     plan_orchestrator_tail,
     run_orchestrator_loop,
     run_orchestrator_step,
 )
+from signposter.scan import LabeledItem
+from signposter.scheduler import SchedulerNext
 
 
 def _next(**overrides) -> LifecycleNext:
@@ -303,3 +307,81 @@ def test_orchestrator_tail_delegates_to_pr_lifecycle_next() -> None:
 
     assert result.lifecycle.pr_number == 47
     plan.assert_called_once_with("ExatronOmega/signposter", issue=None, pr=47)
+
+
+def test_orchestrator_run_next_plans_scheduler_selected_issue() -> None:
+    issue = LabeledItem(
+        number=55,
+        title="Issue 55",
+        html_url="https://github.com/example/repo/issues/55",
+        labels=["state:ready"],
+        item_type="issue",
+    )
+    scheduler = SchedulerNext(
+        repo="example/repo",
+        status="ready",
+        issue=issue,
+        reason="first ready",
+        skipped=[],
+        notes=[],
+    )
+    lifecycle_next = _next(issue_number=55, action="create-worktree")
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", return_value=scheduler),
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next),
+    ):
+        result = plan_orchestrator_run_next("example/repo")
+
+    assert result.scheduler.issue is not None
+    assert result.scheduler.issue.number == 55
+    assert result.next is not None
+    assert result.next.action == "create-worktree"
+
+
+def test_orchestrator_run_next_handles_no_scheduler_issue() -> None:
+    scheduler = SchedulerNext(
+        repo="example/repo",
+        status="completed",
+        issue=None,
+        reason="none",
+        skipped=[],
+        notes=[],
+    )
+
+    with patch("signposter.orchestrator.select_next_issue", return_value=scheduler):
+        result = plan_orchestrator_run_next("example/repo")
+
+    assert result.next is None
+    assert result.status == "completed"
+
+
+def test_format_orchestrator_run_next_contains_selection_and_action() -> None:
+    issue = LabeledItem(
+        number=55,
+        title="Issue 55",
+        html_url="https://github.com/example/repo/issues/55",
+        labels=["state:ready"],
+        item_type="issue",
+    )
+    scheduler = SchedulerNext(
+        repo="example/repo",
+        status="ready",
+        issue=issue,
+        reason="first ready",
+        skipped=[],
+        notes=[],
+    )
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", return_value=scheduler),
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()),
+    ):
+        result = plan_orchestrator_run_next("example/repo")
+
+    out = format_orchestrator_run_next(result)
+
+    assert "Signposter Orchestrator Run Next" in out
+    assert "selected: #55" in out
+    assert "action: execute-worker" in out
+    assert "No lifecycle command was executed." in out
