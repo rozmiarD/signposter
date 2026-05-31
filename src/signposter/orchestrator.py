@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import shlex
 import subprocess
+import sys
 from dataclasses import dataclass
 
 from signposter.lifecycle import LifecycleNext, plan_lifecycle_next
@@ -26,6 +27,12 @@ MUTATION_REQUIRED_ACTIONS = {
     "cleanup",
 }
 APPLYABLE_ACTIONS = MUTATION_REQUIRED_ACTIONS | EXECUTION_REQUIRED_ACTIONS
+SIGNPOSTER_ENTRYPOINT = (
+    "import sys; "
+    "from signposter.cli import main; "
+    "sys.argv = ['signposter'] + sys.argv[1:]; "
+    "main()"
+)
 
 
 @dataclass(frozen=True)
@@ -280,7 +287,7 @@ def _normalized_command(command: str) -> list[str]:
     if not args:
         raise RuntimeError("empty orchestrator command")
     if args[0] == "signposter":
-        return args
+        return [sys.executable, "-c", SIGNPOSTER_ENTRYPOINT, *args[1:]]
     if args[0] == "git" and args[1:] == ["status", "--short", "--branch"]:
         return args
     raise RuntimeError(f"refusing unsupported orchestrator command: {command}")

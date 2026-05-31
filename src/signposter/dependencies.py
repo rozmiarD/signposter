@@ -22,6 +22,7 @@ import subprocess
 # Robust line-based parser for Depends-On declarations.
 # Handles both comma lists and one-per-line styles.
 _DEPENDS_ON_RE = re.compile(r"#(\d+)")
+COMPLETED_DEPENDENCY_STATES = {"done", "merged"}
 
 
 def parse_depends_on(body: str | None) -> list[int]:
@@ -92,7 +93,7 @@ def get_dependency_block_reason(
 
     for dep_num in depends_on:
         state = fetch_issue_state_label(repo, dep_num)
-        if state == "done":
+        if state in COMPLETED_DEPENDENCY_STATES:
             continue  # good, not a blocker
 
         if state is None:
@@ -104,7 +105,7 @@ def get_dependency_block_reason(
         reason = ", ".join(blockers)
         return True, f"blocked by {reason}"
 
-    return False, "all dependencies done"
+    return False, "all dependencies complete"
 
 
 def is_dependency_blocked(

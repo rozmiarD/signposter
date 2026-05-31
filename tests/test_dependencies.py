@@ -54,7 +54,20 @@ def test_is_dependency_blocked_all_done(monkeypatch):
 
     blocked, reason = is_dependency_blocked("test/repo", "Depends-On: #3, #4")
     assert blocked is False
-    assert "all dependencies done" in reason
+    assert "all dependencies complete" in reason
+
+
+def test_is_dependency_blocked_all_merged(monkeypatch):
+    from signposter.dependencies import is_dependency_blocked
+
+    def fake_state(repo, num):
+        return "merged"
+
+    monkeypatch.setattr("signposter.dependencies.fetch_issue_state_label", fake_state)
+
+    blocked, reason = is_dependency_blocked("test/repo", "Depends-On: #3, #4")
+    assert blocked is False
+    assert "all dependencies complete" in reason
 
 
 def test_is_dependency_blocked_active_dep(monkeypatch):
