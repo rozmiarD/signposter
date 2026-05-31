@@ -54,6 +54,7 @@ from signposter.orchestrator import (
     run_orchestrator_loop,
     run_orchestrator_run_next_loop,
     run_orchestrator_step,
+    write_orchestrator_run_next_loop_transcript,
 )
 from signposter.orchestrator import (
     run_orchestrator_run_next as execute_orchestrator_run_next,
@@ -2346,6 +2347,10 @@ def run_orchestrator_run_next_loop_cli(args: argparse.Namespace) -> int:
             print(format_orchestrator_run_next_loop_summary(result))
         else:
             print(format_orchestrator_run_next_loop(result))
+        transcript = getattr(args, "transcript", None)
+        if transcript:
+            path = write_orchestrator_run_next_loop_transcript(result, transcript)
+            print(f"Transcript: {path}")
         return 0 if result.status in ("completed", "limit-reached") else 1
     except Exception as e:
         print(f"Orchestrator run-next-loop failed: {e}", file=sys.stderr)
@@ -2466,6 +2471,12 @@ def _register_orchestrator_subcommands(
     run_next_loop_parser.add_argument("--apply", action="store_true")
     run_next_loop_parser.add_argument("--execute", action="store_true")
     run_next_loop_parser.add_argument("--summary", action="store_true")
+    run_next_loop_parser.add_argument(
+        "--transcript",
+        nargs="?",
+        const="artifacts/runs/orchestrator-run-next-loop.transcript.txt",
+        help="Write a bounded local transcript artifact to PATH or the default runs path",
+    )
     run_next_loop_parser.set_defaults(func=run_orchestrator_run_next_loop_cli)
 
 

@@ -8,6 +8,7 @@ import pytest
 from signposter.cli import main
 from signposter.lifecycle import LifecycleNext, LifecyclePreflight
 from signposter.orchestrator import (
+    OrchestratorRunNextLoop,
     format_orchestrator_loop_summary,
     format_orchestrator_next,
     format_orchestrator_run_next,
@@ -21,6 +22,7 @@ from signposter.orchestrator import (
     run_orchestrator_run_next,
     run_orchestrator_run_next_loop,
     run_orchestrator_step,
+    write_orchestrator_run_next_loop_transcript,
 )
 from signposter.scan import LabeledItem
 from signposter.scheduler import SchedulerNext
@@ -839,3 +841,86 @@ def test_format_orchestrator_run_next_loop_summary_is_concise() -> None:
     ]
     assert "command:" not in out
     assert "Notes:" not in out
+
+
+def test_write_orchestrator_run_next_loop_transcript_is_local_and_bounded(tmp_path) -> None:
+    active = LabeledItem(
+        number=57,
+        title="Issue 57",
+        html_url="https://github.com/example/repo/issues/57",
+        labels=["state:active"],
+        item_type="issue",
+    )
+    scheduler = SchedulerNext(
+        repo="example/repo",
+        status="completed",
+        issue=None,
+        reason="none",
+        skipped=[],
+        notes=[],
+    )
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", return_value=scheduler),
+        patch("signposter.orchestrator.fetch_open_issues", return_value=[active]),
+        patch(
+            "signposter.orchestrator.plan_lifecycle_next",
+            return_value=_next(issue_number=57),
+        ),
+    ):
+        result = run_orchestrator_run_next_loop("example/repo", max_cycles=1, apply=True)
+
+    path = write_orchestrator_run_next_loop_transcript(
+        result,
+        tmp_path / "runs" / "loop.txt",
+    )
+
+    out = path.read_text(encoding="utf-8")
+    assert path.exists()
+    assert "Signposter Automation Summary" in out
+    assert "selected: #57" in out
+    assert "action: execute-worker" in out
+    assert "status: stopped" in out
+    assert "stop: OpenClaw execution requires explicit --execute" in out
+    assert "1. selected=#57 action=execute-worker status=blocked" in out
+    assert "local artifact only" in out
+    assert "no GitHub mutation was performed by transcript writing" in out
+
+
+def test_run_next_loop_cli_writes_transcript(tmp_path, monkeypatch, capsys) -> None:
+    transcript = tmp_path / "loop.txt"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "orchestrator",
+            "run-next-loop",
+            "--repo",
+            "example/repo",
+            "--summary",
+            "--transcript",
+            str(transcript),
+        ],
+    )
+
+    result = OrchestratorRunNextLoop(
+        status="completed",
+        cycles_requested=1,
+        cycles_run=0,
+        max_tasks=1,
+        tasks_started=0,
+        selected_issue=None,
+        steps=[],
+        stop_reason="no ready or resumable active issue found",
+        notes=[],
+    )
+    with patch("signposter.cli.run_orchestrator_run_next_loop", return_value=result):
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+    captured = capsys.readouterr()
+    assert exc_info.value.code == 0
+    assert "Signposter Automation Summary" in captured.out
+    assert f"Transcript: {transcript}" in captured.out
+    assert transcript.exists()
