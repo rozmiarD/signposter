@@ -5,6 +5,8 @@ from unittest.mock import patch
 from signposter.scan import LabeledItem
 from signposter.scheduler import (
     SchedulerNext,
+    build_scheduler_graph,
+    format_scheduler_graph,
     format_scheduler_next,
     parse_graph_metadata,
     select_next_issue,
@@ -122,3 +124,51 @@ def test_parse_graph_metadata_side_task_false() -> None:
     meta = parse_graph_metadata("Side-Task: no")
 
     assert meta.side_task is False
+
+
+def test_build_scheduler_graph_includes_graph_metadata() -> None:
+    issues = [
+        _issue(52, ["state:ready"]),
+        _issue(53, ["state:active"]),
+    ]
+    bodies = {
+        52: {"body": "Depends-On: #51\nMainline: H036"},
+        53: {"body": "Parent: #52\nReturn-To: #54\nSide-Task: yes"},
+    }
+
+    with (
+        patch("signposter.scheduler.fetch_open_issues", return_value=issues),
+        patch(
+            "signposter.scheduler.fetch_issue_context",
+            side_effect=lambda repo, number: bodies[number],
+        ),
+    ):
+        graph = build_scheduler_graph("example/repo")
+
+    assert graph.repo == "example/repo"
+    assert [item.number for item in graph.items] == [52, 53]
+    assert graph.items[0].metadata.depends_on == [51]
+    assert graph.items[0].metadata.mainline == "H036"
+    assert graph.items[1].metadata.parent == 52
+    assert graph.items[1].metadata.return_to == 54
+    assert graph.items[1].metadata.side_task is True
+
+
+def test_format_scheduler_graph_shows_key_fields() -> None:
+    issues = [_issue(52, ["state:ready"])]
+    with (
+        patch("signposter.scheduler.fetch_open_issues", return_value=issues),
+        patch(
+            "signposter.scheduler.fetch_issue_context",
+            return_value={"body": "Depends-On: #51\nMainline: H036"},
+        ),
+    ):
+        graph = build_scheduler_graph("example/repo")
+
+    out = format_scheduler_graph(graph)
+
+    assert "Signposter Scheduler Graph" in out
+    assert "#52 — Issue 52" in out
+    assert "depends on: #51" in out
+    assert "mainline: H036" in out
+    assert "No GitHub mutation was performed." in out

@@ -25,6 +25,26 @@ class SchedulerNext:
 
 
 @dataclass(frozen=True)
+class SchedulerGraphItem:
+    """One issue node in the scheduler graph."""
+
+    number: int
+    title: str
+    state: str | None
+    url: str
+    metadata: GraphMetadata
+
+
+@dataclass(frozen=True)
+class SchedulerGraph:
+    """Read-only scheduler graph snapshot."""
+
+    repo: str
+    items: list[SchedulerGraphItem]
+    notes: list[str]
+
+
+@dataclass(frozen=True)
 class GraphMetadata:
     """Graph metadata parsed from a GitHub issue body."""
 
@@ -124,6 +144,33 @@ def select_next_issue(repo: str, *, limit: int = 50) -> SchedulerNext:
     )
 
 
+def build_scheduler_graph(repo: str, *, limit: int = 50) -> SchedulerGraph:
+    """Build a read-only graph snapshot from open GitHub issues."""
+    items: list[SchedulerGraphItem] = []
+    for issue in sorted(fetch_open_issues(repo, limit=limit), key=lambda item: item.number):
+        context = fetch_issue_context(repo, issue.number) or {}
+        items.append(
+            SchedulerGraphItem(
+                number=issue.number,
+                title=issue.title,
+                state=_state(issue.labels),
+                url=issue.html_url,
+                metadata=parse_graph_metadata(context.get("body")),
+            )
+        )
+
+    return SchedulerGraph(
+        repo=repo,
+        items=items,
+        notes=[
+            "Read-only scheduler graph.",
+            "No GitHub mutation was performed.",
+            "No worktree was created.",
+            "No OpenClaw execution was performed.",
+        ],
+    )
+
+
 def format_scheduler_next(result: SchedulerNext) -> str:
     """Render compact scheduler output."""
     lines = [
@@ -150,6 +197,42 @@ def format_scheduler_next(result: SchedulerNext) -> str:
     if result.skipped:
         lines.extend(["", "Skipped:"])
         lines.extend(f"  {item}" for item in result.skipped)
+    lines.extend(["", "Notes:"])
+    lines.extend(f"  {note}" for note in result.notes)
+    return "\n".join(lines)
+
+
+def format_scheduler_graph(result: SchedulerGraph) -> str:
+    """Render compact scheduler graph output."""
+    lines = [
+        "Signposter Scheduler Graph",
+        "",
+        "Repo:",
+        f"  {result.repo}",
+        "",
+        "Issues:",
+    ]
+    if not result.items:
+        lines.append("  none")
+    for item in result.items:
+        meta = item.metadata
+        deps = ", ".join(f"#{number}" for number in meta.depends_on) or "none"
+        parent = f"#{meta.parent}" if meta.parent is not None else "none"
+        return_to = f"#{meta.return_to}" if meta.return_to is not None else "none"
+        mainline = meta.mainline or "none"
+        side = "yes" if meta.side_task else "no"
+        lines.extend(
+            [
+                f"  #{item.number} — {item.title}",
+                f"    state: {item.state or 'unknown'}",
+                f"    depends on: {deps}",
+                f"    mainline: {mainline}",
+                f"    parent: {parent}",
+                f"    return-to: {return_to}",
+                f"    side-task: {side}",
+            ]
+        )
+
     lines.extend(["", "Notes:"])
     lines.extend(f"  {note}" for note in result.notes)
     return "\n".join(lines)
