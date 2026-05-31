@@ -44,10 +44,12 @@ from signposter.orchestrator import (
     format_orchestrator_run_next,
     format_orchestrator_step,
     plan_orchestrator_next,
-    plan_orchestrator_run_next,
     plan_orchestrator_tail,
     run_orchestrator_loop,
     run_orchestrator_step,
+)
+from signposter.orchestrator import (
+    run_orchestrator_run_next as execute_orchestrator_run_next,
 )
 from signposter.planner import (
     apply_planner_advance_plan,
@@ -2198,13 +2200,20 @@ def run_orchestrator_run_next(args: argparse.Namespace) -> int:
         return 1
 
     try:
-        result = plan_orchestrator_run_next(
+        result = execute_orchestrator_run_next(
             repo,
             limit=getattr(args, "limit", 50),
-            allow_execute=getattr(args, "execute", False),
+            apply=getattr(args, "apply", False),
+            execute=getattr(args, "execute", False),
         )
         print(format_orchestrator_run_next(result))
-        return 0 if result.status in ("ready", "actionable", "complete", "completed") else 1
+        return 0 if result.status in (
+            "ready",
+            "actionable",
+            "applied",
+            "complete",
+            "completed",
+        ) else 1
     except Exception as e:
         print(f"Orchestrator run-next failed: {e}", file=sys.stderr)
         return 2
@@ -2296,6 +2305,7 @@ def _register_orchestrator_subcommands(
     )
     run_next_parser.add_argument("--repo", required=True)
     run_next_parser.add_argument("--limit", type=int, default=50)
+    run_next_parser.add_argument("--apply", action="store_true")
     run_next_parser.add_argument("--execute", action="store_true")
     run_next_parser.set_defaults(func=run_orchestrator_run_next)
 
