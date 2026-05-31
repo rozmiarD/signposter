@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from signposter.artifact import (
+    format_worker_artifact_validation,
     plan_review_summary,
     plan_worker_summary,
+    validate_worker_summary_artifact,
     write_manual_artifact,
 )
 from signposter.gate import evaluate_ci_gate
@@ -57,6 +59,58 @@ def test_worker_summary_apply_writes_file(tmp_path):
     path = tmp_path / "issue-32-worker.summary.md"
     assert wrote is True
     assert path.read_text(encoding="utf-8") == plan.content
+
+
+def test_validate_worker_summary_artifact_passes_formal_summary(tmp_path):
+    plan = plan_worker_summary(
+        repo="test/repo",
+        issue=72,
+        changed_files=["src/signposter/artifact.py", "tests/test_artifact.py"],
+        targeted_validation=[
+            "ruff check src/signposter/artifact.py tests/test_artifact.py",
+            "python -m pytest tests/test_artifact.py -q",
+        ],
+        runs_dir=tmp_path,
+    )
+    write_manual_artifact(plan, apply=True)
+
+    result = validate_worker_summary_artifact(72, runs_dir=tmp_path)
+    out = format_worker_artifact_validation(result)
+
+    assert result.status == "pass"
+    assert result.missing == []
+    assert result.stale_signal is None
+    assert "Status:\n  pass" in out
+
+
+def test_validate_worker_summary_artifact_reports_missing_file(tmp_path):
+    result = validate_worker_summary_artifact(72, runs_dir=tmp_path)
+
+    assert result.status == "missing"
+    assert result.exists is False
+    assert result.missing == ["summary artifact"]
+
+
+def test_validate_worker_summary_artifact_blocks_incomplete_summary(tmp_path):
+    path = tmp_path / "issue-72-worker.summary.md"
+    path.write_text("short summary\n**Exit Code:** 0\n", encoding="utf-8")
+
+    result = validate_worker_summary_artifact(72, runs_dir=tmp_path)
+
+    assert result.status == "blocked"
+    assert "acceptance" in result.missing
+    assert "validation evidence" in result.missing
+
+
+def test_validate_worker_summary_artifact_blocks_unsafe_marker(tmp_path):
+    plan = plan_worker_summary(repo="test/repo", issue=72, runs_dir=tmp_path)
+    path = tmp_path / "issue-72-worker.summary.md"
+    path.write_text(plan.content + "\nModel unavailable.\n", encoding="utf-8")
+
+    result = validate_worker_summary_artifact(72, runs_dir=tmp_path)
+
+    assert result.status == "blocked"
+    assert result.stale_signal == "model unavailable"
 
 
 def test_review_summary_plan_is_review_gate_compatible(tmp_path):

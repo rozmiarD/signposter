@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from signposter.artifact_safety import find_stale_or_failover_signal
+
 DEFAULT_FULL_VALIDATION = [
     "ruff check .",
     "python -m pytest tests/ -q",
@@ -22,6 +24,19 @@ class ManualArtifactPlan:
     path: str
     content: str
     status: str
+    notes: list[str]
+
+
+@dataclass(frozen=True)
+class WorkerArtifactValidation:
+    """Read-only validation result for a local worker summary artifact."""
+
+    issue: int
+    path: str
+    exists: bool
+    status: str
+    missing: list[str]
+    stale_signal: str | None
     notes: list[str]
 
 
@@ -275,4 +290,91 @@ def format_manual_artifact_plan(plan: ManualArtifactPlan, *, apply: bool = False
         lines.append(f"  {note}")
     if not apply:
         lines.append("  Dry-run only. Use --apply to write the artifact.")
+    return "\n".join(lines)
+
+
+def validate_worker_summary_artifact(
+    issue: int,
+    *,
+    summary_path: str | Path | None = None,
+    runs_dir: str | Path = "artifacts/runs",
+) -> WorkerArtifactValidation:
+    """Validate the local worker summary contract without mutating anything."""
+    path = (
+        Path(summary_path)
+        if summary_path
+        else Path(runs_dir) / f"issue-{issue}-worker.summary.md"
+    )
+    if not path.exists():
+        return WorkerArtifactValidation(
+            issue=issue,
+            path=str(path),
+            exists=False,
+            status="missing",
+            missing=["summary artifact"],
+            stale_signal=None,
+            notes=[
+                "Read-only validation.",
+                "No GitHub mutation was performed.",
+                "No OpenClaw execution was performed.",
+            ],
+        )
+
+    text = path.read_text(encoding="utf-8")
+    stale_signal = find_stale_or_failover_signal(text)
+    missing = _missing_worker_summary_fields(text)
+    status = "pass" if not missing and stale_signal is None else "blocked"
+
+    return WorkerArtifactValidation(
+        issue=issue,
+        path=str(path),
+        exists=True,
+        status=status,
+        missing=missing,
+        stale_signal=stale_signal,
+        notes=[
+            "Read-only validation.",
+            "No GitHub mutation was performed.",
+            "No OpenClaw execution was performed.",
+        ],
+    )
+
+
+def _missing_worker_summary_fields(text: str) -> list[str]:
+    lowered = text.lower()
+    required = {
+        "exit code": "**exit code:** 0",
+        "acceptance": "**acceptance:** pass",
+        "scoped completion evidence": "scoped completion evidence",
+        "validation evidence": "validation evidence",
+        "targeted validation": "targeted validation passed",
+        "full validation": "full validation passed",
+        "safety section": "## safety",
+        "no github mutation safety note": "no github mutation was performed",
+        "no unrelated files safety note": "no unrelated files were changed",
+    }
+    return [name for name, needle in required.items() if needle not in lowered]
+
+
+def format_worker_artifact_validation(result: WorkerArtifactValidation) -> str:
+    """Render compact worker artifact validation output."""
+    lines = [
+        f"Signposter Worker Artifact Validation — Issue #{result.issue}",
+        "",
+        "Artifact:",
+        f"  path: {result.path}",
+        f"  exists: {'yes' if result.exists else 'no'}",
+        "",
+        "Status:",
+        f"  {result.status}",
+    ]
+    if result.stale_signal:
+        lines.extend(["", "Unsafe marker:", f"  {result.stale_signal}"])
+    lines.extend(["", "Missing:"])
+    if result.missing:
+        lines.extend(f"  - {item}" for item in result.missing)
+    else:
+        lines.append("  none")
+    lines.extend(["", "Notes:"])
+    lines.extend(f"  {note}" for note in result.notes)
     return "\n".join(lines)

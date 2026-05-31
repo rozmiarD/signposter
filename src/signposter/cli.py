@@ -13,8 +13,10 @@ from pathlib import Path
 
 from signposter.artifact import (
     format_manual_artifact_plan,
+    format_worker_artifact_validation,
     plan_review_summary,
     plan_worker_summary,
+    validate_worker_summary_artifact,
     write_manual_artifact,
 )
 from signposter.claim import cli_main as claim_cli_main
@@ -954,6 +956,23 @@ def main() -> None:
     )
     worker_artifact_parser.set_defaults(func=run_artifact_worker_summary)
 
+    validate_worker_artifact_parser = artifact_subparsers.add_parser(
+        "validate-worker-summary",
+        help="Validate a local worker summary artifact (read-only)",
+    )
+    validate_worker_artifact_parser.add_argument("--issue", type=int, required=True)
+    validate_worker_artifact_parser.add_argument(
+        "--summary",
+        default=None,
+        help="Path to worker summary artifact (default: artifacts/runs/issue-N-worker.summary.md)",
+    )
+    validate_worker_artifact_parser.add_argument(
+        "--runs-dir",
+        default="artifacts/runs",
+        help="Directory for local run artifacts",
+    )
+    validate_worker_artifact_parser.set_defaults(func=run_artifact_validate_worker_summary)
+
     review_artifact_parser = artifact_subparsers.add_parser(
         "write-review-summary",
         help="Create a local manual reviewer summary artifact",
@@ -1299,6 +1318,17 @@ def run_artifact_review_summary(args: argparse.Namespace) -> int:
     write_manual_artifact(plan, apply=apply_flag)
     print(format_manual_artifact_plan(plan, apply=apply_flag))
     return 0
+
+
+def run_artifact_validate_worker_summary(args: argparse.Namespace) -> int:
+    """Validate a local worker summary artifact."""
+    result = validate_worker_summary_artifact(
+        args.issue,
+        summary_path=getattr(args, "summary", None),
+        runs_dir=getattr(args, "runs_dir", "artifacts/runs"),
+    )
+    print(format_worker_artifact_validation(result))
+    return 0 if result.status == "pass" else 1
 
 
 def run_gate(args: argparse.Namespace) -> int:
