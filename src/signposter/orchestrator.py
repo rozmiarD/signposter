@@ -13,6 +13,7 @@ import sys
 from dataclasses import dataclass
 
 from signposter.lifecycle import LifecycleNext, plan_lifecycle_next
+from signposter.scheduler import SchedulerNext, select_next_issue
 
 EXECUTION_REQUIRED_ACTIONS = {"execute-worker"}
 MUTATION_REQUIRED_ACTIONS = {
@@ -73,6 +74,16 @@ class OrchestratorLoop:
     cycles_run: int
     steps: list[OrchestratorStep]
     stop_reason: str | None
+    notes: list[str]
+
+
+@dataclass(frozen=True)
+class OrchestratorRunNext:
+    """Scheduler-selected next issue plus lifecycle action plan."""
+
+    scheduler: SchedulerNext
+    next: OrchestratorNext | None
+    status: str
     notes: list[str]
 
 
@@ -283,6 +294,39 @@ def plan_orchestrator_tail(
     return plan_orchestrator_next(repo, pr=pr, allow_execute=allow_execute)
 
 
+def plan_orchestrator_run_next(
+    repo: str,
+    *,
+    limit: int = 50,
+    allow_execute: bool = False,
+) -> OrchestratorRunNext:
+    """Select the next scheduler issue and plan its lifecycle action."""
+    scheduler = select_next_issue(repo, limit=limit)
+    planned: OrchestratorNext | None = None
+    status = scheduler.status
+
+    if scheduler.issue is not None:
+        planned = plan_orchestrator_next(
+            repo,
+            issue=scheduler.issue.number,
+            allow_execute=allow_execute,
+        )
+        status = planned.status
+
+    return OrchestratorRunNext(
+        scheduler=scheduler,
+        next=planned,
+        status=status,
+        notes=[
+            "Read-only run-next planning.",
+            "No lifecycle command was executed.",
+            "No GitHub mutation was performed.",
+            "No local mutation was performed.",
+            "No OpenClaw execution was performed.",
+        ],
+    )
+
+
 def _normalized_command(command: str) -> list[str]:
     args = shlex.split(command)
     if not args:
@@ -373,6 +417,44 @@ def format_orchestrator_loop(result: OrchestratorLoop) -> str:
         lines.append("  none")
     if result.stop_reason:
         lines.extend(["", "Stop:", f"  {result.stop_reason}"])
+    lines.extend(["", "Status:", f"  {result.status}"])
+    lines.extend(["", "Notes:"])
+    lines.extend(f"  {note}" for note in result.notes)
+    return "\n".join(lines)
+
+
+def format_orchestrator_run_next(result: OrchestratorRunNext) -> str:
+    """Render scheduler-selected next lifecycle plan."""
+    lines = [
+        "Signposter Orchestrator Run Next",
+        "",
+        "Scheduler:",
+    ]
+    if result.scheduler.issue:
+        issue = result.scheduler.issue
+        lines.extend(
+            [
+                f"  selected: #{issue.number} — {issue.title}",
+                f"  reason: {result.scheduler.reason}",
+            ]
+        )
+    else:
+        lines.extend(["  selected: none", f"  reason: {result.scheduler.reason}"])
+
+    lines.extend(["", "Lifecycle:"])
+    if result.next:
+        lines.extend(
+            [
+                f"  action: {result.next.action}",
+                f"  command: {result.next.command}",
+                f"  status: {result.next.status}",
+            ]
+        )
+        if result.next.stop_reason:
+            lines.append(f"  stop: {result.next.stop_reason}")
+    else:
+        lines.append("  none")
+
     lines.extend(["", "Status:", f"  {result.status}"])
     lines.extend(["", "Notes:"])
     lines.extend(f"  {note}" for note in result.notes)
