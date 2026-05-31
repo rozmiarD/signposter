@@ -799,6 +799,7 @@ def cli_main(
 
             if execute and final_plans:
                 print("\n=== EXECUTING RUNNER (OpenClaw) ===\n")
+                execution_failed = False
 
                 for p in final_plans:
                     st = (p.dispatch.state or "").lower()
@@ -853,18 +854,26 @@ def cli_main(
                         print(f"  Exit code: {result.get('exit_code')}")
                         print(f"  Raw output: {result.get('raw_path')}")
                         print(f"  Summary:   {result.get('summary_path')}")
+                        if result.get("exit_code") != 0:
+                            execution_failed = True
                         continue  # handled
 
                     # Normal (non-worktree) execution path
                     if st != "active":
                         msg = f"  Refusing to execute issue #{p.item.number}: state={st}"
                         print(msg + " (requires state:active)")
+                        execution_failed = True
                         continue
                     result = execute_plan(p, repo, allow_dirty=allow_dirty)
                     print(f"Execution completed for issue #{p.item.number}")
                     print(f"  Exit code: {result.get('exit_code')}")
                     print(f"  Raw output: {result.get('raw_path')}")
                     print(f"  Summary:   {result.get('summary_path')}")
+                    if result.get("exit_code") != 0:
+                        execution_failed = True
+
+                if execution_failed:
+                    return 1
 
             return 0
 
@@ -924,10 +933,12 @@ def cli_main(
 
         if execute and final_plans:
             print("\n=== EXECUTING RUNNER (OpenClaw) ===\n")
+            execution_failed = False
             for plan in final_plans:
                 state = (plan.dispatch.state or "").lower()
                 if state == "ready" and not claim:
                     print(f"  Refusing to execute issue #{plan.item.number}: state=ready without --claim. Use --claim --execute to claim + run.")  # noqa: E501
+                    execution_failed = True
                     continue
 
                 result = execute_plan(plan, repo, allow_dirty=allow_dirty)
@@ -935,22 +946,35 @@ def cli_main(
                 print(f"  Exit code: {result.get('exit_code')}")
                 print(f"  Raw output: {result.get('raw_path')}")
                 print(f"  Summary:   {result.get('summary_path')}")
+                if result.get("exit_code") != 0:
+                    execution_failed = True
+
+            if execution_failed:
+                return 1
 
         # Fallback for --execute on already-active items with existing prompt artifacts.
         elif execute and not final_plans:
             print('\n=== EXECUTING RUNNER (OpenClaw) - active item fallback ===\n')
+            execution_failed = False
             try:
                 active_plans = plan_active_runner_from_prompts(repo, limit=limit)
                 if not active_plans:
                     print("No active items with prompt artifacts found.")
+                    execution_failed = True
                 for plan in active_plans:
                     result = execute_plan(plan, repo, allow_dirty=allow_dirty)
                     print(f"Execution completed for issue #{plan.item.number} (active fallback)")
                     print(f"  Exit code: {result.get('exit_code')}")
                     print(f"  Raw output: {result.get('raw_path')}")
                     print(f"  Summary:   {result.get('summary_path')}")
+                    if result.get("exit_code") != 0:
+                        execution_failed = True
             except Exception as e:
                 print(f"Active fallback execution failed: {e}")
+                execution_failed = True
+
+            if execution_failed:
+                return 1
 
         return 0
     except Exception as e:

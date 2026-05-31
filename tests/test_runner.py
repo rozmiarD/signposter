@@ -426,7 +426,7 @@ def test_cli_main_explicit_issue_refuses_execute_on_done_and_failed(capsys):
         captured = capsys.readouterr()
         output = captured.out
 
-        assert exit_code == 0
+        assert exit_code == 1
         assert "Refusing to execute issue #88" in output
         assert f"state={state}" in output
         assert "requires state:active" in output
@@ -848,3 +848,43 @@ def test_execute_worktree_uses_correct_cwd_and_writes_artifacts_to_main(monkeypa
 
     # Artifacts should still be written under main repo artifacts/runs
     # (we can't easily assert file creation without more mocking, but the logic ensures it)
+
+
+def test_cli_main_worktree_execute_propagates_preflight_failure(capsys, tmp_path):
+    """Worktree execution must return non-zero when OpenClaw preflight blocks."""
+    from unittest.mock import patch
+
+    from signposter.runner import cli_main
+
+    fake_item = make_item(70, ["state:active", "phase:build", "role:worker"])
+    worktree_path = str(tmp_path / "signposter-work" / "70")
+    tmp_path.joinpath("signposter-work", "70").mkdir(parents=True)
+    preflight = type(
+        "pf",
+        (),
+        {
+            "ok": False,
+            "reason": "no provider token environment variable is configured",
+            "checked_token_envs": ("OPENAI_API_KEY",),
+            "openclaw_path": "/usr/bin/openclaw",
+            "manual_fallback": "signposter artifact write-worker-summary --issue 70 --apply",
+        },
+    )()
+
+    with patch("signposter.runner.fetch_issue_by_number", return_value=fake_item), \
+         patch("signposter.runner.get_worktree_status_for_issue") as mock_ws, \
+         patch("signposter.runner.find_uncommitted_repo_changes", return_value=[]), \
+         patch("signposter.runner.check_openclaw_preflight", return_value=preflight), \
+         patch("signposter.runner.subprocess.run") as mock_run:
+        mock_ws.return_value = {
+            "status": "available",
+            "path": worktree_path,
+            "exists": True,
+        }
+        exit_code = cli_main("test/repo", issue=70, execute=True, worktree=True)
+
+    out = capsys.readouterr().out
+    assert exit_code == 1
+    assert "OpenClaw preflight blocked execution." in out
+    assert "Exit code: 1" in out
+    mock_run.assert_not_called()
