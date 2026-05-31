@@ -103,7 +103,12 @@ from signposter.review import (
 )
 from signposter.runner import cli_main as runner_cli_main
 from signposter.scan import cli_main as scan_cli_main
-from signposter.scheduler import format_scheduler_next, select_next_issue
+from signposter.scheduler import (
+    build_scheduler_graph,
+    format_scheduler_graph,
+    format_scheduler_next,
+    select_next_issue,
+)
 from signposter.sync import (
     apply_sync,
     format_sync_apply_result,
@@ -2284,6 +2289,22 @@ def run_scheduler_next(args: argparse.Namespace) -> int:
         return 2
 
 
+def run_scheduler_graph(args: argparse.Namespace) -> int:
+    """Handler for `signposter scheduler graph --repo ...`."""
+    repo = getattr(args, "repo", None)
+    if not repo:
+        print("Error: --repo is required", file=sys.stderr)
+        return 1
+
+    try:
+        result = build_scheduler_graph(repo, limit=getattr(args, "limit", 50))
+        print(format_scheduler_graph(result))
+        return 0
+    except Exception as e:
+        print(f"Scheduler graph failed: {e}", file=sys.stderr)
+        return 2
+
+
 def _register_scheduler_subcommands(subparsers: argparse._SubParsersAction) -> None:
     """Register the scheduler command group."""
     scheduler_parser = subparsers.add_parser(
@@ -2298,6 +2319,14 @@ def _register_scheduler_subcommands(subparsers: argparse._SubParsersAction) -> N
     next_parser.add_argument("--repo", required=True)
     next_parser.add_argument("--limit", type=int, default=50)
     next_parser.set_defaults(func=run_scheduler_next)
+
+    graph_parser = scheduler_subparsers.add_parser(
+        "graph",
+        help="Show read-only graph metadata for open workflow issues",
+    )
+    graph_parser.add_argument("--repo", required=True)
+    graph_parser.add_argument("--limit", type=int, default=50)
+    graph_parser.set_defaults(func=run_scheduler_graph)
 
 
 # =============================================================================
