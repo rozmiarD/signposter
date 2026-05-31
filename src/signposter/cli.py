@@ -41,8 +41,10 @@ from signposter.merge import (
 from signposter.orchestrator import (
     format_orchestrator_loop,
     format_orchestrator_next,
+    format_orchestrator_run_next,
     format_orchestrator_step,
     plan_orchestrator_next,
+    plan_orchestrator_run_next,
     plan_orchestrator_tail,
     run_orchestrator_loop,
     run_orchestrator_step,
@@ -2188,6 +2190,26 @@ def run_orchestrator_tail(args: argparse.Namespace) -> int:
         return 2
 
 
+def run_orchestrator_run_next(args: argparse.Namespace) -> int:
+    """Handler for `signposter orchestrator run-next --repo ...`."""
+    repo = getattr(args, "repo", None)
+    if not repo:
+        print("Error: --repo is required", file=sys.stderr)
+        return 1
+
+    try:
+        result = plan_orchestrator_run_next(
+            repo,
+            limit=getattr(args, "limit", 50),
+            allow_execute=getattr(args, "execute", False),
+        )
+        print(format_orchestrator_run_next(result))
+        return 0 if result.status in ("ready", "actionable", "complete", "completed") else 1
+    except Exception as e:
+        print(f"Orchestrator run-next failed: {e}", file=sys.stderr)
+        return 2
+
+
 def _register_orchestrator_subcommands(
     subparsers: argparse._SubParsersAction,
 ) -> None:
@@ -2267,6 +2289,15 @@ def _register_orchestrator_subcommands(
     tail_parser.add_argument("--pr", type=int, required=True)
     tail_parser.add_argument("--execute", action="store_true")
     tail_parser.set_defaults(func=run_orchestrator_tail)
+
+    run_next_parser = orchestrator_subparsers.add_parser(
+        "run-next",
+        help="Plan lifecycle action for scheduler-selected issue",
+    )
+    run_next_parser.add_argument("--repo", required=True)
+    run_next_parser.add_argument("--limit", type=int, default=50)
+    run_next_parser.add_argument("--execute", action="store_true")
+    run_next_parser.set_defaults(func=run_orchestrator_run_next)
 
 
 # =============================================================================
