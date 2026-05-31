@@ -3,7 +3,12 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from signposter.scan import LabeledItem
-from signposter.scheduler import SchedulerNext, format_scheduler_next, select_next_issue
+from signposter.scheduler import (
+    SchedulerNext,
+    format_scheduler_next,
+    parse_graph_metadata,
+    select_next_issue,
+)
 
 
 def _issue(number: int, labels: list[str]) -> LabeledItem:
@@ -82,3 +87,38 @@ def test_scheduler_format_contains_safety_notes() -> None:
 
     assert "Signposter Scheduler Next" in out
     assert "No GitHub mutation was performed." in out
+
+
+def test_parse_graph_metadata_empty_body() -> None:
+    meta = parse_graph_metadata(None)
+
+    assert meta.depends_on == []
+    assert meta.mainline is None
+    assert meta.parent is None
+    assert meta.return_to is None
+    assert meta.side_task is False
+
+
+def test_parse_graph_metadata_full_body() -> None:
+    body = """Task: example
+
+Depends-On: #50, #51
+Mainline: H036
+Parent: #48
+Return-To: #52
+Side-Task: yes
+"""
+
+    meta = parse_graph_metadata(body)
+
+    assert meta.depends_on == [50, 51]
+    assert meta.mainline == "H036"
+    assert meta.parent == 48
+    assert meta.return_to == 52
+    assert meta.side_task is True
+
+
+def test_parse_graph_metadata_side_task_false() -> None:
+    meta = parse_graph_metadata("Side-Task: no")
+
+    assert meta.side_task is False
