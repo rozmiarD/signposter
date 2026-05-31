@@ -230,9 +230,14 @@ def plan_active_runner_from_prompts(repo: str, *, limit: int = 1) -> list[Runner
 
         working_dir = f"~/projects/signposter-work/{item.number}"
         prompt_path_str = str(prompt_path)
+        session_key = build_openclaw_session_key(
+            target_kind="issue",
+            target_number=item.number,
+            profile=profile,
+        )
         command_shape = (
             f"openclaw agent --agent {profile} "
-            f"--session-key signposter-issue-{item.number}-{profile} "
+            f"--session-key {session_key} "
             f'--message "$(cat {prompt_path_str})" --local'
         )
 
