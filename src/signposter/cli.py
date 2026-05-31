@@ -2342,6 +2342,10 @@ def run_orchestrator_run_next_loop_cli(args: argparse.Namespace) -> int:
             max_tasks=getattr(args, "max_tasks", 1),
             apply=getattr(args, "apply", False),
             execute=getattr(args, "execute", False),
+            tolerate_no_ready=getattr(args, "tolerate_no_ready", False),
+            tolerate_active_ambiguity=getattr(args, "tolerate_active_ambiguity", False),
+            tolerate_blocked_lifecycle=getattr(args, "tolerate_blocked_lifecycle", False),
+            tolerate_failed_step=getattr(args, "tolerate_failed_step", False),
         )
         if getattr(args, "summary", False):
             print(format_orchestrator_run_next_loop_summary(result))
@@ -2471,6 +2475,26 @@ def _register_orchestrator_subcommands(
     run_next_loop_parser.add_argument("--apply", action="store_true")
     run_next_loop_parser.add_argument("--execute", action="store_true")
     run_next_loop_parser.add_argument("--summary", action="store_true")
+    run_next_loop_parser.add_argument(
+        "--tolerate-no-ready",
+        action="store_true",
+        help="Treat no ready or resumable active issue as a tolerated loop stop",
+    )
+    run_next_loop_parser.add_argument(
+        "--tolerate-active-ambiguity",
+        action="store_true",
+        help="Treat multiple active issues as a tolerated loop stop",
+    )
+    run_next_loop_parser.add_argument(
+        "--tolerate-blocked-lifecycle",
+        action="store_true",
+        help="Treat a blocked lifecycle action as a tolerated loop stop",
+    )
+    run_next_loop_parser.add_argument(
+        "--tolerate-failed-step",
+        action="store_true",
+        help="Treat a failed lifecycle step command as a tolerated loop stop",
+    )
     run_next_loop_parser.add_argument(
         "--transcript",
         nargs="?",
