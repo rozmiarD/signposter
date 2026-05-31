@@ -625,6 +625,26 @@ def format_orchestrator_run_next(result: OrchestratorRunNext) -> str:
     return "\n".join(lines)
 
 
+def format_orchestrator_run_next_summary(result: OrchestratorRunNext) -> str:
+    """Render compact run-next output for automation loops."""
+    issue = f"#{result.scheduler.issue.number}" if result.scheduler.issue else "none"
+    action = result.next.action if result.next else "none"
+    stop = "none"
+    if result.step and result.step.stop_reason:
+        stop = result.step.stop_reason
+    elif result.next and result.next.stop_reason:
+        stop = result.next.stop_reason
+
+    lines = [
+        "Signposter Automation Summary",
+        f"selected: {issue}",
+        f"action: {action}",
+        f"status: {result.status}",
+        f"stop: {stop}",
+    ]
+    return "\n".join(lines)
+
+
 def format_orchestrator_run_next_loop(result: OrchestratorRunNextLoop) -> str:
     """Render scheduler-driven bounded loop output."""
     lines = [
@@ -661,4 +681,24 @@ def format_orchestrator_run_next_loop(result: OrchestratorRunNextLoop) -> str:
     lines.extend(["", "Status:", f"  {result.status}"])
     lines.extend(["", "Notes:"])
     lines.extend(f"  {note}" for note in result.notes)
+    return "\n".join(lines)
+
+
+def format_orchestrator_run_next_loop_summary(result: OrchestratorRunNextLoop) -> str:
+    """Render compact run-next-loop output for automation loops."""
+    issue = result.selected_issue
+    if issue is None and result.steps:
+        issue = result.steps[-1].next.lifecycle.issue_number
+    selected = f"#{issue}" if issue else "none"
+    action = result.steps[-1].next.action if result.steps else "none"
+    stop = result.stop_reason or "none"
+
+    lines = [
+        "Signposter Automation Summary",
+        f"selected: {selected}",
+        f"action: {action}",
+        f"status: {result.status}",
+        f"stop: {stop}",
+        f"steps: {result.cycles_run}",
+    ]
     return "\n".join(lines)
