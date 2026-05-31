@@ -10,11 +10,13 @@ from signposter.lifecycle import LifecycleNext, LifecyclePreflight
 from signposter.orchestrator import (
     format_orchestrator_next,
     format_orchestrator_run_next,
+    format_orchestrator_run_next_loop,
     plan_orchestrator_next,
     plan_orchestrator_run_next,
     plan_orchestrator_tail,
     run_orchestrator_loop,
     run_orchestrator_run_next,
+    run_orchestrator_run_next_loop,
     run_orchestrator_step,
 )
 from signposter.scan import LabeledItem
@@ -454,3 +456,150 @@ def test_orchestrator_run_next_apply_blocks_execute_without_flag() -> None:
     assert result.step.status == "blocked"
     assert result.status == "blocked"
     assert result.step.stop_reason == "OpenClaw execution requires explicit --execute"
+
+
+def test_orchestrator_run_next_loop_continues_selected_issue_after_claim() -> None:
+    issue = LabeledItem(
+        number=57,
+        title="Issue 57",
+        html_url="https://github.com/example/repo/issues/57",
+        labels=["state:ready"],
+        item_type="issue",
+    )
+    scheduler = SchedulerNext(
+        repo="example/repo",
+        status="ready",
+        issue=issue,
+        reason="first ready",
+        skipped=[],
+        notes=[],
+    )
+    lifecycle_steps = [
+        _next(
+            issue_number=57,
+            action="claim-issue",
+            command="signposter run --repo example/repo --issue 57 --claim",
+        ),
+        _next(
+            issue_number=57,
+            action="write-prompt",
+            command="signposter run --repo example/repo --issue 57 --write-prompt",
+        ),
+        _next(issue_number=57),
+    ]
+    proc = type("Proc", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", return_value=scheduler),
+        patch("signposter.orchestrator.plan_lifecycle_next", side_effect=lifecycle_steps),
+    ):
+        result = run_orchestrator_run_next_loop(
+            "example/repo",
+            max_cycles=3,
+            apply=True,
+            run_command=Mock(return_value=proc),
+        )
+
+    assert result.cycles_run == 3
+    assert result.tasks_started == 1
+    assert [step.next.action for step in result.steps] == [
+        "claim-issue",
+        "write-prompt",
+        "execute-worker",
+    ]
+    assert result.status == "stopped"
+    assert result.stop_reason == "OpenClaw execution requires explicit --execute"
+
+
+def test_orchestrator_run_next_loop_resumes_single_active_issue() -> None:
+    active = LabeledItem(
+        number=57,
+        title="Issue 57",
+        html_url="https://github.com/example/repo/issues/57",
+        labels=["state:active"],
+        item_type="issue",
+    )
+    scheduler = SchedulerNext(
+        repo="example/repo",
+        status="completed",
+        issue=None,
+        reason="no open dependency-clear state:ready issue found",
+        skipped=[],
+        notes=[],
+    )
+    lifecycle_next = _next(
+        issue_number=57,
+        action="write-prompt",
+        command="signposter run --repo example/repo --issue 57 --write-prompt",
+    )
+    proc = type("Proc", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", return_value=scheduler),
+        patch("signposter.orchestrator.fetch_open_issues", return_value=[active]),
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next),
+    ):
+        result = run_orchestrator_run_next_loop(
+            "example/repo",
+            max_cycles=1,
+            apply=True,
+            run_command=Mock(return_value=proc),
+        )
+
+    assert result.steps[0].next.lifecycle.issue_number == 57
+    assert result.steps[0].status == "applied"
+    assert result.status == "limit-reached"
+
+
+def test_orchestrator_run_next_loop_blocks_multiple_active_issues() -> None:
+    active_1 = LabeledItem(1, "One", "url", ["state:active"], "issue")
+    active_2 = LabeledItem(2, "Two", "url", ["state:active"], "issue")
+    scheduler = SchedulerNext(
+        repo="example/repo",
+        status="completed",
+        issue=None,
+        reason="no open dependency-clear state:ready issue found",
+        skipped=[],
+        notes=[],
+    )
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", return_value=scheduler),
+        patch("signposter.orchestrator.fetch_open_issues", return_value=[active_1, active_2]),
+    ):
+        result = run_orchestrator_run_next_loop("example/repo", max_cycles=2, apply=True)
+
+    assert result.steps == []
+    assert result.status == "stopped"
+    assert result.stop_reason == "multiple active issues require explicit --issue: #1, #2"
+
+
+def test_format_orchestrator_run_next_loop_contains_limits_and_steps() -> None:
+    active = LabeledItem(
+        number=57,
+        title="Issue 57",
+        html_url="https://github.com/example/repo/issues/57",
+        labels=["state:active"],
+        item_type="issue",
+    )
+    scheduler = SchedulerNext(
+        repo="example/repo",
+        status="completed",
+        issue=None,
+        reason="none",
+        skipped=[],
+        notes=[],
+    )
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", return_value=scheduler),
+        patch("signposter.orchestrator.fetch_open_issues", return_value=[active]),
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next(issue_number=57)),
+    ):
+        result = run_orchestrator_run_next_loop("example/repo", max_cycles=1, apply=True)
+
+    out = format_orchestrator_run_next_loop(result)
+
+    assert "Signposter Orchestrator Run Next Loop" in out
+    assert "cycles requested: 1" in out
+    assert "1. issue #57: execute-worker -> blocked" in out

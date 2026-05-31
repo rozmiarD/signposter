@@ -13,6 +13,7 @@ import sys
 from dataclasses import dataclass
 
 from signposter.lifecycle import LifecycleNext, plan_lifecycle_next
+from signposter.scan import LabeledItem, fetch_open_issues
 from signposter.scheduler import SchedulerNext, select_next_issue
 
 EXECUTION_REQUIRED_ACTIONS = {"execute-worker"}
@@ -85,6 +86,21 @@ class OrchestratorRunNext:
     next: OrchestratorNext | None
     step: OrchestratorStep | None
     status: str
+    notes: list[str]
+
+
+@dataclass(frozen=True)
+class OrchestratorRunNextLoop:
+    """Result of a scheduler-driven bounded orchestrator loop."""
+
+    status: str
+    cycles_requested: int
+    cycles_run: int
+    max_tasks: int
+    tasks_started: int
+    selected_issue: int | None
+    steps: list[OrchestratorStep]
+    stop_reason: str | None
     notes: list[str]
 
 
@@ -361,6 +377,108 @@ def run_orchestrator_run_next(
     )
 
 
+def run_orchestrator_run_next_loop(
+    repo: str,
+    *,
+    limit: int = 50,
+    max_cycles: int = 1,
+    max_tasks: int = 1,
+    apply: bool = False,
+    execute: bool = False,
+    run_command=subprocess.run,
+) -> OrchestratorRunNextLoop:
+    """Run scheduler-selected lifecycle work with hard task and cycle limits."""
+    if max_cycles < 1:
+        max_cycles = 1
+    if max_tasks < 1:
+        max_tasks = 1
+
+    steps: list[OrchestratorStep] = []
+    selected_issue: int | None = None
+    tasks_started = 0
+    stop_reason: str | None = None
+
+    for _ in range(max_cycles):
+        if selected_issue is None:
+            selected_issue, stop_reason = _select_run_next_loop_issue(repo, limit=limit)
+            if selected_issue is None:
+                break
+            tasks_started += 1
+            if tasks_started > max_tasks:
+                selected_issue = None
+                stop_reason = "max tasks reached"
+                break
+
+        step = run_orchestrator_step(
+            repo,
+            issue=selected_issue,
+            apply=apply,
+            execute=execute,
+            run_command=run_command,
+        )
+        steps.append(step)
+
+        if step.status == "complete":
+            selected_issue = None
+            continue
+        if step.status != "applied":
+            stop_reason = step.stop_reason or step.status
+            break
+
+    status = "stopped"
+    if not steps and stop_reason is None:
+        status = "completed"
+        stop_reason = "no ready or resumable active issue found"
+    elif steps and len(steps) == max_cycles and steps[-1].status == "applied":
+        status = "limit-reached"
+        stop_reason = "max cycles reached"
+    elif stop_reason == "max tasks reached":
+        status = "limit-reached"
+
+    return OrchestratorRunNextLoop(
+        status=status,
+        cycles_requested=max_cycles,
+        cycles_run=len(steps),
+        max_tasks=max_tasks,
+        tasks_started=tasks_started,
+        selected_issue=selected_issue,
+        steps=steps,
+        stop_reason=stop_reason,
+        notes=[
+            "Scheduler-driven bounded run-next loop.",
+            "Default mode is dry-run; use --apply to execute allow-listed steps.",
+            "OpenClaw execution still requires explicit --execute.",
+        ],
+    )
+
+
+def _select_run_next_loop_issue(repo: str, *, limit: int) -> tuple[int | None, str | None]:
+    scheduler = select_next_issue(repo, limit=limit)
+    if scheduler.issue is not None:
+        return scheduler.issue.number, None
+
+    active = [
+        issue
+        for issue in fetch_open_issues(repo, limit=limit)
+        if _issue_state(issue) == "active"
+    ]
+    if len(active) == 1:
+        return active[0].number, None
+    if len(active) > 1:
+        numbers = ", ".join(
+            f"#{issue.number}" for issue in sorted(active, key=lambda item: item.number)
+        )
+        return None, f"multiple active issues require explicit --issue: {numbers}"
+    return None, scheduler.reason
+
+
+def _issue_state(issue: LabeledItem) -> str | None:
+    for label in issue.labels:
+        if label.startswith("state:"):
+            return label.split(":", 1)[1]
+    return None
+
+
 def _normalized_command(command: str) -> list[str]:
     args = shlex.split(command)
     if not args:
@@ -501,6 +619,45 @@ def format_orchestrator_run_next(result: OrchestratorRunNext) -> str:
         if result.step.stop_reason:
             lines.append(f"  stop: {result.step.stop_reason}")
 
+    lines.extend(["", "Status:", f"  {result.status}"])
+    lines.extend(["", "Notes:"])
+    lines.extend(f"  {note}" for note in result.notes)
+    return "\n".join(lines)
+
+
+def format_orchestrator_run_next_loop(result: OrchestratorRunNextLoop) -> str:
+    """Render scheduler-driven bounded loop output."""
+    lines = [
+        "Signposter Orchestrator Run Next Loop",
+        "",
+        "Limits:",
+        f"  cycles requested: {result.cycles_requested}",
+        f"  cycles run: {result.cycles_run}",
+        f"  max tasks: {result.max_tasks}",
+        f"  tasks started: {result.tasks_started}",
+        "",
+        "Selection:",
+        (
+            f"  current issue: #{result.selected_issue}"
+            if result.selected_issue
+            else "  current issue: none"
+        ),
+        "",
+        "Steps:",
+    ]
+    if result.steps:
+        for index, step in enumerate(result.steps, start=1):
+            issue = step.next.lifecycle.issue_number
+            target = f"issue #{issue}" if issue else "unknown target"
+            lines.append(
+                f"  {index}. {target}: {step.next.action} -> {step.status}"
+                + (f" ({step.stop_reason})" if step.stop_reason else "")
+            )
+    else:
+        lines.append("  none")
+
+    if result.stop_reason:
+        lines.extend(["", "Stop:", f"  {result.stop_reason}"])
     lines.extend(["", "Status:", f"  {result.status}"])
     lines.extend(["", "Notes:"])
     lines.extend(f"  {note}" for note in result.notes)
