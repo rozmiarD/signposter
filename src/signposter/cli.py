@@ -42,6 +42,7 @@ from signposter.merge import (
 )
 from signposter.orchestrator import (
     format_orchestrator_loop,
+    format_orchestrator_loop_summary,
     format_orchestrator_next,
     format_orchestrator_run_next,
     format_orchestrator_run_next_loop,
@@ -2235,6 +2236,32 @@ def run_orchestrator_tail(args: argparse.Namespace) -> int:
         return 2
 
 
+def run_orchestrator_tail_loop(args: argparse.Namespace) -> int:
+    """Handler for `signposter orchestrator tail-loop --pr N`."""
+    repo = getattr(args, "repo", None)
+    pr = getattr(args, "pr", None)
+    if not repo or pr is None:
+        print("Error: --repo and --pr are required", file=sys.stderr)
+        return 1
+
+    try:
+        result = run_orchestrator_loop(
+            repo,
+            pr=pr,
+            max_cycles=getattr(args, "max_cycles", 1),
+            apply=getattr(args, "apply", False),
+            execute=getattr(args, "execute", False),
+        )
+        if getattr(args, "summary", False):
+            print(format_orchestrator_loop_summary(result))
+        else:
+            print(format_orchestrator_loop(result))
+        return 0 if result.status in ("completed", "limit-reached", "stopped") else 1
+    except Exception as e:
+        print(f"Orchestrator tail-loop failed: {e}", file=sys.stderr)
+        return 2
+
+
 def run_orchestrator_run_next(args: argparse.Namespace) -> int:
     """Handler for `signposter orchestrator run-next --repo ...`."""
     repo = getattr(args, "repo", None)
@@ -2370,6 +2397,18 @@ def _register_orchestrator_subcommands(
     tail_parser.add_argument("--pr", type=int, required=True)
     tail_parser.add_argument("--execute", action="store_true")
     tail_parser.set_defaults(func=run_orchestrator_tail)
+
+    tail_loop_parser = orchestrator_subparsers.add_parser(
+        "tail-loop",
+        help="Run a bounded PR-tail orchestrator loop",
+    )
+    tail_loop_parser.add_argument("--repo", required=True)
+    tail_loop_parser.add_argument("--pr", type=int, required=True)
+    tail_loop_parser.add_argument("--max-cycles", type=int, default=1)
+    tail_loop_parser.add_argument("--apply", action="store_true")
+    tail_loop_parser.add_argument("--execute", action="store_true")
+    tail_loop_parser.add_argument("--summary", action="store_true")
+    tail_loop_parser.set_defaults(func=run_orchestrator_tail_loop)
 
     run_next_parser = orchestrator_subparsers.add_parser(
         "run-next",
