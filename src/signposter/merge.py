@@ -181,6 +181,12 @@ def plan_merge_for_pr(
 
     if allow_high_risk:
         notes.append("High-risk override explicitly allowed by operator for planning only.")
+    if allow_medium_risk:
+        notes.append("Medium-risk override explicitly allowed by operator for planning only.")
+    if allow_medium_scope:
+        notes.append("Medium-scope override explicitly allowed by operator for planning only.")
+    if allow_large_scope:
+        notes.append("Large-scope override explicitly allowed by operator for planning only.")
 
     try:
         pr_data = _run_gh_pr_view(
