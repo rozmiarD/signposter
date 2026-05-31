@@ -38,6 +38,10 @@ from signposter.issue_factory import (
     apply_issue_factory,
     format_issue_factory_plan,
 )
+from signposter.issue_manifest import (
+    format_issue_dag_manifest_plan,
+    plan_issue_dag_manifest,
+)
 from signposter.merge import (
     apply_merge,
     format_merge_apply_dry_run,
@@ -2564,6 +2568,28 @@ def run_scheduler_explain(args: argparse.Namespace) -> int:
         return 2
 
 
+def run_scheduler_manifest(args: argparse.Namespace) -> int:
+    """Handler for `signposter scheduler manifest --repo ...`."""
+    repo = getattr(args, "repo", None)
+    output = getattr(args, "output", None)
+    if not repo or output is None:
+        print("Error: --repo and --output are required", file=sys.stderr)
+        return 1
+
+    try:
+        plan = plan_issue_dag_manifest(
+            repo,
+            Path(output),
+            limit=getattr(args, "limit", 200),
+            apply=getattr(args, "apply", False),
+        )
+        print(format_issue_dag_manifest_plan(plan))
+        return 0
+    except Exception as e:
+        print(f"Scheduler manifest failed: {e}", file=sys.stderr)
+        return 2
+
+
 def _register_scheduler_subcommands(subparsers: argparse._SubParsersAction) -> None:
     """Register the scheduler command group."""
     scheduler_parser = subparsers.add_parser(
@@ -2594,6 +2620,20 @@ def _register_scheduler_subcommands(subparsers: argparse._SubParsersAction) -> N
     explain_parser.add_argument("--repo", required=True)
     explain_parser.add_argument("--limit", type=int, default=50)
     explain_parser.set_defaults(func=run_scheduler_explain)
+
+    manifest_parser = scheduler_subparsers.add_parser(
+        "manifest",
+        help="Build a local planner manifest from GitHub issue DAG metadata",
+    )
+    manifest_parser.add_argument("--repo", required=True)
+    manifest_parser.add_argument("--limit", type=int, default=200)
+    manifest_parser.add_argument("--output", required=True)
+    manifest_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Write the local manifest file; dry-run by default",
+    )
+    manifest_parser.set_defaults(func=run_scheduler_manifest)
 
 
 def run_issue_factory(args: argparse.Namespace) -> int:
