@@ -11,6 +11,7 @@ import shlex
 import subprocess
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 from signposter.lifecycle import LifecycleNext, plan_lifecycle_next
 from signposter.scan import LabeledItem, fetch_open_issues
@@ -725,3 +726,39 @@ def format_orchestrator_run_next_loop_summary(result: OrchestratorRunNextLoop) -
         f"steps: {result.cycles_run}",
     ]
     return "\n".join(lines)
+
+
+def write_orchestrator_run_next_loop_transcript(
+    result: OrchestratorRunNextLoop,
+    path: str | Path,
+) -> Path:
+    """Write a bounded local transcript for a run-next-loop result."""
+    transcript_path = Path(path)
+    transcript_path.parent.mkdir(parents=True, exist_ok=True)
+
+    lines = [
+        format_orchestrator_run_next_loop_summary(result),
+        "",
+        "Steps:",
+    ]
+    if result.steps:
+        for index, step in enumerate(result.steps, start=1):
+            issue = step.next.lifecycle.issue_number
+            selected = f"#{issue}" if issue is not None else "unknown"
+            lines.append(
+                f"{index}. selected={selected} action={step.next.action} "
+                f"status={step.status} stop={step.stop_reason or 'none'}"
+            )
+    else:
+        lines.append("none")
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "local artifact only",
+            "no GitHub mutation was performed by transcript writing",
+        ]
+    )
+
+    transcript_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return transcript_path
