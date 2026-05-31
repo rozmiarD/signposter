@@ -575,6 +575,29 @@ def format_orchestrator_loop(result: OrchestratorLoop) -> str:
     return "\n".join(lines)
 
 
+def format_orchestrator_loop_summary(result: OrchestratorLoop) -> str:
+    """Render compact bounded loop output for automation logs."""
+    last_step = result.steps[-1] if result.steps else None
+    target = "none"
+    action = "none"
+    if last_step:
+        if last_step.next.lifecycle.pr_number:
+            target = f"pr #{last_step.next.lifecycle.pr_number}"
+        elif last_step.next.lifecycle.issue_number:
+            target = f"issue #{last_step.next.lifecycle.issue_number}"
+        action = last_step.next.action
+
+    lines = [
+        "Signposter Orchestrator Loop Summary",
+        f"target: {target}",
+        f"action: {action}",
+        f"status: {result.status}",
+        f"stop: {result.stop_reason or 'none'}",
+        f"steps: {result.cycles_run}",
+    ]
+    return "\n".join(lines)
+
+
 def format_orchestrator_run_next(result: OrchestratorRunNext) -> str:
     """Render scheduler-selected next lifecycle plan."""
     lines = [

@@ -8,6 +8,7 @@ import pytest
 from signposter.cli import main
 from signposter.lifecycle import LifecycleNext, LifecyclePreflight
 from signposter.orchestrator import (
+    format_orchestrator_loop_summary,
     format_orchestrator_next,
     format_orchestrator_run_next,
     format_orchestrator_run_next_loop,
@@ -312,6 +313,56 @@ def test_orchestrator_tail_delegates_to_pr_lifecycle_next() -> None:
 
     assert result.lifecycle.pr_number == 47
     plan.assert_called_once_with("ExatronOmega/signposter", issue=None, pr=47)
+
+
+def test_orchestrator_pr_tail_loop_runs_bounded_pr_steps() -> None:
+    lifecycle_next = _next(
+        query_issue=None,
+        query_pr=47,
+        issue_number=46,
+        pr_number=47,
+        action="review-pr",
+        command="signposter review gate --repo example/repo --pr 47",
+    )
+    proc = type("Proc", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
+
+    with patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next):
+        result = run_orchestrator_loop(
+            "example/repo",
+            pr=47,
+            max_cycles=2,
+            apply=True,
+            run_command=Mock(return_value=proc),
+        )
+
+    assert result.status == "limit-reached"
+    assert result.cycles_run == 2
+    assert all(step.next.lifecycle.pr_number == 47 for step in result.steps)
+
+
+def test_format_orchestrator_loop_summary_shows_pr_tail_stop() -> None:
+    lifecycle_next = _next(
+        query_issue=None,
+        query_pr=47,
+        issue_number=46,
+        pr_number=47,
+        action="review-pr",
+        command="signposter review gate --repo example/repo --pr 47",
+    )
+
+    with patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next):
+        result = run_orchestrator_loop("example/repo", pr=47, max_cycles=1)
+
+    out = format_orchestrator_loop_summary(result)
+
+    assert out.splitlines() == [
+        "Signposter Orchestrator Loop Summary",
+        "target: pr #47",
+        "action: review-pr",
+        "status: stopped",
+        "stop: dry-run; rerun with --apply to execute this step",
+        "steps: 1",
+    ]
 
 
 def test_orchestrator_run_next_plans_scheduler_selected_issue() -> None:
