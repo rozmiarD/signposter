@@ -11,6 +11,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+from signposter.artifact import (
+    format_manual_artifact_plan,
+    plan_review_summary,
+    plan_worker_summary,
+    write_manual_artifact,
+)
 from signposter.claim import cli_main as claim_cli_main
 from signposter.dispatch import cli_main as dispatch_cli_main
 from signposter.doctor import main as doctor_main
@@ -848,6 +854,95 @@ def main() -> None:
     )
     report_parser.set_defaults(func=run_report)
 
+    # artifact subcommand (local-only manual execution summaries)
+    artifact_parser = subparsers.add_parser(
+        "artifact",
+        help="Create local manual worker/reviewer artifacts (dry-run by default)",
+        description="Write parser-compatible local artifacts without GitHub or OpenClaw.",
+    )
+    artifact_subparsers = artifact_parser.add_subparsers(dest="artifact_command")
+
+    worker_artifact_parser = artifact_subparsers.add_parser(
+        "write-worker-summary",
+        help="Create a local manual worker summary artifact",
+    )
+    worker_artifact_parser.add_argument("--repo", required=True)
+    worker_artifact_parser.add_argument("--issue", type=int, required=True)
+    worker_artifact_parser.add_argument("--agent", default="human/operator")
+    worker_artifact_parser.add_argument(
+        "--changed-file",
+        action="append",
+        default=[],
+        help="Changed file to include in the summary; may be repeated",
+    )
+    worker_artifact_parser.add_argument(
+        "--behavior",
+        action="append",
+        default=[],
+        help="Implemented or verified behavior line; may be repeated",
+    )
+    worker_artifact_parser.add_argument(
+        "--targeted-validation",
+        action="append",
+        default=[],
+        help="Targeted validation command; may be repeated",
+    )
+    worker_artifact_parser.add_argument(
+        "--full-validation",
+        action="append",
+        default=[],
+        help="Full validation command; may be repeated",
+    )
+    worker_artifact_parser.add_argument(
+        "--manual-smoke",
+        action="append",
+        default=[],
+        help="Manual smoke command or evidence line; may be repeated",
+    )
+    worker_artifact_parser.add_argument(
+        "--runs-dir",
+        default="artifacts/runs",
+        help="Directory for local run artifacts",
+    )
+    worker_artifact_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually write the local artifact",
+    )
+    worker_artifact_parser.set_defaults(func=run_artifact_worker_summary)
+
+    review_artifact_parser = artifact_subparsers.add_parser(
+        "write-review-summary",
+        help="Create a local manual reviewer summary artifact",
+    )
+    review_artifact_parser.add_argument("--pr", type=int, required=True)
+    review_artifact_parser.add_argument("--agent", default="human/operator")
+    review_artifact_parser.add_argument("--verdict", default="APPROVE")
+    review_artifact_parser.add_argument("--confidence", type=float, default=0.90)
+    review_artifact_parser.add_argument("--risk", default="high")
+    review_artifact_parser.add_argument(
+        "--finding",
+        action="append",
+        default=[],
+        help="Reviewer finding line; may be repeated",
+    )
+    review_artifact_parser.add_argument(
+        "--reasoning",
+        default=None,
+        help="Reviewer reasoning summary",
+    )
+    review_artifact_parser.add_argument(
+        "--runs-dir",
+        default="artifacts/runs",
+        help="Directory for local run artifacts",
+    )
+    review_artifact_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually write the local artifact",
+    )
+    review_artifact_parser.set_defaults(func=run_artifact_review_summary)
+
     # gate subcommand (dry-run gate decision)
     gate_parser = subparsers.add_parser(
         "gate",
@@ -1110,6 +1205,51 @@ def run_report(args: argparse.Namespace) -> int:
             return 2
 
     return report_main(repo, issue, summary, apply=apply)
+
+
+def run_artifact_worker_summary(args: argparse.Namespace) -> int:
+    """Create a local manual worker summary artifact."""
+    changed_files = getattr(args, "changed_file", []) or None
+    behavior = getattr(args, "behavior", []) or None
+    targeted_validation = getattr(args, "targeted_validation", []) or None
+    full_validation = getattr(args, "full_validation", []) or None
+    manual_smoke = getattr(args, "manual_smoke", []) or None
+    apply_flag = getattr(args, "apply", False)
+
+    plan = plan_worker_summary(
+        repo=args.repo,
+        issue=args.issue,
+        agent=args.agent,
+        changed_files=changed_files,
+        implemented_behavior=behavior,
+        targeted_validation=targeted_validation,
+        full_validation=full_validation,
+        manual_smoke=manual_smoke,
+        runs_dir=args.runs_dir,
+    )
+    write_manual_artifact(plan, apply=apply_flag)
+    print(format_manual_artifact_plan(plan, apply=apply_flag))
+    return 0
+
+
+def run_artifact_review_summary(args: argparse.Namespace) -> int:
+    """Create a local manual reviewer summary artifact."""
+    findings = getattr(args, "finding", []) or None
+    apply_flag = getattr(args, "apply", False)
+
+    plan = plan_review_summary(
+        pr=args.pr,
+        agent=args.agent,
+        verdict=args.verdict,
+        confidence=args.confidence,
+        risk=args.risk,
+        findings=findings,
+        reasoning=args.reasoning,
+        runs_dir=args.runs_dir,
+    )
+    write_manual_artifact(plan, apply=apply_flag)
+    print(format_manual_artifact_plan(plan, apply=apply_flag))
+    return 0
 
 
 def run_gate(args: argparse.Namespace) -> int:
