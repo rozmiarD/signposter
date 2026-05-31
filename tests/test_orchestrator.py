@@ -612,6 +612,115 @@ def test_orchestrator_run_next_loop_blocks_multiple_active_issues() -> None:
     assert result.stop_reason == "multiple active issues require explicit --issue: #1, #2"
 
 
+def test_orchestrator_run_next_loop_dry_run_never_executes_command() -> None:
+    issue = LabeledItem(
+        number=59,
+        title="Issue 59",
+        html_url="https://github.com/example/repo/issues/59",
+        labels=["state:ready"],
+        item_type="issue",
+    )
+    scheduler = SchedulerNext(
+        repo="example/repo",
+        status="ready",
+        issue=issue,
+        reason="first ready",
+        skipped=[],
+        notes=[],
+    )
+    lifecycle_next = _next(
+        issue_number=59,
+        action="create-worktree",
+        command="signposter worktree apply --repo example/repo --issue 59 --apply",
+    )
+    run_command = Mock()
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", return_value=scheduler),
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next),
+    ):
+        result = run_orchestrator_run_next_loop(
+            "example/repo",
+            max_cycles=3,
+            run_command=run_command,
+        )
+
+    assert result.cycles_run == 1
+    assert result.status == "stopped"
+    assert result.stop_reason == "dry-run; rerun with --apply to execute this step"
+    run_command.assert_not_called()
+
+
+def test_orchestrator_run_next_loop_stops_after_step_failure() -> None:
+    issue = LabeledItem(
+        number=59,
+        title="Issue 59",
+        html_url="https://github.com/example/repo/issues/59",
+        labels=["state:ready"],
+        item_type="issue",
+    )
+    scheduler = SchedulerNext(
+        repo="example/repo",
+        status="ready",
+        issue=issue,
+        reason="first ready",
+        skipped=[],
+        notes=[],
+    )
+    lifecycle_next = _next(
+        issue_number=59,
+        action="create-worktree",
+        command="signposter worktree apply --repo example/repo --issue 59 --apply",
+    )
+    proc = type("Proc", (), {"returncode": 2, "stdout": "", "stderr": "boom"})()
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", return_value=scheduler),
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next),
+    ):
+        result = run_orchestrator_run_next_loop(
+            "example/repo",
+            max_cycles=3,
+            apply=True,
+            run_command=Mock(return_value=proc),
+        )
+
+    assert result.cycles_run == 1
+    assert result.status == "stopped"
+    assert result.stop_reason == "step command failed"
+
+
+def test_orchestrator_run_next_loop_enforces_max_tasks() -> None:
+    issue_1 = LabeledItem(59, "Issue 59", "url", ["state:ready"], "issue")
+    issue_2 = LabeledItem(60, "Issue 60", "url", ["state:ready"], "issue")
+    schedulers = [
+        SchedulerNext("example/repo", "ready", issue_1, "first ready", [], []),
+        SchedulerNext("example/repo", "ready", issue_2, "next ready", [], []),
+    ]
+    lifecycle_complete = _next(
+        issue_number=59,
+        action="none",
+        command="(none)",
+        status="complete",
+    )
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", side_effect=schedulers),
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_complete),
+    ):
+        result = run_orchestrator_run_next_loop(
+            "example/repo",
+            max_cycles=3,
+            max_tasks=1,
+            apply=True,
+        )
+
+    assert result.cycles_run == 1
+    assert result.tasks_started == 2
+    assert result.status == "limit-reached"
+    assert result.stop_reason == "max tasks reached"
+
+
 def test_format_orchestrator_run_next_loop_contains_limits_and_steps() -> None:
     active = LabeledItem(
         number=57,
