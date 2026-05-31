@@ -105,6 +105,7 @@ from signposter.runner import cli_main as runner_cli_main
 from signposter.scan import cli_main as scan_cli_main
 from signposter.scheduler import (
     build_scheduler_graph,
+    format_scheduler_explain,
     format_scheduler_graph,
     format_scheduler_next,
     select_next_issue,
@@ -2305,6 +2306,22 @@ def run_scheduler_graph(args: argparse.Namespace) -> int:
         return 2
 
 
+def run_scheduler_explain(args: argparse.Namespace) -> int:
+    """Handler for `signposter scheduler explain --repo ...`."""
+    repo = getattr(args, "repo", None)
+    if not repo:
+        print("Error: --repo is required", file=sys.stderr)
+        return 1
+
+    try:
+        result = select_next_issue(repo, limit=getattr(args, "limit", 50))
+        print(format_scheduler_explain(result))
+        return 0 if result.status in ("ready", "completed") else 1
+    except Exception as e:
+        print(f"Scheduler explain failed: {e}", file=sys.stderr)
+        return 2
+
+
 def _register_scheduler_subcommands(subparsers: argparse._SubParsersAction) -> None:
     """Register the scheduler command group."""
     scheduler_parser = subparsers.add_parser(
@@ -2327,6 +2344,14 @@ def _register_scheduler_subcommands(subparsers: argparse._SubParsersAction) -> N
     graph_parser.add_argument("--repo", required=True)
     graph_parser.add_argument("--limit", type=int, default=50)
     graph_parser.set_defaults(func=run_scheduler_graph)
+
+    explain_parser = scheduler_subparsers.add_parser(
+        "explain",
+        help="Explain scheduler selection and skipped candidates",
+    )
+    explain_parser.add_argument("--repo", required=True)
+    explain_parser.add_argument("--limit", type=int, default=50)
+    explain_parser.set_defaults(func=run_scheduler_explain)
 
 
 # =============================================================================

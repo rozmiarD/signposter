@@ -6,6 +6,7 @@ from signposter.scan import LabeledItem
 from signposter.scheduler import (
     SchedulerNext,
     build_scheduler_graph,
+    format_scheduler_explain,
     format_scheduler_graph,
     format_scheduler_next,
     parse_graph_metadata,
@@ -144,6 +145,40 @@ def test_scheduler_format_contains_safety_notes() -> None:
 
     assert "Signposter Scheduler Next" in out
     assert "No GitHub mutation was performed." in out
+
+
+def test_scheduler_explain_shows_selected_and_skipped() -> None:
+    scheduled = SchedulerNext(
+        repo="example/repo",
+        status="ready",
+        issue=_issue(3, ["state:ready"]),
+        reason="first ready",
+        skipped=["#1: state:done", "#2: state:active"],
+        notes=["No GitHub mutation was performed."],
+    )
+
+    out = format_scheduler_explain(scheduled)
+
+    assert "Signposter Scheduler Explain" in out
+    assert "selected: #3 — Issue 3" in out
+    assert "#1: state:done" in out
+    assert "No GitHub mutation was performed." in out
+
+
+def test_scheduler_explain_shows_none_when_completed() -> None:
+    scheduled = SchedulerNext(
+        repo="example/repo",
+        status="completed",
+        issue=None,
+        reason="none ready",
+        skipped=[],
+        notes=["No GitHub mutation was performed."],
+    )
+
+    out = format_scheduler_explain(scheduled)
+
+    assert "selected: none" in out
+    assert "Skipped:\n  none" in out
 
 
 def test_parse_graph_metadata_empty_body() -> None:
