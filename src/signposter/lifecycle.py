@@ -659,6 +659,50 @@ def format_lifecycle_status(status: LifecycleStatus) -> str:
 
     return "\n".join(lines)
 
+
+def format_lifecycle_status_summary(status: LifecycleStatus) -> str:
+    """Render a terse lifecycle status for loop/watch output."""
+    target = (
+        f"issue #{status.issue_number}"
+        if status.issue_number is not None
+        else f"pr #{status.pr_number}"
+        if status.pr_number is not None
+        else "unknown"
+    )
+    issue = (
+        f"#{status.issue_number} {status.issue_state or 'unknown'} "
+        f"{status.workflow_state or 'state:unknown'}"
+        if status.issue_number is not None
+        else "none detected"
+    )
+    pr = (
+        f"#{status.pr_number} {status.pr_state or 'unknown'}"
+        if status.pr_number is not None
+        else "none detected"
+    )
+    review = status.review_decision or "unknown"
+    if status.has_non_author_approval:
+        review = f"{review} non-author-approval=yes"
+    else:
+        review = f"{review} non-author-approval=no"
+    cleanup = "complete" if status.cleanup_complete else "pending"
+    stop = "none" if status.status == "complete" else status.status
+
+    lines = [
+        "Signposter Lifecycle Summary",
+        f"target: {target}",
+        f"issue: {issue}",
+        f"pr: {pr}",
+        f"status: {status.status}",
+        f"review: {review}",
+        f"integration: {'complete' if status.integrated else 'pending'}",
+        f"cleanup: {cleanup}",
+        f"stop: {stop}",
+        "notes: read-only; no GitHub mutation; no local cleanup",
+    ]
+    return "\n".join(lines)
+
+
 @dataclass(frozen=True)
 class LifecyclePreflight:
     """Result of preflight checks before recommending next lifecycle action (H025D-FIX2)."""
