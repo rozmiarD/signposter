@@ -179,7 +179,7 @@ def plan_merge_for_pr(
     ]
 
     if allow_high_risk:
-        notes.append("High-risk merge override explicitly allowed by operator.")
+        notes.append("High-risk override explicitly allowed by operator for planning only.")
 
     try:
         pr_data = _run_gh_pr_view(
@@ -626,4 +626,3 @@ def format_merge_apply_dry_run(plan: MergePlan) -> str:
     )
 
     return "\n".join(lines)
-
