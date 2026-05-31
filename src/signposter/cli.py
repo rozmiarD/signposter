@@ -42,10 +42,12 @@ from signposter.orchestrator import (
     format_orchestrator_loop,
     format_orchestrator_next,
     format_orchestrator_run_next,
+    format_orchestrator_run_next_loop,
     format_orchestrator_step,
     plan_orchestrator_next,
     plan_orchestrator_tail,
     run_orchestrator_loop,
+    run_orchestrator_run_next_loop,
     run_orchestrator_step,
 )
 from signposter.orchestrator import (
@@ -2219,6 +2221,29 @@ def run_orchestrator_run_next(args: argparse.Namespace) -> int:
         return 2
 
 
+def run_orchestrator_run_next_loop_cli(args: argparse.Namespace) -> int:
+    """Handler for `signposter orchestrator run-next-loop --repo ...`."""
+    repo = getattr(args, "repo", None)
+    if not repo:
+        print("Error: --repo is required", file=sys.stderr)
+        return 1
+
+    try:
+        result = run_orchestrator_run_next_loop(
+            repo,
+            limit=getattr(args, "limit", 50),
+            max_cycles=getattr(args, "max_cycles", 1),
+            max_tasks=getattr(args, "max_tasks", 1),
+            apply=getattr(args, "apply", False),
+            execute=getattr(args, "execute", False),
+        )
+        print(format_orchestrator_run_next_loop(result))
+        return 0 if result.status in ("completed", "limit-reached") else 1
+    except Exception as e:
+        print(f"Orchestrator run-next-loop failed: {e}", file=sys.stderr)
+        return 2
+
+
 def _register_orchestrator_subcommands(
     subparsers: argparse._SubParsersAction,
 ) -> None:
@@ -2308,6 +2333,18 @@ def _register_orchestrator_subcommands(
     run_next_parser.add_argument("--apply", action="store_true")
     run_next_parser.add_argument("--execute", action="store_true")
     run_next_parser.set_defaults(func=run_orchestrator_run_next)
+
+    run_next_loop_parser = orchestrator_subparsers.add_parser(
+        "run-next-loop",
+        help="Run a bounded scheduler-driven orchestrator loop",
+    )
+    run_next_loop_parser.add_argument("--repo", required=True)
+    run_next_loop_parser.add_argument("--limit", type=int, default=50)
+    run_next_loop_parser.add_argument("--max-cycles", type=int, default=1)
+    run_next_loop_parser.add_argument("--max-tasks", type=int, default=1)
+    run_next_loop_parser.add_argument("--apply", action="store_true")
+    run_next_loop_parser.add_argument("--execute", action="store_true")
+    run_next_loop_parser.set_defaults(func=run_orchestrator_run_next_loop_cli)
 
 
 # =============================================================================
