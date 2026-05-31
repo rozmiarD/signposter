@@ -327,6 +327,7 @@ def format_scheduler_explain(result: SchedulerNext) -> str:
 
 def format_scheduler_graph(result: SchedulerGraph) -> str:
     """Render compact scheduler graph output."""
+    state_by_issue = {item.number: item.state for item in result.items}
     lines = [
         "Signposter Scheduler Graph",
         "",
@@ -342,6 +343,8 @@ def format_scheduler_graph(result: SchedulerGraph) -> str:
         deps = ", ".join(f"#{number}" for number in meta.depends_on) or "none"
         parent = f"#{meta.parent}" if meta.parent is not None else "none"
         return_to = f"#{meta.return_to}" if meta.return_to is not None else "none"
+        parent_state = _linked_state(meta.parent, state_by_issue)
+        return_state = _linked_state(meta.return_to, state_by_issue)
         mainline = meta.mainline or "none"
         side = "yes" if meta.side_task else "no"
         lines.extend(
@@ -351,7 +354,10 @@ def format_scheduler_graph(result: SchedulerGraph) -> str:
                 f"    depends on: {deps}",
                 f"    mainline: {mainline}",
                 f"    parent: {parent}",
+                f"    parent state: {parent_state}",
                 f"    return-to: {return_to}",
+                f"    return state: {return_state}",
+                f"    return ready: {_return_ready(meta.return_to, state_by_issue)}",
                 f"    side-task: {side}",
             ]
         )
@@ -359,3 +365,15 @@ def format_scheduler_graph(result: SchedulerGraph) -> str:
     lines.extend(["", "Notes:"])
     lines.extend(f"  {note}" for note in result.notes)
     return "\n".join(lines)
+
+
+def _linked_state(issue: int | None, state_by_issue: dict[int, str | None]) -> str:
+    if issue is None:
+        return "none"
+    return state_by_issue.get(issue) or "unknown"
+
+
+def _return_ready(issue: int | None, state_by_issue: dict[int, str | None]) -> str:
+    if issue is None:
+        return "n/a"
+    return "yes" if state_by_issue.get(issue) == "ready" else "no"
