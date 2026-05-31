@@ -437,8 +437,10 @@ def test_execute_plan_allows_worker_when_clean(monkeypatch):
     plan = make_runner_plan_for_test("worker", "build", number=43)
 
     with patch("signposter.runner.find_uncommitted_repo_changes", return_value=[]), \
+         patch("signposter.runner.check_openclaw_preflight") as mock_preflight, \
          patch("signposter.runner.subprocess.run") as mock_run, \
          patch("builtins.open", create=True) as mock_open:
+        mock_preflight.return_value = type("pf", (), {"ok": True})()
         mock_open.return_value.__enter__.return_value.read.return_value = "mock prompt"
         mock_run.return_value = type("proc", (), {"stdout": "", "stderr": "", "returncode": 0})()
         result = execute_plan(plan, "test/repo", allow_dirty=False)
@@ -456,14 +458,49 @@ def test_execute_plan_reviewer_does_not_block_on_dirty(monkeypatch):
     plan = make_runner_plan_for_test("reviewer", "review", number=44)
 
     with patch("signposter.runner.find_uncommitted_repo_changes", return_value=["some-file.py"]), \
+         patch("signposter.runner.check_openclaw_preflight") as mock_preflight, \
          patch("signposter.runner.subprocess.run") as mock_run, \
          patch("builtins.open", create=True) as mock_open:
+        mock_preflight.return_value = type("pf", (), {"ok": True})()
         mock_open.return_value.__enter__.return_value.read.return_value = "mock prompt"
         mock_run.return_value = type("proc", (), {"stdout": "ok", "stderr": "", "returncode": 0})()
         result = execute_plan(plan, "test/repo", allow_dirty=False)
 
     # Should not have returned the worker dirty guard error
     assert result.get("error") != "dirty working tree"
+
+
+def test_execute_plan_preflight_blocks_before_openclaw_and_artifacts(tmp_path):
+    """OpenClaw preflight failure must block before subprocess/artifact writes."""
+    from unittest.mock import patch
+
+    from signposter.runner import execute_plan
+
+    plan = make_runner_plan_for_test("worker", "build", number=45)
+    preflight = type(
+        "pf",
+        (),
+        {
+            "ok": False,
+            "reason": "no provider token environment variable is configured",
+            "checked_token_envs": ("OPENAI_API_KEY",),
+            "openclaw_path": "/usr/bin/openclaw",
+            "manual_fallback": "signposter artifact write-worker-summary --issue 45 --apply",
+        },
+    )()
+
+    with patch("signposter.runner.find_uncommitted_repo_changes", return_value=[]), \
+         patch("signposter.runner.check_openclaw_preflight", return_value=preflight), \
+         patch("signposter.runner.subprocess.run") as mock_run, \
+         patch("builtins.open", create=True) as mock_open:
+        result = execute_plan(plan, "test/repo", allow_dirty=False)
+
+    assert result["success"] is False
+    assert result["raw_path"] is None
+    assert result["summary_path"] is None
+    assert "provider token" in result["error"]
+    mock_run.assert_not_called()
+    mock_open.assert_not_called()
 
 
 # --- HARDENING-006 micro-adjustment: dirty guard in summary ---
@@ -765,9 +802,11 @@ def test_execute_worktree_uses_correct_cwd_and_writes_artifacts_to_main(monkeypa
 
     with patch("signposter.runner.fetch_issue_by_number", return_value=fake_item), \
          patch("signposter.runner.get_worktree_status_for_issue") as mock_ws, \
+         patch("signposter.runner.check_openclaw_preflight") as mock_preflight, \
          patch("signposter.runner.subprocess.run") as mock_run, \
          patch("builtins.open", create=True) as mock_open:
 
+        mock_preflight.return_value = type("pf", (), {"ok": True})()
         mock_ws.return_value = {
             "status": "available",
             "path": worktree_path,
@@ -784,4 +823,3 @@ def test_execute_worktree_uses_correct_cwd_and_writes_artifacts_to_main(monkeypa
 
     # Artifacts should still be written under main repo artifacts/runs
     # (we can't easily assert file creation without more mocking, but the logic ensures it)
-

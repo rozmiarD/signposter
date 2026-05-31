@@ -15,6 +15,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from signposter.openclaw_preflight import (
+    check_openclaw_preflight,
+    format_openclaw_preflight_block,
+)
+
 
 @dataclass(frozen=True)
 class ReviewPlan:
@@ -619,6 +624,17 @@ def execute_pr_review(
             "raw_path": None,
             "summary_path": None,
             "error": f"prompt artifact missing: {prompt_path}",
+            "success": False,
+        }
+
+    preflight = check_openclaw_preflight(artifact_kind="review", target=pr_number)
+    if not preflight.ok:
+        print(format_openclaw_preflight_block(preflight))
+        return {
+            "exit_code": 1,
+            "raw_path": None,
+            "summary_path": None,
+            "error": preflight.reason,
             "success": False,
         }
 

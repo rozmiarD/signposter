@@ -160,13 +160,15 @@ class TestExecutionSafety:
     """OpenClaw execution must be explicitly requested and mocked in tests."""
 
     @patch("signposter.runner.subprocess.run")
+    @patch("signposter.runner.check_openclaw_preflight")
     @patch(
         "builtins.open",
         new_callable=mock_open,
         read_data="# Signposter Task Prompt\n\n## Role Profile\n...",
     )
-    def test_execute_plan_is_testable_with_mock(self, mock_file, mock_run):
+    def test_execute_plan_is_testable_with_mock(self, mock_file, mock_preflight, mock_run):
         """execute_plan should be callable in tests with subprocess mocked."""
+        mock_preflight.return_value = type("pf", (), {"ok": True})()
         mock_run.return_value = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="SIGNPOSTER_SMOKE_OK", stderr=""
         )
