@@ -213,6 +213,17 @@ def test_orchestrator_step_apply_runs_allowlisted_command() -> None:
     assert result.status == "applied"
     assert result.applied is True
     run_command.assert_called_once()
+    command = run_command.call_args.args[0]
+    assert command[:2] == [sys.executable, "-c"]
+    assert command[-5:] == [
+        "worktree",
+        "apply",
+        "--repo",
+        "ExatronOmega/signposter",
+        "--issue",
+        "46",
+        "--apply",
+    ][-5:]
 
 
 def test_orchestrator_step_blocks_execute_without_flag() -> None:
