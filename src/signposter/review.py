@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from signposter.artifact_safety import find_stale_or_failover_signal
 from signposter.openclaw_preflight import (
     check_openclaw_preflight,
     format_openclaw_preflight_block,
@@ -891,6 +892,21 @@ def evaluate_review_gate(
 
     with open(summary_path, encoding="utf-8") as f:
         text = f.read()
+
+    stale_signal = find_stale_or_failover_signal(text)
+    if stale_signal:
+        opinion = parse_reviewer_opinion(text)
+        return ReviewGateResult(
+            pr_number=pr_number,
+            status=f"blocked — reviewer artifact contains stale/failover signal: {stale_signal}",
+            reason=f"reviewer artifact contains stale/failover signal: {stale_signal}",
+            opinion=opinion,
+            gate_pass=False,
+            merge_eligible=False,
+            automerge_eligible=False,
+            summary_path=summary_path,
+            notes=notes,
+        )
 
     # Prefer the structured section inside the summary (first 25 lines area)
     # but also parse the whole thing
