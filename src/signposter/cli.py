@@ -38,6 +38,10 @@ from signposter.merge import (
     format_merge_plan,
     plan_merge_for_pr,
 )
+from signposter.orchestrator import (
+    format_orchestrator_next,
+    plan_orchestrator_next,
+)
 from signposter.planner import (
     apply_planner_advance_plan,
     apply_planner_seed_manifest,
@@ -985,6 +989,9 @@ def main() -> None:
 
     # HARDENING-022A: lifecycle status (read-only)
     _register_lifecycle_subcommands(subparsers)
+
+    # H035A: minimal orchestrator next-step planning (read-only)
+    _register_orchestrator_subcommands(subparsers)
 
     # HARDENING-024E: guarded local repository sync/rebase
     _register_sync_subcommands(subparsers)
@@ -2049,6 +2056,79 @@ def _register_lifecycle_subcommands(subparsers: argparse._SubParsersAction) -> N
         help="Polling interval in seconds (default: 5)",
     )
     watch_parser.set_defaults(func=run_lifecycle_watch)
+
+
+# =============================================================================
+# H035A: Minimal orchestrator next-step planning
+# =============================================================================
+
+
+def run_orchestrator_next(args: argparse.Namespace) -> int:
+    """Handler for `signposter orchestrator next --repo ... (--issue N | --pr P)`."""
+    repo = getattr(args, "repo", None)
+    issue = getattr(args, "issue", None)
+    pr = getattr(args, "pr", None)
+
+    if not repo:
+        print("Error: --repo is required", file=sys.stderr)
+        return 1
+    if (issue is None and pr is None) or (issue is not None and pr is not None):
+        print("Error: exactly one of --issue or --pr is required", file=sys.stderr)
+        return 1
+
+    try:
+        result = plan_orchestrator_next(
+            repo,
+            issue=issue,
+            pr=pr,
+            allow_execute=getattr(args, "execute", False),
+        )
+        print(format_orchestrator_next(result))
+        return 0 if result.status in ("actionable", "complete") else 1
+    except Exception as e:
+        print(f"Orchestrator next failed: {e}", file=sys.stderr)
+        return 2
+
+
+def _register_orchestrator_subcommands(
+    subparsers: argparse._SubParsersAction,
+) -> None:
+    """Register the orchestrator command group."""
+    orchestrator_parser = subparsers.add_parser(
+        "orchestrator",
+        help="Deterministic lifecycle orchestration planning",
+        description=(
+            "Plan the next deterministic lifecycle step without executing "
+            "commands or mutating local/GitHub state."
+        ),
+    )
+    orchestrator_subparsers = orchestrator_parser.add_subparsers(
+        dest="orchestrator_command"
+    )
+
+    next_parser = orchestrator_subparsers.add_parser(
+        "next",
+        help="Show the next orchestrator step (read-only)",
+    )
+    next_parser.add_argument("--repo", required=True)
+    next_parser.add_argument(
+        "--issue",
+        type=int,
+        default=None,
+        help="Issue number to inspect",
+    )
+    next_parser.add_argument(
+        "--pr",
+        type=int,
+        default=None,
+        help="Pull request number to inspect",
+    )
+    next_parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="Allow planning to pass OpenClaw execution stop checks only",
+    )
+    next_parser.set_defaults(func=run_orchestrator_next)
 
 
 # =============================================================================
