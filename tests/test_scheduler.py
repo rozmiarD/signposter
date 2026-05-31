@@ -122,6 +122,35 @@ def test_scheduler_does_not_select_blocked_side_task_over_mainline() -> None:
     assert "#11: blocked by #99 -> state:active" in result.skipped
 
 
+def test_scheduler_selects_side_task_only_after_dependency_clears() -> None:
+    issues = [
+        _issue(20, ["state:ready"]),
+        _issue(21, ["state:ready"]),
+    ]
+    bodies = {
+        20: {"body": "Mainline: H036"},
+        21: {"body": "Side-Task: yes\nDepends-On: #19\nParent: #20\nReturn-To: #20"},
+    }
+
+    with (
+        patch("signposter.scheduler.fetch_open_issues", return_value=issues),
+        patch(
+            "signposter.scheduler.fetch_issue_context",
+            side_effect=lambda repo, number: bodies[number],
+        ),
+        patch(
+            "signposter.scheduler.is_dependency_blocked",
+            side_effect=[(False, "none"), (False, "none")],
+        ),
+    ):
+        result = select_next_issue("example/repo")
+
+    assert result.status == "ready"
+    assert result.issue is not None
+    assert result.issue.number == 21
+    assert "side-task" in result.reason
+
+
 def test_scheduler_completed_when_no_ready_issue() -> None:
     with patch("signposter.scheduler.fetch_open_issues", return_value=[]):
         result = select_next_issue("example/repo")
