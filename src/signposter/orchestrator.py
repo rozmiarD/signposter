@@ -103,6 +103,8 @@ class OrchestratorRunNextLoop:
     steps: list[OrchestratorStep]
     stop_reason: str | None
     notes: list[str]
+    stop_category: str | None = None
+    stop_tolerated: bool = False
 
 
 def plan_orchestrator_next(
@@ -386,6 +388,10 @@ def run_orchestrator_run_next_loop(
     max_tasks: int = 1,
     apply: bool = False,
     execute: bool = False,
+    tolerate_no_ready: bool = False,
+    tolerate_active_ambiguity: bool = False,
+    tolerate_blocked_lifecycle: bool = False,
+    tolerate_failed_step: bool = False,
     run_command=subprocess.run,
 ) -> OrchestratorRunNextLoop:
     """Run scheduler-selected lifecycle work with hard task and cycle limits."""
@@ -436,6 +442,20 @@ def run_orchestrator_run_next_loop(
     elif stop_reason == "max tasks reached":
         status = "limit-reached"
 
+    stop_category = _run_next_loop_stop_category(steps, stop_reason)
+    tolerated_categories = set()
+    if tolerate_no_ready:
+        tolerated_categories.add("no-ready")
+    if tolerate_active_ambiguity:
+        tolerated_categories.add("active-ambiguity")
+    if tolerate_blocked_lifecycle:
+        tolerated_categories.add("blocked-lifecycle")
+    if tolerate_failed_step:
+        tolerated_categories.add("failed-step")
+    stop_tolerated = stop_category in tolerated_categories
+    if status == "stopped" and stop_tolerated:
+        status = "completed"
+
     return OrchestratorRunNextLoop(
         status=status,
         cycles_requested=max_cycles,
@@ -450,7 +470,28 @@ def run_orchestrator_run_next_loop(
             "Default mode is dry-run; use --apply to execute allow-listed steps.",
             "OpenClaw execution still requires explicit --execute.",
         ],
+        stop_category=stop_category,
+        stop_tolerated=stop_tolerated,
     )
+
+
+def _run_next_loop_stop_category(
+    steps: list[OrchestratorStep],
+    stop_reason: str | None,
+) -> str | None:
+    if stop_reason and stop_reason.startswith("multiple active issues require explicit --issue"):
+        return "active-ambiguity"
+    if not steps:
+        return "no-ready"
+    last_step = steps[-1]
+    if last_step.status == "failed" or stop_reason == "step command failed":
+        return "failed-step"
+    if last_step.status == "blocked" or stop_reason in {
+        "dry-run; rerun with --apply to execute this step",
+        "OpenClaw execution requires explicit --execute",
+    }:
+        return "blocked-lifecycle"
+    return None
 
 
 def _select_run_next_loop_issue(repo: str, *, limit: int) -> tuple[int | None, str | None]:
@@ -702,6 +743,15 @@ def format_orchestrator_run_next_loop(result: OrchestratorRunNextLoop) -> str:
 
     if result.stop_reason:
         lines.extend(["", "Stop:", f"  {result.stop_reason}"])
+    if result.stop_category:
+        lines.extend(
+            [
+                "",
+                "Stop policy:",
+                f"  category: {result.stop_category}",
+                f"  tolerated: {'yes' if result.stop_tolerated else 'no'}",
+            ]
+        )
     lines.extend(["", "Status:", f"  {result.status}"])
     lines.extend(["", "Notes:"])
     lines.extend(f"  {note}" for note in result.notes)
@@ -723,6 +773,8 @@ def format_orchestrator_run_next_loop_summary(result: OrchestratorRunNextLoop) -
         f"action: {action}",
         f"status: {result.status}",
         f"stop: {stop}",
+        f"stop_category: {result.stop_category or 'none'}",
+        f"stop_tolerated: {'yes' if result.stop_tolerated else 'no'}",
         f"steps: {result.cycles_run}",
     ]
     return "\n".join(lines)

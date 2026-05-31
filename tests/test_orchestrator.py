@@ -663,6 +663,36 @@ def test_orchestrator_run_next_loop_blocks_multiple_active_issues() -> None:
     assert result.steps == []
     assert result.status == "stopped"
     assert result.stop_reason == "multiple active issues require explicit --issue: #1, #2"
+    assert result.stop_category == "active-ambiguity"
+    assert result.stop_tolerated is False
+
+
+def test_orchestrator_run_next_loop_can_tolerate_active_ambiguity() -> None:
+    active_1 = LabeledItem(1, "One", "url", ["state:active"], "issue")
+    active_2 = LabeledItem(2, "Two", "url", ["state:active"], "issue")
+    scheduler = SchedulerNext(
+        repo="example/repo",
+        status="completed",
+        issue=None,
+        reason="no open dependency-clear state:ready issue found",
+        skipped=[],
+        notes=[],
+    )
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", return_value=scheduler),
+        patch("signposter.orchestrator.fetch_open_issues", return_value=[active_1, active_2]),
+    ):
+        result = run_orchestrator_run_next_loop(
+            "example/repo",
+            max_cycles=2,
+            apply=True,
+            tolerate_active_ambiguity=True,
+        )
+
+    assert result.status == "completed"
+    assert result.stop_category == "active-ambiguity"
+    assert result.stop_tolerated is True
 
 
 def test_orchestrator_run_next_loop_dry_run_never_executes_command() -> None:
@@ -701,7 +731,39 @@ def test_orchestrator_run_next_loop_dry_run_never_executes_command() -> None:
     assert result.cycles_run == 1
     assert result.status == "stopped"
     assert result.stop_reason == "dry-run; rerun with --apply to execute this step"
+    assert result.stop_category == "blocked-lifecycle"
+    assert result.stop_tolerated is False
     run_command.assert_not_called()
+
+
+def test_orchestrator_run_next_loop_can_tolerate_blocked_lifecycle() -> None:
+    issue = LabeledItem(
+        number=59,
+        title="Issue 59",
+        html_url="https://github.com/example/repo/issues/59",
+        labels=["state:ready"],
+        item_type="issue",
+    )
+    scheduler = SchedulerNext("example/repo", "ready", issue, "first ready", [], [])
+    lifecycle_next = _next(
+        issue_number=59,
+        action="create-worktree",
+        command="signposter worktree apply --repo example/repo --issue 59 --apply",
+    )
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", return_value=scheduler),
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next),
+    ):
+        result = run_orchestrator_run_next_loop(
+            "example/repo",
+            max_cycles=1,
+            tolerate_blocked_lifecycle=True,
+        )
+
+    assert result.status == "completed"
+    assert result.stop_category == "blocked-lifecycle"
+    assert result.stop_tolerated is True
 
 
 def test_orchestrator_run_next_loop_stops_after_step_failure() -> None:
@@ -741,6 +803,60 @@ def test_orchestrator_run_next_loop_stops_after_step_failure() -> None:
     assert result.cycles_run == 1
     assert result.status == "stopped"
     assert result.stop_reason == "step command failed"
+    assert result.stop_category == "failed-step"
+    assert result.stop_tolerated is False
+
+
+def test_orchestrator_run_next_loop_can_tolerate_failed_step() -> None:
+    issue = LabeledItem(59, "Issue 59", "url", ["state:ready"], "issue")
+    scheduler = SchedulerNext("example/repo", "ready", issue, "first ready", [], [])
+    lifecycle_next = _next(
+        issue_number=59,
+        action="create-worktree",
+        command="signposter worktree apply --repo example/repo --issue 59 --apply",
+    )
+    proc = type("Proc", (), {"returncode": 2, "stdout": "", "stderr": "boom"})()
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", return_value=scheduler),
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next),
+    ):
+        result = run_orchestrator_run_next_loop(
+            "example/repo",
+            max_cycles=1,
+            apply=True,
+            tolerate_failed_step=True,
+            run_command=Mock(return_value=proc),
+        )
+
+    assert result.status == "completed"
+    assert result.stop_category == "failed-step"
+    assert result.stop_tolerated is True
+
+
+def test_orchestrator_run_next_loop_can_tolerate_no_ready() -> None:
+    scheduler = SchedulerNext(
+        repo="example/repo",
+        status="completed",
+        issue=None,
+        reason="no open dependency-clear state:ready issue found",
+        skipped=[],
+        notes=[],
+    )
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", return_value=scheduler),
+        patch("signposter.orchestrator.fetch_open_issues", return_value=[]),
+    ):
+        result = run_orchestrator_run_next_loop(
+            "example/repo",
+            max_cycles=1,
+            tolerate_no_ready=True,
+        )
+
+    assert result.status == "completed"
+    assert result.stop_category == "no-ready"
+    assert result.stop_tolerated is True
 
 
 def test_orchestrator_run_next_loop_enforces_max_tasks() -> None:
@@ -803,6 +919,8 @@ def test_format_orchestrator_run_next_loop_contains_limits_and_steps() -> None:
     assert "Signposter Orchestrator Run Next Loop" in out
     assert "cycles requested: 1" in out
     assert "1. issue #57: execute-worker -> blocked" in out
+    assert "category: blocked-lifecycle" in out
+    assert "tolerated: no" in out
 
 
 def test_format_orchestrator_run_next_loop_summary_is_concise() -> None:
@@ -837,6 +955,8 @@ def test_format_orchestrator_run_next_loop_summary_is_concise() -> None:
         "action: execute-worker",
         "status: stopped",
         "stop: OpenClaw execution requires explicit --execute",
+        "stop_category: blocked-lifecycle",
+        "stop_tolerated: no",
         "steps: 1",
     ]
     assert "command:" not in out
@@ -899,6 +1019,10 @@ def test_run_next_loop_cli_writes_transcript(tmp_path, monkeypatch, capsys) -> N
             "--repo",
             "example/repo",
             "--summary",
+            "--tolerate-no-ready",
+            "--tolerate-active-ambiguity",
+            "--tolerate-blocked-lifecycle",
+            "--tolerate-failed-step",
             "--transcript",
             str(transcript),
         ],
@@ -915,7 +1039,10 @@ def test_run_next_loop_cli_writes_transcript(tmp_path, monkeypatch, capsys) -> N
         stop_reason="no ready or resumable active issue found",
         notes=[],
     )
-    with patch("signposter.cli.run_orchestrator_run_next_loop", return_value=result):
+    with patch(
+        "signposter.cli.run_orchestrator_run_next_loop",
+        return_value=result,
+    ) as run_loop:
         with pytest.raises(SystemExit) as exc_info:
             main()
 
@@ -924,3 +1051,7 @@ def test_run_next_loop_cli_writes_transcript(tmp_path, monkeypatch, capsys) -> N
     assert "Signposter Automation Summary" in captured.out
     assert f"Transcript: {transcript}" in captured.out
     assert transcript.exists()
+    assert run_loop.call_args.kwargs["tolerate_no_ready"] is True
+    assert run_loop.call_args.kwargs["tolerate_active_ambiguity"] is True
+    assert run_loop.call_args.kwargs["tolerate_blocked_lifecycle"] is True
+    assert run_loop.call_args.kwargs["tolerate_failed_step"] is True
