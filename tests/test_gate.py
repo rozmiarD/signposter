@@ -740,3 +740,70 @@ No unrelated files were changed.
     assert decision.decision == "pass"
     assert decision.proposed_transition == "state:active → state:done"
     assert "scoped code change evidence" in decision.reason
+
+
+def test_evaluate_ci_gate_allows_neutral_traceback_example_in_formal_summary():
+    """Neutral discussion of blocker words should not block scoped evidence."""
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+# Signposter Execution Summary
+
+**Repository:** ExatronOmega/signposter
+**Issue:** #40 — H034I — Safer CI gate evidence trigger matching
+**Agent:** human/operator
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+## Files changed
+
+- src/signposter/gate.py
+- tests/test_gate.py
+
+## Implemented behavior
+
+Negative signal examples such as traceback are documented as words that still block
+when actual failure output is present.
+
+## Validation evidence
+
+Targeted validation passed:
+
+- ruff check src/signposter/gate.py tests/test_gate.py
+- pytest tests/test_gate.py -q
+
+Full validation passed:
+
+- ruff check .
+- pytest tests/ -q
+
+## Safety
+
+No GitHub mutation was performed by the implemented code.
+No OpenClaw execution was performed by the implemented code.
+No issue was closed by the implemented code.
+No merge was performed by the implemented code.
+No unrelated files were changed.
+"""
+
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "pass"
+
+
+def test_evaluate_ci_gate_blocks_actual_traceback_output():
+    from signposter.gate import evaluate_ci_gate
+
+    raw = """
+Traceback (most recent call last):
+  File "worker.py", line 12, in <module>
+    raise RuntimeError("boom")
+RuntimeError: boom
+"""
+
+    decision = evaluate_ci_gate(0, raw)
+
+    assert decision.decision == "needs-work"
+    assert "Python exception output" in decision.reason
