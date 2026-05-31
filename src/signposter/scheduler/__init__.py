@@ -224,6 +224,35 @@ def format_scheduler_next(result: SchedulerNext) -> str:
     return "\n".join(lines)
 
 
+def format_scheduler_explain(result: SchedulerNext) -> str:
+    """Render a concise explanation of scheduler selection."""
+    lines = [
+        "Signposter Scheduler Explain",
+        "",
+        "Selection:",
+    ]
+    if result.issue:
+        lines.extend(
+            [
+                f"  selected: #{result.issue.number} — {result.issue.title}",
+                f"  reason: {result.reason}",
+            ]
+        )
+    else:
+        lines.extend(["  selected: none", f"  reason: {result.reason}"])
+
+    lines.extend(["", "Skipped:"])
+    if result.skipped:
+        lines.extend(f"  {item}" for item in result.skipped)
+    else:
+        lines.append("  none")
+
+    lines.extend(["", "Status:", f"  {result.status}"])
+    lines.extend(["", "Notes:"])
+    lines.extend(f"  {note}" for note in result.notes)
+    return "\n".join(lines)
+
+
 def format_scheduler_graph(result: SchedulerGraph) -> str:
     """Render compact scheduler graph output."""
     lines = [
