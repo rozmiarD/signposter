@@ -132,6 +132,31 @@ def test_render_prompt_role_specific_instruction():
     assert "Do not fetch private GitHub URLs" in content
 
 
+def test_render_prompt_worker_uses_compact_format():
+    from signposter.runner import render_prompt
+
+    plan = make_runner_plan_for_test("worker", "build", number=42)
+    content = render_prompt(plan, "test/repo")
+
+    assert "# Signposter Worker Prompt" in content
+    assert "## Context" in content
+    assert "## Rules" in content
+    assert "## Validation" in content
+    assert "## Role Profile" not in content
+    assert "Do not fetch the GitHub URL" in content
+    assert "targeted validation" in content
+
+
+def test_render_prompt_worker_compact_is_shorter_than_reviewer_prompt():
+    from signposter.runner import render_prompt
+
+    worker = render_prompt(make_runner_plan_for_test("worker", "build", number=42), "test/repo")
+    reviewer_plan = make_runner_plan_for_test("reviewer", "review", number=43)
+    reviewer = render_prompt(reviewer_plan, "test/repo")
+
+    assert len(worker) < len(reviewer)
+
+
 # --- Post-claim freshness tests ---
 
 
