@@ -338,6 +338,61 @@ def test_write_prompt_artifact_writes_file(tmp_path, monkeypatch):
     assert "Automerge eligible" in content
 
 
+def test_get_pr_diff_marks_omitted_budget_lines(monkeypatch):
+    from signposter.review import get_pr_diff
+
+    class FakeProc:
+        returncode = 0
+        stdout = "\n".join(f"+line {i}" for i in range(10))
+        stderr = ""
+
+    monkeypatch.setattr("subprocess.run", lambda *args, **kwargs: FakeProc())
+
+    diff = get_pr_diff("test/repo", 5, max_lines=3)
+
+    assert "+line 0" in diff
+    assert "+line 3" not in diff
+    assert "# Omitted due to budget" in diff
+    assert "7 diff lines omitted from 10 total lines" in diff
+
+
+def test_build_review_prompt_keeps_structured_contract_with_budget_note():
+    from signposter.review import ReviewPlan, build_review_prompt
+
+    plan = ReviewPlan(
+        pr_number=5,
+        title="test",
+        state="OPEN",
+        base_branch="main",
+        head_branch="work/issue-4-test",
+        mergeable="MERGEABLE",
+        review_decision=None,
+        checks_status="pass",
+        successful_checks=1,
+        failing_checks=0,
+        pending_checks=0,
+        files_changed=2,
+        additions=50,
+        deletions=5,
+        risk_level="medium",
+        size="medium",
+        associated_issue=4,
+        branch_matches_convention=True,
+        status="ready",
+        notes=[],
+        reviewer_profile="reviewer",
+        prompt_artifact_path="artifacts/prompts/pr-5-review.md",
+    )
+    diff = "+kept\n# Omitted due to budget\n# 50 diff lines omitted from 60 total lines."
+
+    prompt = build_review_prompt(plan, "Related issue: #4", diff)
+
+    assert "## Diff (budgeted excerpt)" in prompt
+    assert "# Omitted due to budget" in prompt
+    assert "Verdict: APPROVE | NEEDS_CHANGES | BLOCK" in prompt
+    assert "Automerge eligible: yes | no" in prompt
+
+
 # =============================================================================
 # HARDENING-016 tests: PR reviewer execution
 # =============================================================================

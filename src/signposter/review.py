@@ -411,7 +411,12 @@ def get_pr_diff(repo: str, pr_number: int, max_lines: int = 150) -> str:
     diff = result.stdout.strip()
     lines = diff.splitlines()
     if len(lines) > max_lines:
-        diff = "\n".join(lines[:max_lines]) + f"\n... (truncated, {len(lines)} total lines)"
+        omitted = len(lines) - max_lines
+        diff = (
+            "\n".join(lines[:max_lines])
+            + "\n\n# Omitted due to budget"
+            + f"\n# {omitted} diff lines omitted from {len(lines)} total lines."
+        )
     return diff or "<no diff content>"
 
 
@@ -458,7 +463,7 @@ def build_review_prompt(plan: ReviewPlan, pr_body: str, diff: str) -> str:
 ## PR Body
 {pr_body or "<no body provided>"}
 
-## Diff (bounded excerpt)
+## Diff (budgeted excerpt)
 ```diff
 {diff}
 ```
