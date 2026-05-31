@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 from signposter.scan import LabeledItem
 from signposter.scheduler import (
     SchedulerNext,
+    _active_issue_note,
     build_scheduler_graph,
     format_scheduler_explain,
     format_scheduler_graph,
@@ -21,6 +23,17 @@ def _issue(number: int, labels: list[str]) -> LabeledItem:
         html_url=f"https://github.com/example/repo/issues/{number}",
         labels=labels,
         item_type="issue",
+    )
+
+
+def _issue_updated(number: int, labels: list[str], updated_at: str) -> LabeledItem:
+    return LabeledItem(
+        number=number,
+        title=f"Issue {number}",
+        html_url=f"https://github.com/example/repo/issues/{number}",
+        labels=labels,
+        item_type="issue",
+        updated_at=updated_at,
     )
 
 
@@ -43,6 +56,8 @@ def test_scheduler_selects_first_ready_issue_without_manifest() -> None:
     assert result.issue.number == 3
     assert "#1: state:done" in result.skipped
     assert "#2: state:active" in result.skipped
+    assert result.active_notes is not None
+    assert result.active_notes[0].startswith("#2:")
 
 
 def test_scheduler_skips_dependency_blocked_ready_issue() -> None:
@@ -208,6 +223,62 @@ def test_scheduler_explain_shows_none_when_completed() -> None:
 
     assert "selected: none" in out
     assert "Skipped:\n  none" in out
+    assert "Active issues:\n  none" in out
+
+
+def test_scheduler_explain_shows_stale_active_notes() -> None:
+    active = _issue_updated(2, ["state:active"], "2026-05-20T00:00:00Z")
+    ready = _issue(3, ["state:ready"])
+
+    with (
+        patch("signposter.scheduler.fetch_open_issues", return_value=[active, ready]),
+        patch("signposter.scheduler.fetch_issue_context", return_value={"body": ""}),
+        patch("signposter.scheduler.is_dependency_blocked", return_value=(False, "none")),
+        patch("signposter.scheduler.Path.exists", return_value=False),
+    ):
+        result = select_next_issue("example/repo")
+
+    out = format_scheduler_explain(result)
+
+    assert result.status == "ready"
+    assert "Active issues:" in out
+    assert "#2: worktree=missing, prompt=missing" in out
+    assert "activity_age=stale" in out
+    assert "resume=needs inspection" in out
+
+
+def test_active_issue_note_detects_resume_possible_from_prompt() -> None:
+    active = _issue_updated(4, ["state:active"], "2026-05-30T00:00:00Z")
+
+    with (
+        patch("signposter.scheduler._active_issue_worktree_exists", return_value=False),
+        patch("signposter.scheduler.Path.exists", return_value=True),
+    ):
+        note = _active_issue_note(
+            active,
+            now=datetime(2026, 5, 31, tzinfo=UTC),
+        )
+
+    assert note.startswith("#4:")
+    assert "worktree=missing" in note
+    assert "prompt=present" in note
+    assert "activity_age=fresh" in note
+    assert "resume=possible" in note
+
+
+def test_active_issue_note_detects_current_issue_worktree(tmp_path, monkeypatch) -> None:
+    active = _issue_updated(4, ["state:active"], "2026-05-30T00:00:00Z")
+    worktree = tmp_path / "signposter-work" / "4"
+    worktree.mkdir(parents=True)
+    monkeypatch.chdir(worktree)
+
+    note = _active_issue_note(
+        active,
+        now=datetime(2026, 5, 31, tzinfo=UTC),
+    )
+
+    assert "worktree=present" in note
+    assert "resume=possible" in note
 
 
 def test_parse_graph_metadata_empty_body() -> None:
