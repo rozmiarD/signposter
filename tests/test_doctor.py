@@ -12,7 +12,11 @@ from signposter.doctor import (
     check_docs_exist,
     check_pytest_tool,
     check_python_version,
+    check_reviewer_token_present,
     check_ruff_tool,
+    check_virtualenv_active,
+    format_automation_doctor_report,
+    run_automation_doctor_checks,
     run_doctor_checks,
 )
 
@@ -67,3 +71,52 @@ def test_ruff_tool_check_detects_venv_install():
     result = check_ruff_tool()
     assert result.status == CheckStatus.OK
     assert "ruff" in result.message.lower()
+
+
+def test_reviewer_token_check_does_not_print_secret(monkeypatch):
+    monkeypatch.setenv("SIGNPOSTER_REVIEWER_GH_TOKEN", "secret-token")
+
+    result = check_reviewer_token_present()
+
+    assert result.status == CheckStatus.OK
+    assert "secret-token" not in result.message
+    assert "present" in result.message
+
+
+def test_virtualenv_check_returns_structured_status():
+    result = check_virtualenv_active()
+
+    assert result.name == "venv"
+    assert result.status in (CheckStatus.OK, CheckStatus.WARN)
+
+
+def test_run_automation_doctor_checks_has_expected_checks():
+    results = run_automation_doctor_checks()
+    names = {result.name for result in results}
+
+    assert "git-status" in names
+    assert "gh-auth" in names
+    assert "openclaw-available" in names
+    assert "reviewer-token" in names
+    assert "venv" in names
+
+
+def test_format_automation_doctor_report_hides_secret():
+    results = [
+        type(
+            "Result",
+            (),
+            {
+                "name": "reviewer-token",
+                "status": CheckStatus.OK,
+                "message": "SIGNPOSTER_REVIEWER_GH_TOKEN is present",
+                "details": None,
+            },
+        )()
+    ]
+
+    out = format_automation_doctor_report(results)
+
+    assert "Signposter Automation Doctor" in out
+    assert "No secrets were printed." in out
+    assert "secret-token" not in out
