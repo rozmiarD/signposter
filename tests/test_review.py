@@ -462,9 +462,11 @@ def test_execute_writes_artifacts_on_success(monkeypatch, tmp_path):
         return FakeProc()
 
     with patch("signposter.review.plan_review_for_pr", return_value=fake_plan), \
+         patch("signposter.review.check_openclaw_preflight") as mock_preflight, \
          patch("os.path.isfile", return_value=True), \
          patch("subprocess.run", side_effect=fake_subprocess_run):
 
+        mock_preflight.return_value = type("pf", (), {"ok": True})()
         result = execute_pr_review("test/repo", 5, runs_dir=tmp_path / "runs")
 
     assert result["success"] is True
@@ -474,6 +476,59 @@ def test_execute_writes_artifacts_on_success(monkeypatch, tmp_path):
     assert os.path.exists(result["summary_path"])
     raw = open(result["raw_path"], encoding="utf-8").read()
     assert "Verdict: APPROVE" in raw
+
+
+def test_execute_review_preflight_blocks_before_openclaw_and_artifacts(tmp_path):
+    from signposter.review import ReviewPlan, execute_pr_review
+
+    fake_plan = ReviewPlan(
+        pr_number=5,
+        title="docs change",
+        state="OPEN",
+        base_branch="main",
+        head_branch="work/issue-4-xxx",
+        mergeable="MERGEABLE",
+        review_decision=None,
+        checks_status="pass",
+        successful_checks=1,
+        failing_checks=0,
+        pending_checks=0,
+        files_changed=1,
+        additions=8,
+        deletions=0,
+        risk_level="low",
+        size="small",
+        associated_issue=4,
+        branch_matches_convention=True,
+        status="ready",
+        notes=[],
+        reviewer_profile="reviewer",
+        prompt_artifact_path=str(tmp_path / "pr-5-review.md"),
+    )
+    (tmp_path / "pr-5-review.md").write_text("review prompt", encoding="utf-8")
+    preflight = type(
+        "pf",
+        (),
+        {
+            "ok": False,
+            "reason": "OpenClaw CLI not found on PATH",
+            "checked_token_envs": ("OPENAI_API_KEY",),
+            "openclaw_path": None,
+            "manual_fallback": "signposter artifact write-review-summary --pr 5 --apply",
+        },
+    )()
+
+    with patch("signposter.review.plan_review_for_pr", return_value=fake_plan), \
+         patch("signposter.review.check_openclaw_preflight", return_value=preflight), \
+         patch("subprocess.run") as mock_run:
+        result = execute_pr_review("test/repo", 5, runs_dir=tmp_path / "runs")
+
+    assert result["success"] is False
+    assert result["raw_path"] is None
+    assert result["summary_path"] is None
+    assert "OpenClaw CLI" in result["error"]
+    assert not (tmp_path / "runs").exists()
+    mock_run.assert_not_called()
 
 
 def test_execute_output_contains_safety_notes():
