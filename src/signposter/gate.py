@@ -10,6 +10,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from signposter.artifact_safety import find_stale_or_failover_signal
+
 
 @dataclass
 class GateDecision:
@@ -114,6 +116,16 @@ def evaluate_ci_gate(
             reason=f"Non-zero exit code from worker: {exit_code}",
             confidence="high",
             proposed_transition="state:failed",
+            proposed_command=None,
+        )
+
+    stale_signal = find_stale_or_failover_signal(text)
+    if stale_signal:
+        return GateDecision(
+            decision="needs-work",
+            reason=f"Worker artifact contains stale/failover signal: '{stale_signal}'",
+            confidence="high",
+            proposed_transition="state:active (manual artifact fallback required)",
             proposed_command=None,
         )
 
