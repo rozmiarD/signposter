@@ -14,6 +14,10 @@ from signposter.claim import perform_claim_mutation, plan_claims
 from signposter.dependencies import is_dependency_blocked
 from signposter.dispatch import DispatchDecision, classify_candidate
 from signposter.git_utils import find_uncommitted_repo_changes
+from signposter.openclaw_preflight import (
+    check_openclaw_preflight,
+    format_openclaw_preflight_block,
+)
 from signposter.scan import LabeledItem, fetch_issue_by_number, fetch_issue_context
 from signposter.worktree import get_worktree_status_for_issue
 
@@ -929,6 +933,17 @@ def execute_plan(
                 "summary_path": None,
                 "error": "dirty working tree",
             }
+
+    preflight = check_openclaw_preflight(artifact_kind="worker", target=item.number)
+    if not preflight.ok:
+        print(format_openclaw_preflight_block(preflight))
+        return {
+            "exit_code": 1,
+            "raw_path": None,
+            "summary_path": None,
+            "error": preflight.reason,
+            "success": False,
+        }
 
     # Read the prompt content (we pass it properly, not via shell substitution)
     try:
