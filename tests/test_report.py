@@ -13,10 +13,12 @@ import pytest
 from signposter.report import (
     _make_bounded_excerpt,
     derive_raw_path,
+    find_report_artifact_safety_signal,
     format_comment,
     load_raw_output,
     load_summary,
     post_comment,
+    report_main,
     strip_ansi,
 )
 
@@ -122,6 +124,35 @@ def test_load_summary_missing_raises(tmp_path: Path):
 def test_load_raw_output_missing_returns_none(tmp_path: Path):
     missing = tmp_path / "nope.raw.txt"
     assert load_raw_output(missing) is None
+
+
+def test_find_report_artifact_safety_signal_checks_summary_and_raw():
+    signal = find_report_artifact_safety_signal(
+        "clean summary",
+        "Provider unavailable during failover.",
+    )
+
+    assert signal == "provider unavailable"
+
+
+@patch("signposter.report.post_comment")
+def test_report_main_blocks_stale_artifact_before_github_comment(mock_post, tmp_path: Path, capsys):
+    summary = tmp_path / "issue-71-worker.summary.md"
+    summary.write_text(
+        "# Signposter Execution Summary\n"
+        "**Exit Code:** 0\n"
+        "Model unavailable; fallback provider failed.\n",
+        encoding="utf-8",
+    )
+
+    exit_code = report_main("test/repo", 71, summary, apply=True)
+
+    out = capsys.readouterr().out
+    assert exit_code == 1
+    assert "Report blocked" in out
+    assert "model unavailable" in out
+    assert "No GitHub mutation was performed." in out
+    mock_post.assert_not_called()
 
 
 # --- ANSI sanitization tests (HARDENING-002) ---

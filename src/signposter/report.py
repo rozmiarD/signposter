@@ -12,6 +12,8 @@ import re
 import subprocess
 from pathlib import Path
 
+from signposter.artifact_safety import find_stale_or_failover_signal
+
 # Regex to strip ANSI escape sequences (colors, cursor moves, etc.)
 _ANSI_ESCAPE_RE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
@@ -162,6 +164,16 @@ def load_raw_output(raw_path: str | Path) -> str | None:
     return None
 
 
+def find_report_artifact_safety_signal(
+    summary_content: str,
+    raw_content: str | None = None,
+) -> str | None:
+    """Return stale/failover signal that should block GitHub reporting."""
+    return find_stale_or_failover_signal(
+        (summary_content or "") + "\n" + (raw_content or "")
+    )
+
+
 def post_comment(
     repo: str,
     issue: int,
@@ -209,6 +221,13 @@ def report_main(
         raw_p = derive_raw_path(summary_p)
 
         raw_content = load_raw_output(raw_p)
+        stale_signal = find_report_artifact_safety_signal(summary_content, raw_content)
+        if stale_signal:
+            print("Report blocked: local artifact contains stale/failover signal.")
+            print(f"Signal: {stale_signal}")
+            print("No GitHub mutation was performed.")
+            print("Use an explicit human/operator summary artifact after reviewing local logs.")
+            return 1
 
         # Try to extract prompt path from summary
         prompt_path = None
