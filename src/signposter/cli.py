@@ -34,6 +34,10 @@ from signposter.integration import (
     plan_integration_for_pr,
     plan_noop_integration_for_issue,
 )
+from signposter.issue_factory import (
+    apply_issue_factory,
+    format_issue_factory_plan,
+)
 from signposter.merge import (
     apply_merge,
     format_merge_apply_dry_run,
@@ -1062,6 +1066,9 @@ def main() -> None:
 
     # H035E: simple GitHub-label scheduler (read-only)
     _register_scheduler_subcommands(subparsers)
+
+    # H037K: guarded issue factory from a local task list
+    _register_issue_factory_subcommand(subparsers)
 
     # HARDENING-024E: guarded local repository sync/rebase
     _register_sync_subcommands(subparsers)
@@ -2587,6 +2594,42 @@ def _register_scheduler_subcommands(subparsers: argparse._SubParsersAction) -> N
     explain_parser.add_argument("--repo", required=True)
     explain_parser.add_argument("--limit", type=int, default=50)
     explain_parser.set_defaults(func=run_scheduler_explain)
+
+
+def run_issue_factory(args: argparse.Namespace) -> int:
+    """Handler for `signposter issue-factory --tasks ...`."""
+    repo = getattr(args, "repo", None)
+    tasks = getattr(args, "tasks", None)
+    if not repo or not tasks:
+        print("Error: --repo and --tasks are required", file=sys.stderr)
+        return 1
+
+    try:
+        plan = apply_issue_factory(
+            repo,
+            Path(tasks),
+            apply=getattr(args, "apply", False),
+        )
+        print(format_issue_factory_plan(plan))
+        return 0
+    except Exception as e:
+        print(f"Issue factory failed: {e}", file=sys.stderr)
+        return 2
+
+
+def _register_issue_factory_subcommand(subparsers: argparse._SubParsersAction) -> None:
+    parser = subparsers.add_parser(
+        "issue-factory",
+        help="Create GitHub issues from a local JSON/TSV task list",
+    )
+    parser.add_argument("--repo", required=True)
+    parser.add_argument("--tasks", required=True, help="Path to .json/.tsv task list")
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually create missing GitHub issues; dry-run by default",
+    )
+    parser.set_defaults(func=run_issue_factory)
 
 
 # =============================================================================
