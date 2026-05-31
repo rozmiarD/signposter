@@ -64,6 +64,7 @@ class LabeledItem:
     html_url: str
     labels: list[str]
     item_type: str  # "issue" or "pr"
+    updated_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -116,6 +117,7 @@ def fetch_open_issues(repo: str, limit: int = 50) -> list[LabeledItem]:
                 html_url=item.get("url", ""),
                 labels=labels,
                 item_type="issue",
+                updated_at=item.get("updatedAt"),
             )
         )
     return items
