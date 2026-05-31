@@ -550,6 +550,58 @@ def test_merge_plan_allows_medium_scope_with_explicit_override():
     assert allowed.has_auto_close_keywords is False
 
 
+def test_merge_plan_allows_large_scope_with_explicit_override():
+    """Large scope remains blocked by default but can be explicitly allowed."""
+    with patch("signposter.merge._run_gh_pr_view") as mock_view, \
+         patch("signposter.merge._fetch_pr_reviews_and_author") as mock_reviews, \
+         patch("signposter.merge.evaluate_review_gate") as mock_gate, \
+         patch("signposter.merge._fetch_pr_checks_for_merge") as mock_checks:
+
+        mock_view.return_value = {
+            "title": "work: h035b-e-add-bounded-orchestrator-automation",
+            "state": "OPEN",
+            "baseRefName": "main",
+            "headRefName": "work/issue-48-h035b-e",
+            "mergeable": "MERGEABLE",
+            "reviewDecision": "APPROVED",
+            "body": "Related issue: #48",
+            "files": [{"path": "src/signposter/orchestrator.py"}],
+            "additions": 650,
+            "deletions": 10,
+        }
+        mock_reviews.return_value = {
+            "pr_author": "ExatronOmega",
+            "review_decision": "APPROVED",
+            "approving_reviewers": ["AlphaExatron"],
+        }
+        mock_gate.return_value = type("G", (), {
+            "gate_pass": True,
+            "opinion": type("O", (), {
+                "verdict": "APPROVE",
+                "confidence": 0.9,
+                "risk": "high",
+            })(),
+        })()
+        mock_checks.return_value = {
+            "status": "pass",
+            "successful": 1,
+            "failing": 0,
+            "pending": 0,
+        }
+
+        blocked = plan_merge_for_pr("test/repo", 48, allow_high_risk=True)
+        allowed = plan_merge_for_pr(
+            "test/repo",
+            48,
+            allow_large_scope=True,
+            allow_high_risk=True,
+        )
+
+    assert blocked.status == "blocked — PR scope is large"
+    assert allowed.status == "ready"
+    assert allowed.size == "large"
+
+
 def test_apply_merge_passes_allow_medium_scope_override():
     from signposter.merge import apply_merge
 
@@ -600,8 +652,9 @@ def test_apply_merge_passes_allow_medium_scope_override():
         "test/repo",
         15,
         allow_medium_scope=True,
+        allow_large_scope=False,
         allow_medium_risk=False,
-            allow_high_risk=False,
+        allow_high_risk=False,
     )
     assert result["mode"] == "dry_run"
     assert result["plan"].status == "ready"
@@ -878,6 +931,7 @@ def test_apply_merge_passes_allow_high_risk_override():
         "test/repo",
         21,
         allow_medium_scope=False,
+        allow_large_scope=False,
         allow_medium_risk=False,
         allow_high_risk=True,
     )

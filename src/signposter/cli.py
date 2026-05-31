@@ -39,8 +39,13 @@ from signposter.merge import (
     plan_merge_for_pr,
 )
 from signposter.orchestrator import (
+    format_orchestrator_loop,
     format_orchestrator_next,
+    format_orchestrator_step,
     plan_orchestrator_next,
+    plan_orchestrator_tail,
+    run_orchestrator_loop,
+    run_orchestrator_step,
 )
 from signposter.planner import (
     apply_planner_advance_plan,
@@ -98,6 +103,7 @@ from signposter.review import (
 )
 from signposter.runner import cli_main as runner_cli_main
 from signposter.scan import cli_main as scan_cli_main
+from signposter.scheduler import format_scheduler_next, select_next_issue
 from signposter.sync import (
     apply_sync,
     format_sync_apply_result,
@@ -780,6 +786,11 @@ def main() -> None:
         help="Explicitly allow guarded merge of a medium-scope PR",
     )
     merge_apply_parser.add_argument(
+        "--allow-large-scope",
+        action="store_true",
+        help="Explicitly allow guarded merge of a large-scope PR",
+    )
+    merge_apply_parser.add_argument(
         "--allow-medium-risk",
         action="store_true",
         help="Explicitly allow guarded merge with medium reviewer risk",
@@ -992,6 +1003,9 @@ def main() -> None:
 
     # H035A: minimal orchestrator next-step planning (read-only)
     _register_orchestrator_subcommands(subparsers)
+
+    # H035E: simple GitHub-label scheduler (read-only)
+    _register_scheduler_subcommands(subparsers)
 
     # HARDENING-024E: guarded local repository sync/rebase
     _register_sync_subcommands(subparsers)
@@ -1611,6 +1625,7 @@ def run_merge_apply(args: argparse.Namespace) -> int:
     pr = getattr(args, "pr", None)
     do_apply = getattr(args, "apply", False)
     allow_medium_scope = getattr(args, "allow_medium_scope", False)
+    allow_large_scope = getattr(args, "allow_large_scope", False)
     allow_medium_risk = getattr(args, "allow_medium_risk", False)
     allow_high_risk = getattr(args, "allow_high_risk", False)
 
@@ -1624,8 +1639,9 @@ def run_merge_apply(args: argparse.Namespace) -> int:
             pr,
             apply=do_apply,
             allow_medium_scope=allow_medium_scope,
+            allow_large_scope=allow_large_scope,
             allow_medium_risk=allow_medium_risk,
-                allow_high_risk=allow_high_risk,
+            allow_high_risk=allow_high_risk,
         )
         plan = result.get("plan")
 
@@ -2090,6 +2106,82 @@ def run_orchestrator_next(args: argparse.Namespace) -> int:
         return 2
 
 
+def run_orchestrator_step_cli(args: argparse.Namespace) -> int:
+    """Handler for `signposter orchestrator step`."""
+    repo = getattr(args, "repo", None)
+    issue = getattr(args, "issue", None)
+    pr = getattr(args, "pr", None)
+    if not repo:
+        print("Error: --repo is required", file=sys.stderr)
+        return 1
+    if (issue is None and pr is None) or (issue is not None and pr is not None):
+        print("Error: exactly one of --issue or --pr is required", file=sys.stderr)
+        return 1
+
+    try:
+        result = run_orchestrator_step(
+            repo,
+            issue=issue,
+            pr=pr,
+            apply=getattr(args, "apply", False),
+            execute=getattr(args, "execute", False),
+        )
+        print(format_orchestrator_step(result))
+        return 0 if result.status in ("ready", "applied", "complete") else 1
+    except Exception as e:
+        print(f"Orchestrator step failed: {e}", file=sys.stderr)
+        return 2
+
+
+def run_orchestrator_loop_cli(args: argparse.Namespace) -> int:
+    """Handler for `signposter orchestrator loop`."""
+    repo = getattr(args, "repo", None)
+    issue = getattr(args, "issue", None)
+    pr = getattr(args, "pr", None)
+    if not repo:
+        print("Error: --repo is required", file=sys.stderr)
+        return 1
+    if (issue is None and pr is None) or (issue is not None and pr is not None):
+        print("Error: exactly one of --issue or --pr is required", file=sys.stderr)
+        return 1
+
+    try:
+        result = run_orchestrator_loop(
+            repo,
+            issue=issue,
+            pr=pr,
+            max_cycles=getattr(args, "max_cycles", 1),
+            apply=getattr(args, "apply", False),
+            execute=getattr(args, "execute", False),
+        )
+        print(format_orchestrator_loop(result))
+        return 0 if result.status in ("completed", "limit-reached", "stopped") else 1
+    except Exception as e:
+        print(f"Orchestrator loop failed: {e}", file=sys.stderr)
+        return 2
+
+
+def run_orchestrator_tail(args: argparse.Namespace) -> int:
+    """Handler for `signposter orchestrator tail --pr N`."""
+    repo = getattr(args, "repo", None)
+    pr = getattr(args, "pr", None)
+    if not repo or pr is None:
+        print("Error: --repo and --pr are required", file=sys.stderr)
+        return 1
+
+    try:
+        result = plan_orchestrator_tail(
+            repo,
+            pr=pr,
+            allow_execute=getattr(args, "execute", False),
+        )
+        print(format_orchestrator_next(result))
+        return 0 if result.status in ("actionable", "complete") else 1
+    except Exception as e:
+        print(f"Orchestrator tail failed: {e}", file=sys.stderr)
+        return 2
+
+
 def _register_orchestrator_subcommands(
     subparsers: argparse._SubParsersAction,
 ) -> None:
@@ -2129,6 +2221,83 @@ def _register_orchestrator_subcommands(
         help="Allow planning to pass OpenClaw execution stop checks only",
     )
     next_parser.set_defaults(func=run_orchestrator_next)
+
+    step_parser = orchestrator_subparsers.add_parser(
+        "step",
+        help="Run at most one allow-listed lifecycle step",
+    )
+    step_parser.add_argument("--repo", required=True)
+    step_parser.add_argument("--issue", type=int, default=None)
+    step_parser.add_argument("--pr", type=int, default=None)
+    step_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Execute the selected lifecycle command",
+    )
+    step_parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="Permit OpenClaw execution steps",
+    )
+    step_parser.set_defaults(func=run_orchestrator_step_cli)
+
+    loop_parser = orchestrator_subparsers.add_parser(
+        "loop",
+        help="Run a bounded orchestrator loop",
+    )
+    loop_parser.add_argument("--repo", required=True)
+    loop_parser.add_argument("--issue", type=int, default=None)
+    loop_parser.add_argument("--pr", type=int, default=None)
+    loop_parser.add_argument("--max-cycles", type=int, default=1)
+    loop_parser.add_argument("--apply", action="store_true")
+    loop_parser.add_argument("--execute", action="store_true")
+    loop_parser.set_defaults(func=run_orchestrator_loop_cli)
+
+    tail_parser = orchestrator_subparsers.add_parser(
+        "tail",
+        help="Plan the next PR-tail action",
+    )
+    tail_parser.add_argument("--repo", required=True)
+    tail_parser.add_argument("--pr", type=int, required=True)
+    tail_parser.add_argument("--execute", action="store_true")
+    tail_parser.set_defaults(func=run_orchestrator_tail)
+
+
+# =============================================================================
+# H035E: Simple GitHub-label scheduler
+# =============================================================================
+
+
+def run_scheduler_next(args: argparse.Namespace) -> int:
+    """Handler for `signposter scheduler next --repo ...`."""
+    repo = getattr(args, "repo", None)
+    if not repo:
+        print("Error: --repo is required", file=sys.stderr)
+        return 1
+
+    try:
+        result = select_next_issue(repo, limit=getattr(args, "limit", 50))
+        print(format_scheduler_next(result))
+        return 0 if result.status in ("ready", "completed") else 1
+    except Exception as e:
+        print(f"Scheduler next failed: {e}", file=sys.stderr)
+        return 2
+
+
+def _register_scheduler_subcommands(subparsers: argparse._SubParsersAction) -> None:
+    """Register the scheduler command group."""
+    scheduler_parser = subparsers.add_parser(
+        "scheduler",
+        help="Select the next ready GitHub issue without a manifest",
+    )
+    scheduler_subparsers = scheduler_parser.add_subparsers(dest="scheduler_command")
+    next_parser = scheduler_subparsers.add_parser(
+        "next",
+        help="Select the next open state:ready issue",
+    )
+    next_parser.add_argument("--repo", required=True)
+    next_parser.add_argument("--limit", type=int, default=50)
+    next_parser.set_defaults(func=run_scheduler_next)
 
 
 # =============================================================================

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sys
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -10,6 +10,9 @@ from signposter.lifecycle import LifecycleNext, LifecyclePreflight
 from signposter.orchestrator import (
     format_orchestrator_next,
     plan_orchestrator_next,
+    plan_orchestrator_tail,
+    run_orchestrator_loop,
+    run_orchestrator_step,
 )
 
 
@@ -173,3 +176,99 @@ def test_cli_orchestrator_next_uses_read_only_surface(
     assert "Signposter Orchestrator Next — Issue #46" in captured.out
     assert "OpenClaw execution requires explicit --execute" in captured.out
     assert "No GitHub mutation was performed." in captured.out
+
+
+def test_orchestrator_step_dry_run_does_not_execute() -> None:
+    lifecycle_next = _next(
+        workflow_state="state:ready",
+        action="create-worktree",
+        command="signposter worktree apply --repo ExatronOmega/signposter --issue 46 --apply",
+    )
+
+    with patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next):
+        result = run_orchestrator_step("ExatronOmega/signposter", issue=46)
+
+    assert result.status == "ready"
+    assert result.applied is False
+    assert result.stop_reason == "dry-run; rerun with --apply to execute this step"
+
+
+def test_orchestrator_step_apply_runs_allowlisted_command() -> None:
+    lifecycle_next = _next(
+        workflow_state="state:ready",
+        action="create-worktree",
+        command="signposter worktree apply --repo ExatronOmega/signposter --issue 46 --apply",
+    )
+    proc = type("Proc", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
+
+    with patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next):
+        run_command = Mock(return_value=proc)
+        result = run_orchestrator_step(
+            "ExatronOmega/signposter",
+            issue=46,
+            apply=True,
+            run_command=run_command,
+        )
+
+    assert result.status == "applied"
+    assert result.applied is True
+    run_command.assert_called_once()
+
+
+def test_orchestrator_step_blocks_execute_without_flag() -> None:
+    with patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()):
+        result = run_orchestrator_step(
+            "ExatronOmega/signposter",
+            issue=46,
+            apply=True,
+        )
+
+    assert result.status == "blocked"
+    assert result.stop_reason == "OpenClaw execution requires explicit --execute"
+
+
+def test_orchestrator_loop_stops_after_dry_run_step() -> None:
+    lifecycle_next = _next(
+        workflow_state="state:ready",
+        action="create-worktree",
+        command="signposter worktree apply --repo ExatronOmega/signposter --issue 46 --apply",
+    )
+
+    with patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next):
+        result = run_orchestrator_loop("ExatronOmega/signposter", issue=46, max_cycles=3)
+
+    assert result.status == "stopped"
+    assert result.cycles_run == 1
+    assert result.stop_reason == "dry-run; rerun with --apply to execute this step"
+
+
+def test_orchestrator_loop_stops_at_cycle_limit_after_applied_steps() -> None:
+    lifecycle_next = _next(
+        workflow_state="state:ready",
+        action="create-worktree",
+        command="signposter worktree apply --repo ExatronOmega/signposter --issue 46 --apply",
+    )
+    proc = type("Proc", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
+
+    with patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next):
+        result = run_orchestrator_loop(
+            "ExatronOmega/signposter",
+            issue=46,
+            max_cycles=2,
+            apply=True,
+            run_command=Mock(return_value=proc),
+        )
+
+    assert result.status == "limit-reached"
+    assert result.cycles_run == 2
+    assert result.stop_reason == "max cycles reached"
+
+
+def test_orchestrator_tail_delegates_to_pr_lifecycle_next() -> None:
+    lifecycle_next = _next(query_issue=None, query_pr=47, issue_number=46, pr_number=47)
+
+    with patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next) as plan:
+        result = plan_orchestrator_tail("ExatronOmega/signposter", pr=47)
+
+    assert result.lifecycle.pr_number == 47
+    plan.assert_called_once_with("ExatronOmega/signposter", issue=None, pr=47)
