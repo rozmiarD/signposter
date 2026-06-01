@@ -17,7 +17,10 @@ def test_active_registry_uses_only_allowed_models():
 def test_get_role_policy_returns_expected_core_roles():
     assert get_role_policy("WORKER_CORE").model == "openai/gpt-5.4"
     assert get_role_policy("WORKER_CORE").reasoning_effort == "medium"
-    assert get_role_policy("REVIEWER_LIGHT").model == "openai/gpt-5.4-mini"
+    assert get_role_policy("REVIEWER_LIGHT").model == "xai/grok-build-0.1"
+    assert get_role_policy("REVIEWER_LIGHT").fallback_model == "openai/gpt-5.4-mini"
+    assert get_role_policy("WORKER_LIGHT").model == "xai/grok-build-0.1"
+    assert get_role_policy("WORKER_LIGHT").fallback_model == "openai/gpt-5.4-mini"
     assert get_role_policy("PLANNER_MAIN").openclaw_agent == "planner"
 
 
@@ -109,5 +112,7 @@ def test_format_role_policy_status_reports_pass_for_active_registry():
     assert "Signposter Role Policy Status" in output
     assert "WORKER_CODE" in output
     assert "openai/gpt-5.3-codex" in output
+    assert "xai/grok-build-0.1" in output
+    assert "fallback_model: openai/gpt-5.4-mini" in output
     assert "Validation:" in output
     assert "status: pass" in output

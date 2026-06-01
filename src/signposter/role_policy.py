@@ -16,6 +16,7 @@ ALLOWED_OPENCLAW_MODELS = frozenset(
         "openai/gpt-5.4-mini",
         "openai/gpt-5.3-codex",
         "openai/gpt-5.2",
+        "xai/grok-build-0.1",
     }
 )
 
@@ -33,6 +34,7 @@ class RolePolicy:
     use_case: str
     escalation_role: str | None = None
     fallback_role: str | None = None
+    fallback_model: str | None = None
     restrictions: tuple[str, ...] = ()
     manual_only: bool = False
     legacy_fallback: bool = False
@@ -83,10 +85,11 @@ ACTIVE_ROLE_POLICIES: dict[str, RolePolicy] = {
     "WORKER_LIGHT": RolePolicy(
         name="WORKER_LIGHT",
         openclaw_agent="worker",
-        model="openai/gpt-5.4-mini",
+        model="xai/grok-build-0.1",
         reasoning_effort="low",
         use_case="Docs, tests, simple patch, low-risk refactor.",
         escalation_role="WORKER_CODE",
+        fallback_model="openai/gpt-5.4-mini",
     ),
     "WORKER_CODE": RolePolicy(
         name="WORKER_CODE",
@@ -107,10 +110,11 @@ ACTIVE_ROLE_POLICIES: dict[str, RolePolicy] = {
     "REVIEWER_LIGHT": RolePolicy(
         name="REVIEWER_LIGHT",
         openclaw_agent="reviewer",
-        model="openai/gpt-5.4-mini",
+        model="xai/grok-build-0.1",
         reasoning_effort="low",
         use_case="Docs-only and small low/medium-risk PR review.",
         escalation_role="REVIEWER_CORE",
+        fallback_model="openai/gpt-5.4-mini",
     ),
     "REVIEWER_CORE": RolePolicy(
         name="REVIEWER_CORE",
@@ -178,6 +182,12 @@ def validate_role_policy(policy: RolePolicy) -> list[str]:
             f"{policy.name}: model '{policy.model}' is not in the allowed OpenClaw model set"
         )
 
+    if policy.fallback_model and policy.fallback_model not in ALLOWED_OPENCLAW_MODELS:
+        errors.append(
+            f"{policy.name}: fallback model '{policy.fallback_model}' "
+            "is not in the allowed OpenClaw model set"
+        )
+
     if policy.reasoning_effort not in ALLOWED_REASONING_EFFORTS:
         errors.append(
             f"{policy.name}: reasoning effort '{policy.reasoning_effort}' is not allowed"
@@ -186,8 +196,22 @@ def validate_role_policy(policy: RolePolicy) -> list[str]:
     if "-pro" in policy.model or policy.model.endswith("-nano"):
         errors.append(f"{policy.name}: forbidden model family '{policy.model}'")
 
+    if policy.fallback_model and (
+        "-pro" in policy.fallback_model or policy.fallback_model.endswith("-nano")
+    ):
+        errors.append(
+            f"{policy.name}: forbidden fallback model family '{policy.fallback_model}'"
+        )
+
     if "deep-research" in policy.model or "/o" in policy.model:
         errors.append(f"{policy.name}: unavailable model family '{policy.model}'")
+
+    if policy.fallback_model and (
+        "deep-research" in policy.fallback_model or "/o" in policy.fallback_model
+    ):
+        errors.append(
+            f"{policy.name}: unavailable fallback model family '{policy.fallback_model}'"
+        )
 
     if policy.model == "openai/gpt-5.5" and not policy.manual_only:
         errors.append(f"{policy.name}: gpt-5.5 is reserved for critical/manual escalation only")
@@ -239,6 +263,8 @@ def format_role_policy_status(registry: dict[str, RolePolicy] | None = None) -> 
             lines.append(f"  escalation: {policy.escalation_role}")
         if policy.fallback_role:
             lines.append(f"  fallback: {policy.fallback_role}")
+        if policy.fallback_model:
+            lines.append(f"  fallback_model: {policy.fallback_model}")
         if policy.manual_only:
             lines.append("  manual_only: yes")
         if policy.legacy_fallback:

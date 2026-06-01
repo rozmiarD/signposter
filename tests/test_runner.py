@@ -778,6 +778,53 @@ def test_execute_plan_preflight_blocks_before_openclaw_and_artifacts(tmp_path):
     mock_open.assert_not_called()
 
 
+def test_fallback_runner_plan_prefers_role_fallback_model_before_escalation():
+    from signposter.dispatch import DispatchDecision
+    from signposter.runner import RunnerPlan, _fallback_runner_plan
+    from signposter.scan import LabeledItem
+
+    fake_item = LabeledItem(
+        number=88,
+        title="Docs: light worker fallback",
+        html_url="https://github.com/example/repo/issues/88",
+        labels=["state:ready", "phase:build", "role:worker", "risk:low", "area:docs"],
+        item_type="issue",
+    )
+    fake_dispatch = DispatchDecision(
+        item=fake_item,
+        phase="build",
+        state="ready",
+        role="worker",
+        risk="low",
+        area="docs",
+        proposed_route="worker",
+        proposed_gate="ci",
+        reason="test",
+    )
+    plan = RunnerPlan(
+        item=fake_item,
+        dispatch=fake_dispatch,
+        proposed_runner="openclaw",
+        proposed_profile="worker",
+        proposed_working_dir="~/work/88",
+        proposed_prompt_path="artifacts/prompts/issue-88.md",
+        proposed_command_shape="test",
+        reason="test",
+        selected_role_name="WORKER_LIGHT",
+        selected_model="xai/grok-build-0.1",
+        selected_reasoning_effort="low",
+        selected_openclaw_agent="worker",
+    )
+
+    fallback = _fallback_runner_plan(plan)
+
+    assert fallback is not None
+    assert fallback.selected_role_name == "WORKER_LIGHT"
+    assert fallback.selected_model == "openai/gpt-5.4-mini"
+    assert fallback.selected_openclaw_agent == "worker"
+    assert "fallback model for WORKER_LIGHT" in fallback.role_selection_reason
+
+
 def test_execute_plan_timeout_writes_bounded_summary(tmp_path, monkeypatch):
     from subprocess import TimeoutExpired
     from unittest.mock import patch

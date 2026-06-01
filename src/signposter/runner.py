@@ -70,6 +70,31 @@ def _fallback_runner_plan(plan: RunnerPlan) -> RunnerPlan | None:
         return None
 
     fallback_role = policy.escalation_role or policy.fallback_role
+    fallback_model = policy.fallback_model
+
+    if fallback_model and fallback_model != plan.selected_model:
+        base_session_key = build_openclaw_session_key(
+            target_kind="issue",
+            target_number=plan.item.number,
+            profile=plan.proposed_profile or "worker",
+        )
+        fallback_session_key = f"{base_session_key}-fallback-model"
+        return replace(
+            plan,
+            selected_model=fallback_model,
+            role_selection_reason=(
+                f"fallback model for {plan.selected_role_name} after runtime reported "
+                f"unsupported model for {plan.selected_model}"
+            ),
+            proposed_command_shape=(
+                f"openclaw agent --agent {plan.selected_openclaw_agent} "
+                f"--session-key {fallback_session_key} "
+                f"--model {fallback_model} "
+                f"--thinking {plan.selected_reasoning_effort} "
+                f'--message "$(cat {plan.proposed_prompt_path})" --local'
+            ),
+        )
+
     if not fallback_role:
         return None
 
