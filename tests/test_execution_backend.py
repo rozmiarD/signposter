@@ -21,7 +21,7 @@ def test_resolve_execution_backend_accepts_explicit_codex_cli() -> None:
 
     assert plan.backend == "codex-cli"
     assert plan.execution_supported is False
-    assert "not implemented yet" in " ".join(plan.notes)
+    assert "not wired" in " ".join(plan.notes)
 
 
 def test_resolve_execution_backend_rejects_unknown_backend() -> None:
