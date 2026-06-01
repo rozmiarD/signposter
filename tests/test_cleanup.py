@@ -151,6 +151,51 @@ def test_cleanup_apply_refuses_when_plan_not_ready():
         assert "Refusing cleanup apply" in result.get("error", "")
 
 
+def test_cleanup_apply_replans_once_after_post_integration_issue_state_race():
+    """apply should refresh once when integration just closed the issue."""
+    stale = _make_plan(
+        issue_state="OPEN",
+        has_state_merged_label=False,
+        status="blocked — associated issue #4 is not CLOSED (state: OPEN)",
+    )
+    ready = _make_plan(status="ready")
+
+    with patch(
+        "signposter.cleanup.plan_cleanup_for_pr",
+        side_effect=[stale, ready],
+    ), patch(
+        "signposter.cleanup._local_branch_exists",
+        return_value=False,
+    ), patch(
+        "signposter.cleanup.subprocess.run",
+    ) as mock_run:
+        mock_run.return_value.returncode = 0
+        mock_run.return_value.stderr = ""
+
+        result = apply_cleanup("ExatronOmega/signposter", 5, apply=True)
+
+    assert result["success"] is True
+    assert any("removed worktree" in r for r in result.get("results", []))
+
+
+def test_cleanup_apply_still_blocks_when_refreshed_plan_stays_open():
+    """apply must still refuse cleanup when the issue is genuinely open."""
+    stale = _make_plan(
+        issue_state="OPEN",
+        has_state_merged_label=False,
+        status="blocked — associated issue #4 is not CLOSED (state: OPEN)",
+    )
+
+    with patch(
+        "signposter.cleanup.plan_cleanup_for_pr",
+        side_effect=[stale, stale],
+    ):
+        result = apply_cleanup("ExatronOmega/signposter", 5, apply=True)
+
+    assert result["mode"] == "apply_blocked"
+    assert "Refusing cleanup apply" in result.get("error", "")
+
+
 def test_cleanup_apply_removes_worktree_when_ready():
     """apply removes expected worktree when ready."""
     plan = _make_plan(status="ready", worktree_exists=True)

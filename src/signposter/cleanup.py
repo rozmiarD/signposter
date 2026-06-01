@@ -237,6 +237,16 @@ def _is_already_fully_cleaned(plan: CleanupPlan) -> bool:
     )
 
 
+def _needs_post_integration_refresh(plan: CleanupPlan) -> bool:
+    """Return True when cleanup should re-read fresh lifecycle state once."""
+    if plan.pr_state != "MERGED" or plan.associated_issue is None:
+        return False
+    return (
+        "is not CLOSED" in plan.status
+        or "does not have label state:merged" in plan.status
+    )
+
+
 def format_cleanup_apply_dry_run(plan: CleanupPlan) -> str:
     """Dry-run output for `cleanup apply` (default)."""
     lines = [f"Signposter Cleanup Apply Plan — PR #{plan.pr_number}\n"]
@@ -273,6 +283,11 @@ def apply_cleanup(
             "mode": "dry_run",
             "plan": plan,
         }
+
+    if _needs_post_integration_refresh(plan):
+        refreshed_plan = plan_cleanup_for_pr(repo, pr_number)
+        if refreshed_plan.status == "ready" or refreshed_plan.status == "completed":
+            plan = refreshed_plan
 
     # Mutation path — strictly guarded
     if plan.status != "ready":
