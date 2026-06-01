@@ -518,11 +518,8 @@ def _select_run_next_loop_issue(repo: str, *, limit: int) -> tuple[int | None, s
     if scheduler.issue is not None:
         return scheduler.issue.number, None
 
-    active = [
-        issue
-        for issue in fetch_open_issues(repo, limit=limit)
-        if _issue_state(issue) == "active"
-    ]
+    open_issues = fetch_open_issues(repo, limit=limit)
+    active = [issue for issue in open_issues if _issue_state(issue) == "active"]
     if len(active) == 1:
         return active[0].number, None
     if len(active) > 1:
@@ -530,6 +527,20 @@ def _select_run_next_loop_issue(repo: str, *, limit: int) -> tuple[int | None, s
             f"#{issue.number}" for issue in sorted(active, key=lambda item: item.number)
         )
         return None, f"multiple active issues require explicit --issue: {numbers}"
+
+    resumable_done = [
+        issue
+        for issue in open_issues
+        if _issue_state(issue) == "done"
+        and plan_lifecycle_next(repo, issue=issue.number).status == "actionable"
+    ]
+    if len(resumable_done) == 1:
+        return resumable_done[0].number, None
+    if len(resumable_done) > 1:
+        numbers = ", ".join(
+            f"#{issue.number}" for issue in sorted(resumable_done, key=lambda item: item.number)
+        )
+        return None, f"multiple resumable done issues require explicit --issue: {numbers}"
     return None, scheduler.reason
 
 
