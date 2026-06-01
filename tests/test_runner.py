@@ -549,9 +549,14 @@ def test_execute_plan_preflight_blocks_before_openclaw_and_artifacts(tmp_path):
         (),
         {
             "ok": False,
-            "reason": "no provider token environment variable is configured",
+            "reason": (
+                "no provider token environment variable is configured and "
+                "no usable OpenClaw auth profile was found"
+            ),
             "checked_token_envs": ("OPENAI_API_KEY",),
             "openclaw_path": "/usr/bin/openclaw",
+            "auth_config_path": "/tmp/openclaw.json",
+            "auth_profile_count": 0,
             "manual_fallback": "signposter artifact write-worker-summary --issue 45 --apply",
         },
     )()
@@ -906,9 +911,14 @@ def test_cli_main_worktree_execute_propagates_preflight_failure(capsys, tmp_path
         (),
         {
             "ok": False,
-            "reason": "no provider token environment variable is configured",
+            "reason": (
+                "no provider token environment variable is configured and "
+                "no usable OpenClaw auth profile was found"
+            ),
             "checked_token_envs": ("OPENAI_API_KEY",),
             "openclaw_path": "/usr/bin/openclaw",
+            "auth_config_path": "/tmp/openclaw.json",
+            "auth_profile_count": 0,
             "manual_fallback": "signposter artifact write-worker-summary --issue 70 --apply",
         },
     )()

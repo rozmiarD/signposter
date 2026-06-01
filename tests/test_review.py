@@ -569,6 +569,8 @@ def test_execute_review_preflight_blocks_before_openclaw_and_artifacts(tmp_path)
             "reason": "OpenClaw CLI not found on PATH",
             "checked_token_envs": ("OPENAI_API_KEY",),
             "openclaw_path": None,
+            "auth_config_path": None,
+            "auth_profile_count": 0,
             "manual_fallback": "signposter artifact write-review-summary --pr 5 --apply",
         },
     )()
