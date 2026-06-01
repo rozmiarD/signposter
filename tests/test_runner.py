@@ -247,6 +247,16 @@ def test_render_prompt_worker_marks_omitted_sections_for_large_context():
     assert "...[omitted " in content
 
 
+def test_render_prompt_worker_omission_marker_stays_within_comment_budget():
+    from signposter.runner import _compact_comments
+
+    text = "\n".join(f"comment line {i} {'x' * 40}" for i in range(20))
+    compact = _compact_comments(text)
+
+    assert "...[omitted " in compact
+    assert len(compact) <= 1200
+
+
 # --- Post-claim freshness tests ---
 
 

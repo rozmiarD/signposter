@@ -562,16 +562,26 @@ def _compact_prompt_text(
         consumed_chars += line_cost
 
     excerpt = "\n".join(selected).strip()
-    omitted_lines = max(len(lines) - len(selected), 0)
-    omitted_chars = max(len(normalized) - len(excerpt), 0)
 
-    if omitted_lines or omitted_chars:
-        excerpt = (
-            f"{excerpt}\n...[omitted {omitted_lines} lines, "
-            f"{omitted_chars} chars]"
-        ).strip()
+    while True:
+        omitted_lines = max(len(lines) - len(selected), 0)
+        omitted_chars = max(len(normalized) - len(excerpt), 0)
+        if not omitted_lines and not omitted_chars:
+            return excerpt or empty_fallback
 
-    return excerpt or empty_fallback
+        omission_marker = f"...[omitted {omitted_lines} lines, {omitted_chars} chars]"
+        candidate = f"{excerpt}\n{omission_marker}".strip() if excerpt else omission_marker
+        if len(selected) <= max_lines and len(candidate) <= max_chars:
+            return candidate
+
+        if selected:
+            selected.pop()
+            excerpt = "\n".join(selected).strip()
+            continue
+
+        if len(omission_marker) > max_chars:
+            return omission_marker[:max_chars].rstrip()
+        return omission_marker
 
 
 def _compact_issue_body(text: str | None) -> str:

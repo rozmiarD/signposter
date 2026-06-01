@@ -548,13 +548,26 @@ def _compact_review_text(
         consumed += line_cost
 
     excerpt = "\n".join(selected).strip()
-    omitted_lines = max(len(lines) - len(selected), 0)
-    omitted_chars = max(len(normalized) - len(excerpt), 0)
-    if omitted_lines or omitted_chars:
-        excerpt = (
-            f"{excerpt}\n...[omitted {omitted_lines} lines, {omitted_chars} chars]"
-        ).strip()
-    return excerpt or empty_fallback
+
+    while True:
+        omitted_lines = max(len(lines) - len(selected), 0)
+        omitted_chars = max(len(normalized) - len(excerpt), 0)
+        if not omitted_lines and not omitted_chars:
+            return excerpt or empty_fallback
+
+        omission_marker = f"...[omitted {omitted_lines} lines, {omitted_chars} chars]"
+        candidate = f"{excerpt}\n{omission_marker}".strip() if excerpt else omission_marker
+        if len(selected) <= max_lines and len(candidate) <= max_chars:
+            return candidate
+
+        if selected:
+            selected.pop()
+            excerpt = "\n".join(selected).strip()
+            continue
+
+        if len(omission_marker) > max_chars:
+            return omission_marker[:max_chars].rstrip()
+        return omission_marker
 
 
 def build_review_prompt(
@@ -616,11 +629,12 @@ def build_review_prompt(
 - OpenClaw agent/profile: {plan.reviewer_profile}
 - role selection reason: {plan.role_selection_reason}
 
-## Authoritative Changed Files (from GitHub metadata, bounded)
+## Changed Files Excerpt (from GitHub metadata, bounded)
 {_format_authoritative_changed_files(file_paths or [])}
 
-Treat the list above as the canonical changed-file scope even if the PR body summary is stale
-or incomplete.
+Treat the list above as a bounded excerpt of the GitHub changed-file metadata.
+If it includes an omitted marker, use the file count and diff excerpt as evidence that the
+true scope is broader than the displayed list.
 
 ## PR Body (bounded)
 {pr_body_excerpt}
