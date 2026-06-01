@@ -513,7 +513,19 @@ def get_pr_diff(repo: str, pr_number: int, max_lines: int = 150) -> str:
     return diff or "<no diff content>"
 
 
-def build_review_prompt(plan: ReviewPlan, pr_body: str, diff: str) -> str:
+def _format_authoritative_changed_files(file_paths: list[str]) -> str:
+    if not file_paths:
+        return "- <no changed files returned by GitHub>"
+    return "\n".join(f"- {path}" for path in file_paths)
+
+
+def build_review_prompt(
+    plan: ReviewPlan,
+    pr_body: str,
+    diff: str,
+    *,
+    file_paths: list[str] | None = None,
+) -> str:
     """Render the complete reviewer prompt with structured output contract."""
     plan_notes = "\n".join(f"- {n}" for n in plan.notes) if plan.notes else "- none"
 
@@ -559,6 +571,12 @@ def build_review_prompt(plan: ReviewPlan, pr_body: str, diff: str) -> str:
 - selected reasoning effort: {plan.selected_reasoning_effort}
 - OpenClaw agent/profile: {plan.reviewer_profile}
 - role selection reason: {plan.role_selection_reason}
+
+## Authoritative Changed Files (from GitHub metadata)
+{_format_authoritative_changed_files(file_paths or [])}
+
+Treat the list above as the canonical changed-file scope even if the PR body summary is stale
+or incomplete.
 
 ## PR Body
 {pr_body or "<no body provided>"}
@@ -626,9 +644,10 @@ def write_review_prompt_artifact(
     except Exception:
         pr_body = ""
 
-    diff = get_pr_diff(repo, pr_number, max_lines=120)
+    diff = get_pr_diff(repo, pr_number, max_lines=180)
+    file_paths = _fetch_pr_file_paths(repo, pr_number)
 
-    content = build_review_prompt(plan, pr_body, diff)
+    content = build_review_prompt(plan, pr_body, diff, file_paths=file_paths)
 
     path = _preferred_artifact_path(plan.prompt_artifact_path)
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -789,6 +808,43 @@ def execute_pr_review(
     execute_timeout = timeout_settings.execute_timeout
     subprocess_timeout = timeout_settings.subprocess_timeout
     diagnostics_warnings = diagnostics.warnings + timeout_settings.warnings
+    config_error = getattr(timeout_settings, "config_error", None)
+    if config_error:
+        runs_dir = Path(runs_dir)
+        runs_dir.mkdir(parents=True, exist_ok=True)
+        raw_path = runs_dir / f"pr-{pr_number}-reviewer.raw.txt"
+        summary_path = runs_dir / f"pr-{pr_number}-reviewer.summary.md"
+        combined = "[CONFIG ERROR]\n" + config_error
+        raw_path.write_text(combined, encoding="utf-8")
+        diagnosis = OpenClawExecutionDiagnosis(
+            status="config-error",
+            reason=config_error,
+            remediation=(
+                "Fix the timeout environment configuration before rerunning OpenClaw.",
+                "Do not continue review or merge automation with invalid timeout bounds.",
+            ),
+        )
+        summary = _generate_pr_reviewer_summary(
+            pr_number=pr_number,
+            plan=plan,
+            session_key=session_key,
+            exit_code=-1,
+            raw_path=str(raw_path),
+            stdout="",
+            stderr=config_error,
+            start_time=datetime.datetime.now(datetime.UTC),
+            diagnosis=diagnosis,
+            diagnostics_warnings=diagnostics_warnings,
+        )
+        summary_path.write_text(summary, encoding="utf-8")
+        return {
+            "exit_code": -1,
+            "raw_path": str(raw_path),
+            "summary_path": str(summary_path),
+            "success": False,
+            "error": diagnosis.reason,
+            "diagnosis_status": diagnosis.status,
+        }
 
     exec_cmd = [
         "openclaw", "agent",

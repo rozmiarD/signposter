@@ -1206,6 +1206,44 @@ def execute_plan(
     execute_timeout = timeout_settings.execute_timeout
     subprocess_timeout = timeout_settings.subprocess_timeout
     diagnostics_warnings = diagnostics.warnings + timeout_settings.warnings
+    config_error = getattr(timeout_settings, "config_error", None)
+    if config_error:
+        runs_dir = Path("artifacts/runs")
+        runs_dir.mkdir(parents=True, exist_ok=True)
+        raw_path = runs_dir / f"issue-{item.number}-{profile}.raw.txt"
+        summary_path = runs_dir / f"issue-{item.number}-{profile}.summary.md"
+        combined = "[CONFIG ERROR]\n" + config_error
+        raw_path.write_text(combined, encoding="utf-8")
+        diagnosis = OpenClawExecutionDiagnosis(
+            status="config-error",
+            reason=config_error,
+            remediation=(
+                "Fix the timeout environment configuration before rerunning OpenClaw.",
+                "Do not continue the lifecycle automatically with invalid timeout bounds.",
+            ),
+        )
+        summary = _generate_execution_summary(
+            repo=repo,
+            plan=plan,
+            session_key=session_key,
+            exit_code=-1,
+            raw_path=str(raw_path),
+            stdout="",
+            stderr=config_error,
+            start_time=datetime.datetime.now(datetime.UTC),
+            allow_dirty=allow_dirty,
+            diagnosis=diagnosis,
+            diagnostics_warnings=diagnostics_warnings,
+        )
+        summary_path.write_text(summary, encoding="utf-8")
+        return {
+            "exit_code": -1,
+            "raw_path": str(raw_path),
+            "summary_path": str(summary_path),
+            "success": False,
+            "error": diagnosis.reason,
+            "diagnosis_status": diagnosis.status,
+        }
     exec_cmd = [
         "openclaw", "agent",
         "--agent", plan.selected_openclaw_agent,

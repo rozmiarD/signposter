@@ -37,3 +37,18 @@ def test_openclaw_timeout_settings_surface_invalid_values():
     assert settings.execute_timeout == 120
     assert settings.subprocess_timeout == 135
     assert len(settings.warnings) == 2
+    assert settings.config_error is None
+
+
+def test_openclaw_timeout_settings_reject_invalid_timeout_relationship():
+    settings = openclaw_timeout_settings(
+        {
+            "SIGNPOSTER_OPENCLAW_EXECUTE_TIMEOUT_SECONDS": "40",
+            "SIGNPOSTER_OPENCLAW_SUBPROCESS_TIMEOUT_SECONDS": "30",
+        }
+    )
+
+    assert settings.execute_timeout == 40
+    assert settings.subprocess_timeout == 30
+    assert settings.config_error is not None
+    assert "must exceed" in settings.config_error

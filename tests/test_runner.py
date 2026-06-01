@@ -778,6 +778,46 @@ def test_execute_plan_runtime_stall_writes_bounded_summary(tmp_path, monkeypatch
     assert "do not keep the orchestrator waiting" in summary
 
 
+def test_execute_plan_refuses_invalid_timeout_relationship(tmp_path, monkeypatch):
+    from unittest.mock import patch
+
+    from signposter.runner import execute_plan
+
+    monkeypatch.chdir(tmp_path)
+    plan = make_runner_plan_for_test("worker", "build", number=50)
+
+    with patch("signposter.runner.find_uncommitted_repo_changes", return_value=[]), \
+         patch("signposter.runner.check_openclaw_preflight") as mock_preflight, \
+         patch("signposter.runner.gather_openclaw_runtime_diagnostics") as mock_diag, \
+         patch("signposter.runner.openclaw_timeout_settings") as mock_timeouts, \
+         patch("builtins.open", create=True) as mock_open, \
+         patch("signposter.runner.subprocess.run") as mock_run:
+        mock_preflight.return_value = type("pf", (), {"ok": True})()
+        mock_diag.return_value = type("diag", (), {"warnings": ()})()
+        mock_timeouts.return_value = type(
+            "timeouts",
+            (),
+            {
+                "execute_timeout": 40,
+                "subprocess_timeout": 30,
+                "warnings": (),
+                "config_error": (
+                    "SIGNPOSTER_OPENCLAW_SUBPROCESS_TIMEOUT_SECONDS must exceed "
+                    "SIGNPOSTER_OPENCLAW_EXECUTE_TIMEOUT_SECONDS"
+                ),
+            },
+        )()
+        mock_open.return_value.__enter__.return_value.read.return_value = "mock prompt"
+        result = execute_plan(plan, "test/repo", allow_dirty=False)
+
+    assert result["success"] is False
+    assert result["diagnosis_status"] == "config-error"
+    mock_run.assert_not_called()
+    summary = (tmp_path / result["summary_path"]).read_text(encoding="utf-8")
+    assert "**Execution Status:** config-error" in summary
+    assert "invalid timeout bounds" in summary
+
+
 # --- HARDENING-006 micro-adjustment: dirty guard in summary ---
 
 

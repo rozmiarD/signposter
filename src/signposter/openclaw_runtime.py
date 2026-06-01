@@ -26,6 +26,7 @@ class OpenClawTimeoutSettings:
     execute_timeout: int
     subprocess_timeout: int
     warnings: tuple[str, ...] = ()
+    config_error: str | None = None
 
 
 def _parse_timeout_setting(
@@ -60,16 +61,51 @@ def openclaw_timeout_settings(env: dict[str, str] | None = None) -> OpenClawTime
     )
     warnings = [warning for warning in (execute_warning, subprocess_warning) if warning]
     if subprocess_timeout <= execute_timeout:
-        subprocess_timeout = execute_timeout + 15
-        warnings.append(
-            f"{OPENCLAW_SUBPROCESS_TIMEOUT_ENV} must exceed "
-            f"{OPENCLAW_EXECUTE_TIMEOUT_ENV}; adjusted to {subprocess_timeout}s"
+        return OpenClawTimeoutSettings(
+            execute_timeout=execute_timeout,
+            subprocess_timeout=subprocess_timeout,
+            warnings=tuple(warnings),
+            config_error=(
+                f"{OPENCLAW_SUBPROCESS_TIMEOUT_ENV} must exceed "
+                f"{OPENCLAW_EXECUTE_TIMEOUT_ENV}; refusing to execute with "
+                f"{subprocess_timeout}s <= {execute_timeout}s"
+            ),
         )
     return OpenClawTimeoutSettings(
         execute_timeout=execute_timeout,
         subprocess_timeout=subprocess_timeout,
         warnings=tuple(warnings),
     )
+
+
+def _auth_failure_lines(combined_output: str) -> tuple[str, ...]:
+    matches: list[str] = []
+    for raw_line in combined_output.splitlines():
+        line = raw_line.strip().lower()
+        if not line:
+            continue
+        if "token_invalidated" in line:
+            matches.append(raw_line)
+            continue
+        if "no provider token environment variable is configured" in line:
+            matches.append(raw_line)
+            continue
+        if "incorrect api key" in line:
+            matches.append(raw_line)
+            continue
+        if "auth refresh request timed out" in line:
+            matches.append(raw_line)
+            continue
+        if ("status=401" in line or '"status":401' in line) and (
+            "provider=" in line or "openai" in line or "auth" in line or "token" in line
+        ):
+            matches.append(raw_line)
+            continue
+        if "authentication failed" in line and (
+            "provider" in line or "token" in line or "openai" in line or "codex" in line
+        ):
+            matches.append(raw_line)
+    return tuple(matches)
 
 
 def classify_openclaw_execution(
@@ -104,18 +140,14 @@ def classify_openclaw_execution(
 
     lowered = combined_output.lower()
 
-    if (
-        "token_invalidated" in lowered
-        or "authentication failed" in lowered
-        or "auth refresh request timed out" in lowered
-        or "status=401" in lowered
-        or '"status":401' in lowered
-        or "incorrect api key" in lowered
-        or "no provider token environment variable is configured" in lowered
-    ):
+    auth_lines = _auth_failure_lines(combined_output)
+    if auth_lines:
         return OpenClawExecutionDiagnosis(
             status="auth-provider-failure",
-            reason="OpenClaw reported an auth or provider credential/runtime failure.",
+            reason=(
+                "OpenClaw reported an auth or provider credential/runtime failure: "
+                f"{auth_lines[0].strip()[:160]}"
+            ),
             remediation=(
                 "Refresh the active provider auth profile and rerun doctor/models status.",
                 "Do not continue the lifecycle automatically until auth health is restored.",
