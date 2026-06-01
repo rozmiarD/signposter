@@ -515,9 +515,46 @@ def get_pr_diff(repo: str, pr_number: int, max_lines: int = 150) -> str:
 
 
 def _format_authoritative_changed_files(file_paths: list[str]) -> str:
+    max_files = 24
     if not file_paths:
         return "- <no changed files returned by GitHub>"
-    return "\n".join(f"- {path}" for path in file_paths)
+    selected = file_paths[:max_files]
+    lines = [f"- {path}" for path in selected]
+    omitted = len(file_paths) - len(selected)
+    if omitted > 0:
+        lines.append(f"- ...[omitted {omitted} additional changed files]")
+    return "\n".join(lines)
+
+
+def _compact_review_text(
+    text: str,
+    *,
+    max_lines: int,
+    max_chars: int,
+    empty_fallback: str,
+) -> str:
+    normalized = (text or "").strip()
+    if not normalized:
+        return empty_fallback
+
+    lines = normalized.splitlines()
+    selected: list[str] = []
+    consumed = 0
+    for line in lines:
+        line_cost = len(line) + (1 if selected else 0)
+        if len(selected) >= max_lines or consumed + line_cost > max_chars:
+            break
+        selected.append(line)
+        consumed += line_cost
+
+    excerpt = "\n".join(selected).strip()
+    omitted_lines = max(len(lines) - len(selected), 0)
+    omitted_chars = max(len(normalized) - len(excerpt), 0)
+    if omitted_lines or omitted_chars:
+        excerpt = (
+            f"{excerpt}\n...[omitted {omitted_lines} lines, {omitted_chars} chars]"
+        ).strip()
+    return excerpt or empty_fallback
 
 
 def build_review_prompt(
@@ -529,6 +566,12 @@ def build_review_prompt(
 ) -> str:
     """Render the complete reviewer prompt with structured output contract."""
     plan_notes = "\n".join(f"- {n}" for n in plan.notes) if plan.notes else "- none"
+    pr_body_excerpt = _compact_review_text(
+        pr_body,
+        max_lines=40,
+        max_chars=2400,
+        empty_fallback="<no body provided>",
+    )
 
     issue_line = (
         f"Issue #{plan.associated_issue}"
@@ -573,14 +616,14 @@ def build_review_prompt(
 - OpenClaw agent/profile: {plan.reviewer_profile}
 - role selection reason: {plan.role_selection_reason}
 
-## Authoritative Changed Files (from GitHub metadata)
+## Authoritative Changed Files (from GitHub metadata, bounded)
 {_format_authoritative_changed_files(file_paths or [])}
 
 Treat the list above as the canonical changed-file scope even if the PR body summary is stale
 or incomplete.
 
-## PR Body
-{pr_body or "<no body provided>"}
+## PR Body (bounded)
+{pr_body_excerpt}
 
 ## Diff (budgeted excerpt)
 ```diff
@@ -645,7 +688,7 @@ def write_review_prompt_artifact(
     except Exception:
         pr_body = ""
 
-    diff = get_pr_diff(repo, pr_number, max_lines=180)
+    diff = get_pr_diff(repo, pr_number, max_lines=120)
     file_paths = _fetch_pr_file_paths(repo, pr_number)
 
     content = build_review_prompt(plan, pr_body, diff, file_paths=file_paths)

@@ -214,6 +214,39 @@ def test_render_prompt_worker_compact_is_shorter_than_reviewer_prompt():
     assert len(worker) < len(reviewer)
 
 
+def test_render_prompt_planner_uses_compact_format():
+    from signposter.runner import render_prompt
+
+    plan = make_runner_plan_for_test("planner", "plan", number=52)
+    content = render_prompt(plan, "test/repo")
+
+    assert "# Signposter Planner Prompt" in content
+    assert "## Context" in content
+    assert "## Output Contract" in content
+    assert "## Role Profile" not in content
+    assert "Keep the plan scoped to this issue." in content
+
+
+def test_render_prompt_worker_marks_omitted_sections_for_large_context():
+    from signposter.runner import render_prompt
+
+    plan = make_runner_plan_for_test("worker", "build", number=53)
+    issue_context = {
+        "labels": [{"name": "phase:build"}, {"name": "state:ready"}],
+        "body": "\n".join(f"line {i}" for i in range(80)),
+        "state": "OPEN",
+        "comments": [
+            {"author": {"login": "a"}, "body": "x" * 500},
+            {"author": {"login": "b"}, "body": "y" * 500},
+            {"author": {"login": "c"}, "body": "z" * 500},
+        ],
+    }
+
+    content = render_prompt(plan, "test/repo", issue_context=issue_context)
+
+    assert "...[omitted " in content
+
+
 # --- Post-claim freshness tests ---
 
 
