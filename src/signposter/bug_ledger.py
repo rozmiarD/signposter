@@ -43,6 +43,22 @@ class BugLedgerPlan:
     errors: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class RuntimeBugLedgerRecord:
+    status: str
+    path: str
+    entry_key: str | None = None
+    error: str | None = None
+
+
+RUNTIME_BUG_LEDGER_STATUSES = {
+    "timeout",
+    "runtime-stall",
+    "unsupported-model",
+    "failover-or-stale-runtime",
+}
+
+
 def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
@@ -249,6 +265,72 @@ def apply_bug_ledger_plan(plan: BugLedgerPlan, *, apply: bool = False) -> bool:
         return False
     write_bug_ledger(plan.entries, plan.path)
     return True
+
+
+def record_runtime_bug_ledger_entry(
+    *,
+    target_kind: str,
+    target_number: int,
+    diagnosis_status: str,
+    diagnosis_reason: str,
+    selected_role: str,
+    selected_model: str,
+    raw_path: str,
+    summary_path: str,
+    ledger_path: str | Path = DEFAULT_LEDGER_PATH,
+) -> RuntimeBugLedgerRecord:
+    """Record deterministic local runtime blockers without changing workflow state."""
+    if diagnosis_status not in RUNTIME_BUG_LEDGER_STATUSES:
+        return RuntimeBugLedgerRecord(status="skipped", path=str(ledger_path))
+
+    current_issue = target_number if target_kind == "issue" else None
+    current_pr = target_number if target_kind == "pr" else None
+    summary = (
+        f"{target_kind} #{target_number}: OpenClaw {diagnosis_status} "
+        f"for {selected_role}"
+    )
+    notes = (
+        f"model={selected_model}; raw={raw_path}; summary={summary_path}; "
+        f"reason={diagnosis_reason[:180]}"
+    )
+    try:
+        plan = plan_record_bug(
+            summary=summary[:240],
+            status="runtime-blocker",
+            current_issue=current_issue,
+            current_pr=current_pr,
+            notes=notes,
+            ledger_path=ledger_path,
+        )
+        if plan.status != "ready" or plan.entry is None:
+            error = "; ".join(plan.errors) or "bug ledger plan was not ready"
+            return RuntimeBugLedgerRecord(
+                status="blocked",
+                path=str(ledger_path),
+                error=error,
+            )
+        apply_bug_ledger_plan(plan, apply=True)
+        return RuntimeBugLedgerRecord(
+            status="recorded",
+            path=str(ledger_path),
+            entry_key=plan.entry.key,
+        )
+    except Exception as exc:
+        return RuntimeBugLedgerRecord(
+            status="error",
+            path=str(ledger_path),
+            error=str(exc),
+        )
+
+
+def format_runtime_bug_ledger_record(record: RuntimeBugLedgerRecord) -> str:
+    """Format runtime ledger recording status for bounded execution summaries."""
+    if record.status == "recorded":
+        return f"**Bug Ledger:** recorded {record.entry_key} in {record.path}"
+    if record.status == "skipped":
+        return "**Bug Ledger:** not applicable for this execution status"
+    reason = f" ({record.error})" if record.error else ""
+    return f"**Bug Ledger:** {record.status}{reason} in {record.path}"
 
 
 def format_bug_ledger_plan(
