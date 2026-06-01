@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import sys
+from datetime import UTC, datetime
 from unittest.mock import Mock, patch
 
 import pytest
@@ -61,7 +63,10 @@ def _next(**overrides) -> LifecycleNext:
 
 
 def test_orchestrator_next_blocks_execute_without_flag() -> None:
-    with patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()):
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=None),
+    ):
         result = plan_orchestrator_next("ExatronOmega/signposter", issue=46)
 
     assert result.status == "blocked"
@@ -71,7 +76,10 @@ def test_orchestrator_next_blocks_execute_without_flag() -> None:
 
 
 def test_orchestrator_next_allows_execute_planning_with_flag() -> None:
-    with patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()):
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=None),
+    ):
         result = plan_orchestrator_next(
             "ExatronOmega/signposter",
             issue=46,
@@ -92,7 +100,10 @@ def test_orchestrator_next_marks_mutating_lifecycle_action() -> None:
         reason="ready issue has no local worktree",
     )
 
-    with patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next):
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=None),
+    ):
         result = plan_orchestrator_next("ExatronOmega/signposter", issue=46)
 
     assert result.status == "actionable"
@@ -109,7 +120,10 @@ def test_orchestrator_next_preserves_blocked_preflight_reason() -> None:
         reason="local working tree must be clean before lifecycle mutation",
     )
 
-    with patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next):
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=None),
+    ):
         result = plan_orchestrator_next("ExatronOmega/signposter", issue=46)
 
     assert result.status == "blocked"
@@ -132,7 +146,10 @@ def test_orchestrator_next_formats_complete_lifecycle() -> None:
         reason="lifecycle already complete",
     )
 
-    with patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next):
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=None),
+    ):
         planned = plan_orchestrator_next("ExatronOmega/signposter", issue=46)
 
     out = format_orchestrator_next(planned)
@@ -179,7 +196,10 @@ def test_cli_orchestrator_next_uses_read_only_surface(
         ],
     )
 
-    with patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()):
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=None),
+    ):
         planned = plan_orchestrator_next("ExatronOmega/signposter", issue=46)
 
     with patch("signposter.cli.plan_orchestrator_next", return_value=planned):
@@ -191,6 +211,149 @@ def test_cli_orchestrator_next_uses_read_only_surface(
     assert "Signposter Orchestrator Next — Issue #46" in captured.out
     assert "OpenClaw execution requires explicit --execute" in captured.out
     assert "No GitHub mutation was performed." in captured.out
+
+
+def test_orchestrator_next_plans_resume_existing_worktree_for_stale_active_issue(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    issue = LabeledItem(
+        number=46,
+        title="Issue 46",
+        html_url="https://github.com/example/repo/issues/46",
+        labels=["state:active"],
+        item_type="issue",
+        updated_at="2026-05-20T00:00:00Z",
+    )
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=issue),
+    ):
+        result = plan_orchestrator_next("ExatronOmega/signposter", issue=46)
+
+    assert result.takeover_category == "resume-existing-worktree"
+    assert "existing worktree" in (result.takeover_reason or "")
+
+
+def test_orchestrator_next_plans_regenerate_prompt_for_stale_active_issue(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    lifecycle_next = _next(prompt_exists=False, worktree_exists=True)
+    issue = LabeledItem(
+        number=46,
+        title="Issue 46",
+        html_url="https://github.com/example/repo/issues/46",
+        labels=["state:active"],
+        item_type="issue",
+        updated_at="2026-05-20T00:00:00Z",
+    )
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=issue),
+    ):
+        result = plan_orchestrator_next("ExatronOmega/signposter", issue=46)
+
+    assert result.takeover_category == "regenerate-prompt"
+
+
+def test_orchestrator_next_plans_manual_fallback_for_stale_prompt_without_worktree(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    lifecycle_next = _next(prompt_exists=True, worktree_exists=False, local_branch_exists=False)
+    issue = LabeledItem(
+        number=46,
+        title="Issue 46",
+        html_url="https://github.com/example/repo/issues/46",
+        labels=["state:active"],
+        item_type="issue",
+        updated_at="2026-05-20T00:00:00Z",
+    )
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=issue),
+    ):
+        result = plan_orchestrator_next("ExatronOmega/signposter", issue=46)
+
+    assert result.takeover_category == "manual-worker-fallback"
+
+
+def test_orchestrator_next_plans_inspect_blocker_for_stale_active_issue(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    lifecycle_next = _next(
+        prompt_exists=False,
+        worktree_exists=False,
+        local_branch_exists=False,
+        action="write-prompt",
+        command="signposter run --repo ExatronOmega/signposter --issue 46 --write-prompt",
+    )
+    issue = LabeledItem(
+        number=46,
+        title="Issue 46",
+        html_url="https://github.com/example/repo/issues/46",
+        labels=["state:active"],
+        item_type="issue",
+        updated_at="2026-05-20T00:00:00Z",
+    )
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=issue),
+    ):
+        result = plan_orchestrator_next("ExatronOmega/signposter", issue=46)
+
+    assert result.takeover_category == "inspect-blocker"
+    assert "lacks a safe resume path" in (result.takeover_reason or "")
+
+
+def test_orchestrator_next_degrades_when_issue_fetch_fails() -> None:
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()),
+        patch(
+            "signposter.orchestrator.fetch_issue_by_number",
+            side_effect=RuntimeError("temporary GitHub failure"),
+        ),
+    ):
+        result = plan_orchestrator_next("ExatronOmega/signposter", issue=46)
+
+    assert result.takeover_category is None
+    assert result.takeover_reason is None
+
+
+def test_orchestrator_next_uses_local_artifact_freshness_before_issue_updated_at(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    runs = tmp_path / "artifacts" / "runs"
+    runs.mkdir(parents=True)
+    raw = runs / "issue-46-worker.raw.txt"
+    raw.write_text("recent worker output", encoding="utf-8")
+    now = datetime.now(UTC).timestamp()
+    os.utime(raw, (now, now))
+    monkeypatch.chdir(tmp_path)
+    issue = LabeledItem(
+        number=46,
+        title="Issue 46",
+        html_url="https://github.com/example/repo/issues/46",
+        labels=["state:active"],
+        item_type="issue",
+        updated_at="2026-05-20T00:00:00Z",
+    )
+
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=issue),
+    ):
+        result = plan_orchestrator_next("ExatronOmega/signposter", issue=46)
+
+    assert result.takeover_category is None
+    assert result.takeover_reason is None
 
 
 def test_orchestrator_step_dry_run_does_not_execute() -> None:
