@@ -225,3 +225,25 @@ def test_build_role_smoke_matrix_marks_profile_failures():
     assert entry.profile_status == "fail"
     assert any("configured OpenClaw agent/profile" in error for error in entry.profile_errors)
     assert entry.invoke_status == "fail"
+
+
+def test_execute_role_smoke_matrix_skips_execution_when_profile_validation_fails(tmp_path):
+    diagnostics = type("diag", (), {"warnings": ()})()
+    with patch(
+        "signposter.role_smoke.gather_openclaw_runtime_diagnostics",
+        return_value=diagnostics,
+    ), patch(
+        "signposter.role_smoke.load_openclaw_agent_profiles",
+        return_value=({}, None),
+    ), patch("signposter.role_smoke.execute_role_smoke") as mock_execute:
+        matrix = execute_role_smoke_matrix(("WORKER_CORE",), runs_dir=tmp_path)
+
+    assert len(matrix.entries) == 1
+    entry = matrix.entries[0]
+    assert entry.profile_status == "fail"
+    assert entry.invoke_status == "fail"
+    assert entry.result_status == "blocked"
+    assert "runtime profile validation errors" in entry.result_reason
+    assert entry.raw_path is None
+    assert entry.summary_path is None
+    mock_execute.assert_not_called()

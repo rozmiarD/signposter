@@ -461,8 +461,30 @@ def execute_role_smoke_matrix(
         plan = build_role_smoke_plan(role_name)
         policy_errors = tuple(validate_role_policy(plan.policy))
         profile_errors = _profile_errors_for_role(role_name, profiles, runtime_error)
-        result = execute_role_smoke(role_name, runs_dir=runs_dir, diagnostics=diagnostics)
-        diagnosis = result.get("diagnosis")
+        invoke_allowed = not policy_errors and not profile_errors
+        result_status: str
+        result_reason: str
+        raw_path: str | None = None
+        summary_path: str | None = None
+
+        if invoke_allowed:
+            result = execute_role_smoke(role_name, runs_dir=runs_dir, diagnostics=diagnostics)
+            diagnosis = result.get("diagnosis")
+            result_status = (
+                diagnosis.status if diagnosis is not None else result.get("error", "unknown")
+            )
+            result_reason = diagnosis.reason if diagnosis is not None else result.get("error")
+            raw_path = result.get("raw_path")
+            summary_path = result.get("summary_path")
+        else:
+            result_status = "blocked"
+            if policy_errors and profile_errors:
+                result_reason = "Role smoke execution blocked by policy and runtime profile errors."
+            elif policy_errors:
+                result_reason = "Role smoke execution blocked by role policy validation errors."
+            else:
+                result_reason = "Role smoke execution blocked by runtime profile validation errors."
+
         entries.append(
             RoleSmokeMatrixEntry(
                 role_name=role_name,
@@ -473,14 +495,12 @@ def execute_role_smoke_matrix(
                 policy_errors=policy_errors,
                 profile_status="pass" if not profile_errors else "fail",
                 profile_errors=profile_errors,
-                invoke_status="pass" if not policy_errors and not profile_errors else "fail",
+                invoke_status="pass" if invoke_allowed else "fail",
                 command_shape=plan.command_shape,
-                result_status=(
-                    diagnosis.status if diagnosis is not None else result.get("error", "unknown")
-                ),
-                result_reason=diagnosis.reason if diagnosis is not None else result.get("error"),
-                raw_path=result.get("raw_path"),
-                summary_path=result.get("summary_path"),
+                result_status=result_status,
+                result_reason=result_reason,
+                raw_path=raw_path,
+                summary_path=summary_path,
             )
         )
 
