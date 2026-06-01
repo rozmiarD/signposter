@@ -1723,6 +1723,7 @@ def build_planner_next_from_status(status: dict[str, Any]) -> dict[str, Any]:
     waiting: list[dict[str, Any]] = []
     blocked: list[dict[str, Any]] = []
     ready_mainline: dict[str, Any] | None = None
+    missing_ready_label = False
 
     for task in tasks:
         state = str(task.get("state", "")).lower()
@@ -1753,7 +1754,53 @@ def build_planner_next_from_status(status: dict[str, Any]) -> dict[str, Any]:
             )
             continue
 
-        if state in {"open", "ready"}:
+        if state == "ready":
+            next_task = {
+                "key": task["key"],
+                "title": task["title"],
+                "github_issue": task["github_issue"],
+                "github_url": task["github_url"],
+                "state": task["state"],
+                "depends_on": task["depends_on"],
+                "mainline": task.get("mainline"),
+                "parent": task.get("parent"),
+                "return_to": task.get("return_to"),
+                "side_task": bool(task.get("side_task", False)),
+            }
+            if task.get("side_task"):
+                return {
+                    "status": "ready",
+                    "reason": "dependency-ready side-task selected before mainline",
+                    "next": next_task,
+                    "waiting": waiting,
+                    "blocked": blocked,
+                }
+            if ready_mainline is None:
+                ready_mainline = next_task
+            continue
+
+        if (
+            state == "open"
+            and task.get("github_state") == "open"
+            and not task.get("workflow_state")
+        ):
+            missing_ready_label = True
+            completed_source_issues = [
+                dependency_issue
+                for dependency_issue in task.get("github_depends_on", [])
+                if dependency_issue is not None
+            ]
+            blocked.append(
+                {
+                    "key": task["key"],
+                    "reason": "dependency-ready task is open but missing GitHub label state:ready",
+                    "github_issue": task.get("github_issue"),
+                    "reconcile_issues": completed_source_issues,
+                }
+            )
+            continue
+
+        if state == "open":
             next_task = {
                 "key": task["key"],
                 "title": task["title"],
@@ -1798,6 +1845,15 @@ def build_planner_next_from_status(status: dict[str, Any]) -> dict[str, Any]:
         return {
             "status": "completed",
             "reason": "all planner tasks are completed",
+            "next": None,
+            "waiting": waiting,
+            "blocked": blocked,
+        }
+
+    if missing_ready_label:
+        return {
+            "status": "blocked",
+            "reason": "dependency-ready open task is missing GitHub label state:ready",
             "next": None,
             "waiting": waiting,
             "blocked": blocked,
@@ -1858,7 +1914,18 @@ def format_planner_next_from_status(result: dict[str, Any]) -> str:
     if result["blocked"]:
         lines.extend(["", "Blocked:"])
         for item in result["blocked"]:
-            lines.append(f"  {item['key']} — {item['reason']}")
+            line = f"  {item['key']} — {item['reason']}"
+            github_issue = item.get("github_issue")
+            if github_issue is not None:
+                line += f" (issue #{github_issue})"
+            lines.append(line)
+            reconcile_issues = item.get("reconcile_issues", [])
+            if reconcile_issues:
+                issues = ", ".join(f"#{issue}" for issue in reconcile_issues)
+                lines.append(
+                    "    reconcile hint: run planner advance/apply from completed "
+                    f"dependency issue(s) {issues} to restore state:ready before claim"
+                )
 
     lines.extend(
         [
@@ -2044,8 +2111,16 @@ def build_planner_status(
     for issue in manifest.get("issues", []):
         github_issue = issue.get("github_issue")
         state = "unseeded"
+        github_state: str | None = None
+        workflow_state: str | None = None
         if github_issue is not None:
-            state = issue_states.get(int(github_issue), "unknown")
+            snapshot = issue_states.get(int(github_issue), "unknown")
+            if isinstance(snapshot, dict):
+                github_state = str(snapshot.get("github_state", "")).lower() or None
+                workflow_state = str(snapshot.get("workflow_state", "")).lower() or None
+                state = str(snapshot.get("state", "")).lower() or "unknown"
+            else:
+                state = str(snapshot).lower()
 
         tasks.append(
             {
@@ -2054,6 +2129,8 @@ def build_planner_status(
                 "github_issue": github_issue,
                 "github_url": issue.get("github_url", ""),
                 "state": state,
+                "github_state": github_state,
+                "workflow_state": workflow_state,
                 "labels": issue.get("labels", []),
                 "depends_on": issue.get("depends_on", []),
                 "github_depends_on": issue.get("github_depends_on", []),
