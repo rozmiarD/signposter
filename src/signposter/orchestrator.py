@@ -1229,8 +1229,8 @@ def _plan_takeover(repo: str, lifecycle: LifecycleNext) -> tuple[str | None, str
     if lifecycle.worker_summary_exists:
         return None, None
 
-    issue = fetch_issue_by_number(repo, lifecycle.issue_number)
-    if not _is_stale_issue(issue.updated_at if issue is not None else None):
+    issue_updated_at = _safe_issue_updated_at(repo, lifecycle.issue_number)
+    if not _is_stale_active_work(lifecycle, issue_updated_at=issue_updated_at):
         return None, None
 
     if lifecycle.worktree_exists and lifecycle.prompt_exists:
@@ -1258,6 +1258,47 @@ def _plan_takeover(repo: str, lifecycle: LifecycleNext) -> tuple[str | None, str
     )
 
 
+def _safe_issue_updated_at(repo: str, issue_number: int) -> str | None:
+    try:
+        issue = fetch_issue_by_number(repo, issue_number)
+    except Exception:
+        return None
+    if issue is None:
+        return None
+    return issue.updated_at
+
+
+def _is_stale_active_work(
+    lifecycle: LifecycleNext,
+    *,
+    issue_updated_at: str | None,
+    stale_after_hours: int = 48,
+) -> bool:
+    if lifecycle.issue_number is None:
+        return False
+
+    newest_artifact = _newest_existing_mtime(
+        [
+            Path(f"artifacts/prompts/issue-{lifecycle.issue_number}-worker.md"),
+            Path(f"artifacts/runs/issue-{lifecycle.issue_number}-worker.raw.txt"),
+        ]
+    )
+    if newest_artifact is not None:
+        return _is_stale_datetime(newest_artifact, stale_after_hours=stale_after_hours)
+
+    return _is_stale_issue(issue_updated_at, stale_after_hours=stale_after_hours)
+
+
+def _newest_existing_mtime(paths: list[Path]) -> datetime | None:
+    existing = [path for path in paths if path.exists()]
+    if not existing:
+        return None
+    return datetime.fromtimestamp(
+        max(path.stat().st_mtime for path in existing),
+        tz=UTC,
+    )
+
+
 def _is_stale_issue(updated_at: str | None, *, stale_after_hours: int = 48) -> bool:
     if not updated_at:
         return False
@@ -1270,6 +1311,10 @@ def _is_stale_issue(updated_at: str | None, *, stale_after_hours: int = 48) -> b
         return False
     if updated.tzinfo is None:
         updated = updated.replace(tzinfo=UTC)
+    return _is_stale_datetime(updated, stale_after_hours=stale_after_hours)
+
+
+def _is_stale_datetime(updated: datetime, *, stale_after_hours: int) -> bool:
     return (datetime.now(UTC) - updated).total_seconds() > stale_after_hours * 3600
 
 
