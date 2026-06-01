@@ -489,6 +489,80 @@ def test_cli_main_explicit_issue_refuses_execute_on_done_and_failed(capsys):
         assert "requires state:active" in output
 
 
+def test_cli_main_explicit_issue_claim_refreshes_before_execute(capsys):
+    from unittest.mock import patch
+
+    from signposter.dispatch import classify_candidate
+    from signposter.runner import RunnerPlan, cli_main
+
+    ready_item = make_item(
+        128,
+        ["state:ready", "phase:build", "role:worker", "risk:high", "area:runner"],
+    )
+    active_item = make_item(
+        128,
+        ["state:active", "phase:build", "role:worker", "risk:high", "area:runner"],
+    )
+    ready_dispatch = classify_candidate(ready_item)
+    active_dispatch = classify_candidate(active_item)
+
+    ready_plan = RunnerPlan(
+        item=ready_item,
+        dispatch=ready_dispatch,
+        proposed_runner="openclaw",
+        proposed_profile="worker",
+        proposed_working_dir="~/work/128",
+        proposed_prompt_path="artifacts/prompts/issue-128.md",
+        proposed_command_shape="openclaw agent ...",
+        reason="ready plan",
+    )
+    active_plan = RunnerPlan(
+        item=active_item,
+        dispatch=active_dispatch,
+        proposed_runner="openclaw",
+        proposed_profile="worker",
+        proposed_working_dir="~/work/128",
+        proposed_prompt_path="artifacts/prompts/issue-128.md",
+        proposed_command_shape="openclaw agent ...",
+        reason="active plan",
+    )
+
+    with patch(
+        "signposter.runner.plan_runner_for_issue",
+        side_effect=[ready_plan, active_plan],
+    ) as mock_plan_issue, patch(
+        "signposter.runner.perform_claim_mutation",
+        return_value=["gh issue edit 128 --add-label state:active"],
+    ) as mock_claim_mutation, patch(
+        "signposter.runner.write_prompt_artifact",
+        return_value="artifacts/prompts/issue-128.md",
+    ), patch(
+        "signposter.runner.execute_plan",
+        return_value={
+            "exit_code": 0,
+            "raw_path": "artifacts/runs/issue-128-worker.raw.txt",
+            "summary_path": "artifacts/runs/issue-128-worker.summary.md",
+        },
+    ) as mock_execute:
+        exit_code = cli_main(
+            "test/repo",
+            issue=128,
+            claim=True,
+            write_prompt=True,
+            execute=True,
+        )
+
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "Refreshing explicit issue plan from current GitHub state" in out
+    assert "Refreshed issue #128: state=active" in out
+    assert mock_plan_issue.call_count == 2
+    mock_claim_mutation.assert_called_once()
+    mock_execute.assert_called_once()
+    executed_plan = mock_execute.call_args.args[0]
+    assert executed_plan.dispatch.state == "active"
+
+
 # --- HARDENING-006: worker isolation / dirty tree guard ---
 
 

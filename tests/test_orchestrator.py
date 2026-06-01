@@ -15,6 +15,7 @@ from signposter.orchestrator import (
     format_orchestrator_run_next_loop,
     format_orchestrator_run_next_loop_summary,
     format_orchestrator_run_next_summary,
+    format_orchestrator_step,
     plan_orchestrator_next,
     plan_orchestrator_run_next,
     plan_orchestrator_tail,
@@ -1057,6 +1058,114 @@ def test_orchestrator_step_extracts_execute_diagnosis_from_summary_artifact(tmp_
     assert "stalled" in (result.diagnosis_reason or "")
     assert result.raw_artifact_path == "artifacts/runs/issue-57-worker.raw.txt"
     assert result.summary_artifact_path == str(summary)
+    assert result.fallback_commands == (
+        "signposter artifact write-worker-summary --repo example/repo --issue 57 --apply",
+        "signposter artifact validate-worker-summary --issue 57",
+        "signposter report --repo example/repo --issue 57 --apply",
+        "signposter gate --repo example/repo --issue 57",
+    )
+
+
+def test_orchestrator_step_plans_worker_fallback_for_unsupported_model(tmp_path) -> None:
+    lifecycle_next = _next(
+        issue_number=58,
+        action="execute-worker",
+        command="signposter run --repo example/repo --issue 58 --execute --worktree",
+    )
+    summary = tmp_path / "issue-58-worker.summary.md"
+    summary.write_text(
+        "\n".join(
+            [
+                "# Signposter Execution Summary",
+                "**Execution Status:** unsupported-model",
+                "**Execution Reason:** Selected model is not available in OpenClaw runtime.",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    proc = type(
+        "Proc",
+        (),
+        {
+            "returncode": 1,
+            "stdout": (
+                "Execution completed for issue #58\n"
+                "  Exit code: 1\n"
+                f"  Summary:   {summary}\n"
+            ),
+            "stderr": "",
+        },
+    )()
+
+    with patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next):
+        result = run_orchestrator_step(
+            "example/repo",
+            issue=58,
+            apply=True,
+            execute=True,
+            run_command=Mock(return_value=proc),
+        )
+
+    out = format_orchestrator_step(result)
+
+    assert result.diagnosis_status == "unsupported-model"
+    assert "Fallback next commands:" in out
+    assert "signposter artifact write-worker-summary --repo example/repo --issue 58 --apply" in out
+    assert "signposter gate --repo example/repo --issue 58" in out
+
+
+def test_orchestrator_step_plans_review_fallback_for_runtime_stall(tmp_path) -> None:
+    lifecycle_next = _next(
+        query_issue=None,
+        query_pr=47,
+        issue_number=46,
+        pr_number=47,
+        action="review-pr",
+        command="signposter review execute --repo example/repo --pr 47",
+    )
+    summary = tmp_path / "pr-47-reviewer.summary.md"
+    summary.write_text(
+        "\n".join(
+            [
+                "# Signposter Reviewer Summary",
+                "**Execution Status:** runtime-stall",
+                (
+                    "**Execution Reason:** OpenClaw runtime stalled without producing "
+                    "a usable bounded result."
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    proc = type(
+        "Proc",
+        (),
+        {
+            "returncode": 1,
+            "stdout": (
+                "Review execution completed for PR #47\n"
+                f"  Summary:   {summary}\n"
+            ),
+            "stderr": "",
+        },
+    )()
+
+    with patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next):
+        result = run_orchestrator_step(
+            "example/repo",
+            pr=47,
+            apply=True,
+            execute=True,
+            run_command=Mock(return_value=proc),
+        )
+
+    assert result.fallback_commands == (
+        "signposter artifact write-review-summary --pr 47 --apply",
+        "signposter review validate-artifact --pr 47",
+        "signposter review gate --repo example/repo --pr 47",
+    )
 
 
 def test_write_orchestrator_transcript_includes_execute_diagnosis(tmp_path) -> None:
@@ -1075,6 +1184,10 @@ def test_write_orchestrator_transcript_includes_execute_diagnosis(tmp_path) -> N
             "diagnosis_reason": "OpenClaw execution exceeded the bounded subprocess timeout (25s).",
             "raw_artifact_path": "artifacts/runs/issue-57-worker.raw.txt",
             "summary_artifact_path": "artifacts/runs/issue-57-worker.summary.md",
+            "fallback_commands": (
+                "signposter artifact write-worker-summary --repo example/repo --issue 57 --apply",
+                "signposter artifact validate-worker-summary --issue 57",
+            ),
         },
     )()
     result = OrchestratorRunNextLoop(
@@ -1101,6 +1214,49 @@ def test_write_orchestrator_transcript_includes_execute_diagnosis(tmp_path) -> N
     )
     assert "raw_artifact=artifacts/runs/issue-57-worker.raw.txt" in out
     assert "summary_artifact=artifacts/runs/issue-57-worker.summary.md" in out
+    assert (
+        "fallback_command=signposter artifact write-worker-summary "
+        "--repo example/repo --issue 57 --apply"
+        in out
+    )
+
+
+def test_format_orchestrator_run_next_loop_shows_fallback_commands(tmp_path) -> None:
+    lifecycle_next = _next(issue_number=57)
+    step = type(
+        "Step",
+        (),
+        {
+            "next": type("Next", (), {"lifecycle": lifecycle_next, "action": "execute-worker"})(),
+            "status": "failed",
+            "stop_reason": "step command failed",
+            "fallback_commands": (
+                "signposter artifact write-worker-summary --repo example/repo --issue 57 --apply",
+                "signposter gate --repo example/repo --issue 57",
+            ),
+        },
+    )()
+    result = OrchestratorRunNextLoop(
+        status="stopped",
+        cycles_requested=1,
+        cycles_run=1,
+        max_tasks=1,
+        tasks_started=1,
+        selected_issue=57,
+        steps=[step],
+        stop_reason="step command failed",
+        notes=[],
+        stop_category="failed-step",
+        stop_tolerated=False,
+    )
+
+    out = format_orchestrator_run_next_loop(result)
+
+    assert (
+        "fallback: signposter artifact write-worker-summary "
+        "--repo example/repo --issue 57 --apply" in out
+    )
+    assert "fallback: signposter gate --repo example/repo --issue 57" in out
 
 
 def test_run_next_loop_cli_writes_transcript(tmp_path, monkeypatch, capsys) -> None:

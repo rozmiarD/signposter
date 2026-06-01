@@ -11,6 +11,7 @@ from signposter.claim import (
     ClaimDryRunResult,
     ClaimPlan,
     _claim_sort_key,
+    build_claim_plan,
 )
 from signposter.dispatch import DispatchDecision
 from signposter.scan import LabeledItem
@@ -112,6 +113,24 @@ def test_claim_result_higher_limit():
     assert len(result.selected) == 2
     assert result.total_claimable == 2
     assert result.limit == 2
+
+
+def test_build_claim_plan_uses_shared_ready_rules():
+    item = make_ready_item(7, ["phase:build", "risk:high"])
+    decision = make_decision(
+        item,
+        phase="build",
+        risk="high",
+        proposed_route="reviewer",
+        proposed_gate="human",
+    )
+
+    plan = build_claim_plan(decision)
+
+    assert plan.item.number == 7
+    assert plan.lease_owner == "local-worker"
+    assert plan.labels_to_remove == ["state:ready"]
+    assert plan.labels_to_add == ["state:active", "gate:human"]
 
 
 # --- Mutation simulation tests (mocked) ---
