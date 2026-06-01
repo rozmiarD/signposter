@@ -1163,50 +1163,59 @@ def apply_planner_advance_plan(
         }
 
     targets = advance_plan.get("targets", [])
-    if len(targets) != 1:
+    if not targets:
         return {
             "status": "blocked",
             "issue": advance_plan.get("issue"),
             "promoted": [],
             "commands": [],
-            "errors": [f"expected exactly one advance target, found {len(targets)}"],
+            "errors": ["advance plan has no promotable targets"],
         }
 
-    target = targets[0]
-    labels_to_add = target.get("labels_to_add", [])
-    if labels_to_add != ["state:ready"]:
-        return {
-            "status": "blocked",
-            "issue": advance_plan.get("issue"),
-            "promoted": [],
-            "commands": [],
-            "errors": ["advance target must add exactly state:ready"],
-        }
+    promoted: list[dict[str, Any]] = []
+    commands: list[str] = []
+    ordered_targets = sorted(
+        targets,
+        key=lambda item: (int(item.get("github_issue", 0)), str(item.get("key", ""))),
+    )
 
-    github_issue = str(target["github_issue"])
-    command = [
-        "gh",
-        "issue",
-        "edit",
-        github_issue,
-        "-R",
-        repo,
-        "--add-label",
-        "state:ready",
-    ]
-    run_command(command)
+    for target in ordered_targets:
+        labels_to_add = target.get("labels_to_add", [])
+        if labels_to_add != ["state:ready"]:
+            return {
+                "status": "blocked",
+                "issue": advance_plan.get("issue"),
+                "promoted": [],
+                "commands": [],
+                "errors": ["advance target must add exactly state:ready"],
+            }
 
-    return {
-        "status": "applied",
-        "issue": advance_plan.get("issue"),
-        "promoted": [
+        github_issue = str(target["github_issue"])
+        command = [
+            "gh",
+            "issue",
+            "edit",
+            github_issue,
+            "-R",
+            repo,
+            "--add-label",
+            "state:ready",
+        ]
+        run_command(command)
+        commands.append(" ".join(command))
+        promoted.append(
             {
                 "key": target["key"],
                 "github_issue": target["github_issue"],
                 "labels_added": labels_to_add,
             }
-        ],
-        "commands": [" ".join(command)],
+        )
+
+    return {
+        "status": "applied",
+        "issue": advance_plan.get("issue"),
+        "promoted": promoted,
+        "commands": commands,
         "errors": [],
     }
 
