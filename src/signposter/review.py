@@ -60,6 +60,73 @@ class ReviewPlan:
     role_selection_reason: str = "default review role selection"
 
 
+def _git_output(args: list[str]) -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    text = (result.stdout or "").strip()
+    return text or None
+
+
+def _artifact_search_roots() -> tuple[Path, ...]:
+    roots: list[Path] = []
+    seen: set[str] = set()
+
+    def add_root(path: str | None) -> None:
+        if not path:
+            return
+        resolved = str(Path(path).expanduser().resolve())
+        if resolved in seen:
+            return
+        seen.add(resolved)
+        roots.append(Path(resolved))
+
+    add_root(_git_output(["rev-parse", "--show-toplevel"]))
+
+    common_git_dir = _git_output(["rev-parse", "--path-format=absolute", "--git-common-dir"])
+    if common_git_dir:
+        add_root(str(Path(common_git_dir).resolve().parent))
+
+    worktree_output = _git_output(["worktree", "list", "--porcelain"])
+    if worktree_output:
+        for line in worktree_output.splitlines():
+            if line.startswith("worktree "):
+                add_root(line.split(" ", 1)[1].strip())
+
+    if not roots:
+        add_root(str(Path.cwd()))
+
+    return tuple(roots)
+
+
+def _preferred_artifact_path(path: str) -> str:
+    artifact = Path(path)
+    if artifact.is_absolute():
+        return str(artifact)
+    return str(_artifact_search_roots()[0] / artifact)
+
+
+def _resolve_existing_artifact_path(path: str) -> str | None:
+    artifact = Path(path)
+    if artifact.is_absolute():
+        return str(artifact) if os.path.isfile(artifact) else None
+
+    for root in _artifact_search_roots():
+        candidate = root / artifact
+        if os.path.isfile(candidate):
+            return str(candidate)
+
+    return None
+
+
 def _run_gh_pr_view(repo: str, pr: int, fields: list[str]) -> dict[str, Any]:
     """Run gh pr view and return parsed JSON."""
     result = subprocess.run(
@@ -557,7 +624,7 @@ def write_review_prompt_artifact(
 
     content = build_review_prompt(plan, pr_body, diff)
 
-    path = plan.prompt_artifact_path
+    path = _preferred_artifact_path(plan.prompt_artifact_path)
     os.makedirs(os.path.dirname(path), exist_ok=True)
 
     with open(path, "w", encoding="utf-8") as f:
@@ -654,15 +721,22 @@ def execute_pr_review(
             "success": False,
         }
 
-    prompt_path = plan.prompt_artifact_path
-    if not os.path.isfile(prompt_path):
-        return {
-            "exit_code": 1,
-            "raw_path": None,
-            "summary_path": None,
-            "error": f"prompt artifact missing: {prompt_path}",
-            "success": False,
-        }
+    prompt_path = _resolve_existing_artifact_path(plan.prompt_artifact_path)
+    if not prompt_path:
+        try:
+            prompt_path = write_review_prompt_artifact(
+                repo,
+                pr_number,
+                allow_high_risk=allow_high_risk,
+            )
+        except Exception as e:
+            return {
+                "exit_code": 1,
+                "raw_path": None,
+                "summary_path": None,
+                "error": f"prompt artifact missing and could not be written: {e}",
+                "success": False,
+            }
 
     preflight = check_openclaw_preflight(artifact_kind="review", target=pr_number)
     if not preflight.ok:
@@ -902,6 +976,7 @@ def validate_review_artifact(
     """Validate the structured reviewer summary contract without side effects."""
     if summary_path is None:
         summary_path = f"artifacts/runs/pr-{pr_number}-reviewer.summary.md"
+    resolved_summary_path = _resolve_existing_artifact_path(summary_path)
 
     notes = [
         "No GitHub review was submitted.",
@@ -909,7 +984,7 @@ def validate_review_artifact(
         "No issue was closed.",
     ]
 
-    if not os.path.isfile(summary_path):
+    if not resolved_summary_path:
         return ReviewArtifactValidation(
             pr_number=pr_number,
             summary_path=summary_path,
@@ -919,7 +994,7 @@ def validate_review_artifact(
             notes=notes,
         )
 
-    with open(summary_path, encoding="utf-8") as f:
+    with open(resolved_summary_path, encoding="utf-8") as f:
         text = f.read()
     opinion = parse_reviewer_opinion(text)
     errors: list[str] = []
@@ -946,7 +1021,7 @@ def validate_review_artifact(
 
     return ReviewArtifactValidation(
         pr_number=pr_number,
-        summary_path=summary_path,
+        summary_path=resolved_summary_path,
         status="ready" if not errors else "blocked",
         errors=errors,
         opinion=opinion,
@@ -1009,6 +1084,7 @@ def evaluate_review_gate(
     """Read reviewer artifacts and produce a conservative gate decision."""
     if summary_path is None:
         summary_path = f"artifacts/runs/pr-{pr_number}-reviewer.summary.md"
+    resolved_summary_path = _resolve_existing_artifact_path(summary_path)
 
     notes = [
         "No GitHub review was submitted.",
@@ -1020,10 +1096,12 @@ def evaluate_review_gate(
     if allow_high_risk:
         notes.append("High-risk override explicitly allowed by operator.")
 
-    if not os.path.isfile(summary_path):
+    if not resolved_summary_path:
         # Try raw as fallback for parsing
-        raw_path = f"artifacts/runs/pr-{pr_number}-reviewer.raw.txt"
-        if os.path.isfile(raw_path):
+        raw_path = _resolve_existing_artifact_path(
+            f"artifacts/runs/pr-{pr_number}-reviewer.raw.txt"
+        )
+        if raw_path:
             with open(raw_path, encoding="utf-8") as f:
                 text = f.read()
             opinion = parse_reviewer_opinion(text)
@@ -1052,7 +1130,7 @@ def evaluate_review_gate(
             notes=notes,
         )
 
-    with open(summary_path, encoding="utf-8") as f:
+    with open(resolved_summary_path, encoding="utf-8") as f:
         text = f.read()
 
     stale_signal = find_stale_or_failover_signal(text)
@@ -1066,7 +1144,7 @@ def evaluate_review_gate(
             gate_pass=False,
             merge_eligible=False,
             automerge_eligible=False,
-            summary_path=summary_path,
+            summary_path=resolved_summary_path,
             notes=notes,
         )
 
@@ -1125,7 +1203,7 @@ def evaluate_review_gate(
         gate_pass=gate_pass,
         merge_eligible=gate_pass,  # conservative: gate pass == merge eligible for now
         automerge_eligible=automerge_ok,
-        summary_path=summary_path,
+        summary_path=resolved_summary_path,
         notes=notes,
     )
 
