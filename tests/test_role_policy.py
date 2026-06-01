@@ -1,27 +1,83 @@
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from signposter.role_policy import (
     ACTIVE_ROLE_POLICIES,
+    OpenClawAgentProfile,
     RolePolicy,
     format_role_policy_status,
     get_role_policy,
+    validate_role_agent_profiles,
     validate_role_policy,
     validate_role_registry,
 )
 
 
+def _mock_runtime_profiles():
+    return {
+        "worker_light": OpenClawAgentProfile(
+            name="worker_light",
+            primary_model="xai/grok-build-0.1",
+            fallback_models=("openai/gpt-5.4-mini",),
+        ),
+        "worker_code": OpenClawAgentProfile(
+            name="worker_code",
+            primary_model="openai/gpt-5.3-codex",
+            fallback_models=("openai/gpt-5.4", "openai/gpt-5.2"),
+        ),
+        "worker_core": OpenClawAgentProfile(
+            name="worker_core",
+            primary_model="openai/gpt-5.4",
+            fallback_models=("openai/gpt-5.4-mini",),
+        ),
+        "reviewer_light": OpenClawAgentProfile(
+            name="reviewer_light",
+            primary_model="xai/grok-build-0.1",
+            fallback_models=("openai/gpt-5.4-mini",),
+        ),
+        "reviewer_core": OpenClawAgentProfile(
+            name="reviewer_core",
+            primary_model="openai/gpt-5.4",
+            fallback_models=("openai/gpt-5.4-mini",),
+        ),
+        "planner_main": OpenClawAgentProfile(
+            name="planner_main",
+            primary_model="openai/gpt-5.4",
+            fallback_models=("openai/gpt-5.4-mini",),
+        ),
+        "main": OpenClawAgentProfile(
+            name="main",
+            primary_model="openai/gpt-5.4",
+            fallback_models=(),
+        ),
+        "worker": OpenClawAgentProfile(
+            name="worker",
+            primary_model="openai/gpt-5.2",
+            fallback_models=("openai/gpt-5.4",),
+        ),
+    }
+
+
 def test_active_registry_uses_only_allowed_models():
-    assert validate_role_registry() == []
+    with patch(
+        "signposter.role_policy.load_openclaw_agent_profiles",
+        return_value=(_mock_runtime_profiles(), None),
+    ):
+        assert validate_role_registry() == []
 
 
 def test_get_role_policy_returns_expected_core_roles():
     assert get_role_policy("WORKER_CORE").model == "openai/gpt-5.4"
     assert get_role_policy("WORKER_CORE").reasoning_effort == "medium"
+    assert get_role_policy("WORKER_CORE").openclaw_agent == "worker_core"
     assert get_role_policy("REVIEWER_LIGHT").model == "xai/grok-build-0.1"
+    assert get_role_policy("REVIEWER_LIGHT").openclaw_agent == "reviewer_light"
     assert get_role_policy("REVIEWER_LIGHT").fallback_model == "openai/gpt-5.4-mini"
     assert get_role_policy("WORKER_LIGHT").model == "xai/grok-build-0.1"
+    assert get_role_policy("WORKER_LIGHT").openclaw_agent == "worker_light"
     assert get_role_policy("WORKER_LIGHT").fallback_model == "openai/gpt-5.4-mini"
-    assert get_role_policy("PLANNER_MAIN").openclaw_agent == "planner"
+    assert get_role_policy("PLANNER_MAIN").openclaw_agent == "planner_main"
 
 
 def test_critical_override_uses_gpt54_with_manual_high_reasoning():
@@ -116,13 +172,77 @@ def test_validate_role_registry_rejects_unknown_references():
     assert any("unknown escalation_role 'MISSING_ROLE'" in error for error in errors)
 
 
+def test_validate_role_agent_profiles_rejects_missing_profile():
+    registry = {
+        "WORKER_CORE": RolePolicy(
+            name="WORKER_CORE",
+            openclaw_agent="worker_core",
+            model="openai/gpt-5.4",
+            reasoning_effort="medium",
+            use_case="core work",
+        )
+    }
+
+    errors = validate_role_agent_profiles(registry, profiles={})
+
+    assert any(
+        "configured OpenClaw agent/profile 'worker_core' is missing" in error
+        for error in errors
+    )
+
+
+def test_validate_role_agent_profiles_rejects_profile_without_policy_model():
+    registry = {
+        "WORKER_CODE": RolePolicy(
+            name="WORKER_CODE",
+            openclaw_agent="worker_code",
+            model="openai/gpt-5.3-codex",
+            reasoning_effort="low",
+            use_case="code work",
+        )
+    }
+    profiles = {
+        "worker_code": OpenClawAgentProfile(
+            name="worker_code",
+            primary_model="openai/gpt-5.4",
+            fallback_models=("openai/gpt-5.4-mini",),
+        )
+    }
+
+    errors = validate_role_agent_profiles(registry, profiles=profiles)
+
+    assert any("does not expose policy model 'openai/gpt-5.3-codex'" in error for error in errors)
+
+
+def test_format_role_policy_status_reports_profile_presence_for_runtime_profiles():
+    registry = {
+        "WORKER_CORE": RolePolicy(
+            name="WORKER_CORE",
+            openclaw_agent="worker_core",
+            model="openai/gpt-5.4",
+            reasoning_effort="medium",
+            use_case="core work",
+        )
+    }
+
+    output = format_role_policy_status(registry)
+
+    assert "WORKER_CORE" in output
+    assert "agent: worker_core" in output
+
+
 def test_format_role_policy_status_reports_pass_for_active_registry():
-    output = format_role_policy_status()
+    with patch(
+        "signposter.role_policy.load_openclaw_agent_profiles",
+        return_value=(_mock_runtime_profiles(), None),
+    ):
+        output = format_role_policy_status()
 
     assert "Signposter Role Policy Status" in output
     assert "WORKER_CODE" in output
     assert "openai/gpt-5.3-codex" in output
     assert "xai/grok-build-0.1" in output
     assert "fallback_model: openai/gpt-5.4-mini" in output
+    assert "profile_status:" in output
     assert "Validation:" in output
-    assert "status: pass" in output
+    assert "status:" in output
