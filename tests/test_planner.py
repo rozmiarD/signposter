@@ -923,6 +923,14 @@ def test_apply_planner_seed_manifest_uses_fake_runner_and_updates_manifest(
     assert saved["status"] == "applied"
     assert saved["issues"][0]["github_issue"] == 101
     assert saved["issues"][0]["github_url"].endswith("/issues/101")
+    assert saved["issues"][1]["github_depends_on"] == [101]
+    assert saved["issues"][1]["dependency_metadata"] == [
+        {
+            "key": "WATCH-001",
+            "github_issue": 101,
+            "github_url": "https://github.com/ExatronOmega/signposter/issues/101",
+        }
+    ]
 
 
 def test_apply_planner_seed_manifest_blocks_missing_body_files(tmp_path: Path) -> None:
@@ -1041,6 +1049,7 @@ def test_cli_planner_seed_apply_uses_fake_subprocess_and_updates_manifest(
     assert manifest["status"] == "applied"
     assert manifest["issues"][0]["github_issue"] == 201
     assert manifest["issues"][0]["github_url"].endswith("/issues/201")
+    assert manifest["issues"][1]["github_depends_on"] == [201]
     assert (body_dir / "WATCH-001.md").exists()
     assert "Planner Seed Apply" in captured
     assert "WATCH-001 -> #201" in captured
@@ -1415,6 +1424,7 @@ def test_cli_planner_seed_apply_partial_manifest_continues_missing_only(
     assert saved["status"] == "applied"
     assert saved["issues"][0]["github_issue"] == 301
     assert saved["issues"][1]["github_issue"] == 401
+    assert saved["issues"][1]["github_depends_on"] == [301]
     assert "Status:\n  ready" in captured
     assert "Planner Seed Apply" in captured
     assert "WATCH-002 -> #401" in captured
@@ -1648,9 +1658,33 @@ def test_format_planner_status_contains_safety_notes(tmp_path: Path) -> None:
 
     assert "Signposter Planner Status" in output
     assert "WATCH-001 — issue: none — state: unseeded" in output
+    assert "depends on: WATCH-001" in output
     assert "No GitHub mutation was performed." in output
     assert "No OpenClaw execution was performed." in output
     assert "No task execution was performed." in output
+
+
+def test_build_planner_seed_manifest_materializes_github_ready_dependency_metadata(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+
+    assert manifest["issues"][0]["dependency_metadata"] == []
+    assert manifest["issues"][1]["dependency_metadata"] == [
+        {"key": "WATCH-001", "github_issue": None, "github_url": ""}
+    ]
+    assert manifest["issues"][1]["github_depends_on"] == []
+    assert manifest["issue_key_map"] == {}
 
 
 def test_cli_planner_status_prints_local_manifest_status(
