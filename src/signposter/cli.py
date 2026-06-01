@@ -3065,9 +3065,9 @@ def _planner_workflow_state_from_issue_payload(payload: dict[str, object]) -> st
     return None
 
 
-def _fetch_manifest_issue_states(repo: str, manifest: dict[str, object]) -> dict[int, str]:
+def _fetch_manifest_issue_states(repo: str, manifest: dict[str, object]) -> dict[int, object]:
     """Fetch GitHub issue states for issues listed in a planner manifest."""
-    states: dict[int, str] = {}
+    states: dict[int, object] = {}
     for issue in manifest.get("issues", []):
         if not isinstance(issue, dict):
             continue
@@ -3095,10 +3095,12 @@ def _fetch_manifest_issue_states(repo: str, manifest: dict[str, object]) -> dict
 
         output = result.stdout.strip()
         state = ""
+        workflow_state = ""
+        github_state = ""
         try:
             payload = json.loads(output) if output else {}
             if isinstance(payload, dict):
-                workflow_state = _planner_workflow_state_from_issue_payload(payload)
+                workflow_state = _planner_workflow_state_from_issue_payload(payload) or ""
                 github_state = str(payload.get("state", "")).lower()
                 state = workflow_state or github_state
             else:
@@ -3108,7 +3110,14 @@ def _fetch_manifest_issue_states(repo: str, manifest: dict[str, object]) -> dict
             state = output.lower()
 
         if state:
-            states[int(issue_number)] = state
+            if workflow_state or github_state:
+                states[int(issue_number)] = {
+                    "state": state,
+                    "github_state": github_state,
+                    "workflow_state": workflow_state or None,
+                }
+            else:
+                states[int(issue_number)] = state
 
     return states
 

@@ -2511,6 +2511,58 @@ def test_build_planner_next_from_status_selects_ready_workflow_state(
     assert result["next"]["state"] == "ready"
 
 
+def test_build_planner_next_from_status_blocks_dependency_ready_open_task_missing_ready_label(
+    tmp_path: Path,
+) -> None:
+    status = {
+        "tasks": [
+            {
+                "key": "WATCH-001",
+                "title": "Done task",
+                "github_issue": 10,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/10",
+                "state": "done",
+                "github_state": "closed",
+                "workflow_state": "done",
+                "labels": ["state:done"],
+                "depends_on": [],
+                "github_depends_on": [],
+                "dependency_metadata": [],
+                "mainline": None,
+                "parent": None,
+                "return_to": None,
+                "side_task": False,
+            },
+            {
+                "key": "WATCH-002",
+                "title": "Ready but unlabeled on GitHub",
+                "github_issue": 11,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/11",
+                "state": "open",
+                "github_state": "open",
+                "workflow_state": None,
+                "labels": [],
+                "depends_on": ["WATCH-001"],
+                "github_depends_on": [10],
+                "dependency_metadata": [],
+                "mainline": None,
+                "parent": None,
+                "return_to": None,
+                "side_task": False,
+            },
+        ]
+    }
+
+    result = build_planner_next_from_status(status)
+
+    assert result["status"] == "blocked"
+    assert result["reason"] == "dependency-ready open task is missing GitHub label state:ready"
+    assert result["next"] is None
+    assert result["blocked"][0]["key"] == "WATCH-002"
+    assert result["blocked"][0]["github_issue"] == 11
+    assert result["blocked"][0]["reconcile_issues"] == [10]
+
+
 def test_build_planner_next_from_status_prefers_side_task_before_mainline(
     tmp_path: Path,
 ) -> None:
@@ -2683,6 +2735,33 @@ def test_format_planner_next_from_status_shows_side_task_transition() -> None:
     assert "No worktree was created." in output
     assert "No OpenClaw execution was performed." in output
     assert "No task execution was performed." in output
+
+
+def test_format_planner_next_from_status_shows_missing_ready_label_reconcile_hint() -> None:
+    result = {
+        "status": "blocked",
+        "reason": "dependency-ready open task is missing GitHub label state:ready",
+        "next": None,
+        "waiting": [],
+        "blocked": [
+            {
+                "key": "WATCH-002",
+                "reason": "dependency-ready task is open but missing GitHub label state:ready",
+                "github_issue": 11,
+                "reconcile_issues": [10],
+            }
+        ],
+    }
+
+    output = format_planner_next_from_status(result)
+
+    assert (
+        "WATCH-002 — dependency-ready task is open but missing GitHub label state:ready "
+        "(issue #11)"
+    ) in output
+    assert (
+        "reconcile hint: run planner advance/apply from completed dependency issue(s) #10"
+    ) in output
 
 
 def test_cli_planner_run_dry_run_shows_dashboard(
