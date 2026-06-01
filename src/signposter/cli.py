@@ -1370,11 +1370,22 @@ def run_roles_smoke(args: argparse.Namespace) -> int:
     result = execute_role_smoke(role_name)
     print(f"Signposter Role Smoke Execute — {role_name}")
     print("")
+    diagnosis = result.get("diagnosis")
     print(f"Status: {'completed' if result.get('success') else 'failed'}")
-    if result.get("error"):
+    if diagnosis is not None:
+        print(f"Diagnosis: {diagnosis.status}")
+        print(f"Reason: {diagnosis.reason}")
+    if result.get("error") and diagnosis is None:
         print(f"Error: {result['error']}")
     if result.get("raw_path"):
         print(f"Raw output: {result['raw_path']}")
+    if result.get("summary_path"):
+        print(f"Summary: {result['summary_path']}")
+    warnings = result.get("diagnostics_warnings") or ()
+    if warnings:
+        print("Runtime hygiene warnings:")
+        for warning in warnings:
+            print(f"  - {warning}")
     print("Notes:")
     print("  No GitHub mutation was performed.")
     print("  Output remains local.")
