@@ -1814,7 +1814,8 @@ def test_build_planner_next_from_status_selects_first_open_ready_task(
     assert result["status"] == "ready"
     assert result["next"]["key"] == "WATCH-001"
     assert result["next"]["github_issue"] == 10
-    assert result["waiting"] == []
+    assert result["waiting"][0]["key"] == "WATCH-002"
+    assert result["waiting"][0]["missing_dependencies"] == ["WATCH-001"]
 
 
 def test_build_planner_next_from_status_respects_closed_dependencies(

@@ -1790,8 +1790,8 @@ def build_planner_next_from_status(status: dict[str, Any]) -> dict[str, Any]:
             "status": "ready",
             "reason": "first dependency-ready open task selected",
             "next": ready_mainline,
-            "waiting": [],
-            "blocked": [],
+            "waiting": waiting,
+            "blocked": blocked,
         }
 
     if len(completed) == len(tasks):
