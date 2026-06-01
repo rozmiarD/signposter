@@ -271,14 +271,23 @@ def get_worktree_status_for_issue(issue_number: int, title: str | None = None) -
       status: 'available' | 'missing'
       path, branch, exists
     """
+    cwd = Path.cwd()
     expected_path = generate_proposed_worktree(issue_number)
     branch_name = generate_proposed_branch(issue_number, title or "task")
+    candidate_paths = [Path(expected_path)]
 
-    exists = worktree_path_exists(expected_path)
+    if cwd.name == str(issue_number):
+        candidate_paths.append(cwd)
+    if cwd.parent.name == "signposter-work":
+        candidate_paths.append(cwd.parent / str(issue_number))
+
+    existing_path = next((path for path in candidate_paths if path.exists()), None)
+    exists = existing_path is not None
+    resolved_path = str(existing_path) if existing_path is not None else expected_path
 
     return {
         "status": "available" if exists else "missing",
-        "path": expected_path,
+        "path": resolved_path,
         "branch": branch_name,
         "exists": exists,
     }

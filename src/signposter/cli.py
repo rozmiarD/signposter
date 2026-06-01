@@ -130,6 +130,7 @@ from signposter.review import (
     write_review_prompt_artifact,
 )
 from signposter.role_policy import format_role_policy_status, validate_role_registry
+from signposter.role_smoke import build_role_smoke_plan, execute_role_smoke, format_role_smoke_plan
 from signposter.runner import cli_main as runner_cli_main
 from signposter.scan import cli_main as scan_cli_main
 from signposter.scheduler import (
@@ -353,6 +354,14 @@ def main() -> None:
         help="Validate the active role/model/reasoning registry",
     )
     roles_validate_parser.set_defaults(func=run_roles_validate)
+
+    roles_smoke_parser = roles_subparsers.add_parser(
+        "smoke",
+        help="Plan or run a local OpenClaw smoke turn for one role",
+    )
+    roles_smoke_parser.add_argument("--role", required=True)
+    roles_smoke_parser.add_argument("--execute", action="store_true")
+    roles_smoke_parser.set_defaults(func=run_roles_smoke)
 
     # planner subcommand group — HARDENING-029A
     planner_parser = subparsers.add_parser(
@@ -1349,6 +1358,27 @@ def run_roles_validate(args: argparse.Namespace) -> int:
     print("Status:")
     print("  pass")
     return 0
+
+
+def run_roles_smoke(args: argparse.Namespace) -> int:
+    """Plan or execute a local OpenClaw smoke turn for one role."""
+    role_name = args.role
+    if not getattr(args, "execute", False):
+        print(format_role_smoke_plan(build_role_smoke_plan(role_name)))
+        return 0
+
+    result = execute_role_smoke(role_name)
+    print(f"Signposter Role Smoke Execute — {role_name}")
+    print("")
+    print(f"Status: {'completed' if result.get('success') else 'failed'}")
+    if result.get("error"):
+        print(f"Error: {result['error']}")
+    if result.get("raw_path"):
+        print(f"Raw output: {result['raw_path']}")
+    print("Notes:")
+    print("  No GitHub mutation was performed.")
+    print("  Output remains local.")
+    return 0 if result.get("success") else 1
 
 
 def run_report(args: argparse.Namespace) -> int:
