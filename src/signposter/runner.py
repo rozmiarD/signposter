@@ -10,7 +10,7 @@ import subprocess
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from signposter.claim import perform_claim_mutation, plan_claims
+from signposter.claim import build_claim_plan, perform_claim_mutation, plan_claims
 from signposter.dependencies import is_dependency_blocked
 from signposter.dispatch import DispatchDecision, classify_candidate
 from signposter.git_utils import find_uncommitted_repo_changes
@@ -145,6 +145,10 @@ def _select_runner_and_profile(dispatch: DispatchDecision) -> tuple[str, str]:
     else:
         # Conservative default
         return "openclaw", "worker"
+
+
+def _build_explicit_claim_plan(plan: RunnerPlan):
+    return build_claim_plan(plan.dispatch)
 
 
 def plan_runner(repo: str, *, limit: int = 1) -> list[RunnerPlan]:
@@ -925,24 +929,35 @@ def cli_main(
             item_number = plan.item.number
             current_state = (plan.dispatch.state or "").lower()
 
+            claimed_issue = False
             if claim:
                 if current_state == "ready":
                     print("\n=== APPLYING CLAIM MUTATION (explicit --issue) ===\n")
-                    # Use the normal claim planner but limited to this issue conceptually.
-                    # For safety we still go through plan_claims + filter (conservative).
-                    claim_result = plan_claims(repo, limit=1)
-                    for claim_plan in claim_result.selected:
-                        if claim_plan.item.number == item_number:
-                            print(f"Claiming issue #{item_number}...")
-                            commands = perform_claim_mutation(claim_plan, repo, dry_run=False)
-                            for cmd in commands:
-                                print(f"  Executed: {cmd}")
+                    claim_plan = _build_explicit_claim_plan(plan)
+                    print(f"Claiming issue #{item_number}...")
+                    commands = perform_claim_mutation(claim_plan, repo, dry_run=False)
+                    for cmd in commands:
+                        print(f"  Executed: {cmd}")
+                    claimed_issue = True
                     print("Claim mutation complete.")
                 else:
                     msg = f"  Note: issue #{item_number} already {current_state}. Skipping claim."
                     print(msg)
 
             final_plans = plans
+
+            if claimed_issue:
+                print("\n=== Refreshing explicit issue plan from current GitHub state ===\n")
+                refreshed_plan = plan_runner_for_issue(repo, item_number)
+                if refreshed_plan is None:
+                    print(
+                        f"  Warning: could not re-fetch issue #{item_number}; "
+                        "continuing with stale explicit plan"
+                    )
+                else:
+                    final_plans = [refreshed_plan]
+                    current_state = (refreshed_plan.dispatch.state or "").lower()
+                    print(f"  Refreshed issue #{item_number}: state={current_state}")
 
             if write_prompt and final_plans:
                 print("\n=== Writing Prompt Artifact(s) ===\n")

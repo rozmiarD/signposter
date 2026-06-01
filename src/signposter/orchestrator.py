@@ -70,6 +70,7 @@ class OrchestratorStep:
     diagnosis_reason: str | None = None
     raw_artifact_path: str | None = None
     summary_artifact_path: str | None = None
+    fallback_commands: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -250,6 +251,11 @@ def run_orchestrator_step(
     diagnosis_status, diagnosis_reason, raw_artifact_path, summary_artifact_path = (
         _extract_execute_diagnosis(proc.stdout, proc.stderr)
     )
+    fallback_commands = _plan_fallback_commands(
+        repo=repo,
+        planned=planned,
+        diagnosis_status=diagnosis_status,
+    )
     return OrchestratorStep(
         next=planned,
         status=status,
@@ -263,6 +269,7 @@ def run_orchestrator_step(
         diagnosis_reason=diagnosis_reason,
         raw_artifact_path=raw_artifact_path,
         summary_artifact_path=summary_artifact_path,
+        fallback_commands=fallback_commands,
     )
 
 
@@ -604,6 +611,9 @@ def format_orchestrator_step(result: OrchestratorStep) -> str:
             lines.append(f"  raw artifact: {result.raw_artifact_path}")
         if result.summary_artifact_path:
             lines.append(f"  summary artifact: {result.summary_artifact_path}")
+    if result.fallback_commands:
+        lines.extend(["", "Fallback next commands:"])
+        lines.extend(f"  {command}" for command in result.fallback_commands)
     if result.stop_reason:
         lines.extend(["", "Stop:", f"  {result.stop_reason}"])
     lines.extend(["", "Status:", f"  {result.status}"])
@@ -704,6 +714,9 @@ def format_orchestrator_run_next(result: OrchestratorRunNext) -> str:
         )
         if result.step.stop_reason:
             lines.append(f"  stop: {result.step.stop_reason}")
+        if result.step.fallback_commands:
+            lines.append("  fallback next commands:")
+            lines.extend(f"    - {command}" for command in result.step.fallback_commands)
 
     lines.extend(["", "Status:", f"  {result.status}"])
     lines.extend(["", "Notes:"])
@@ -759,6 +772,8 @@ def format_orchestrator_run_next_loop(result: OrchestratorRunNextLoop) -> str:
                 f"  {index}. {target}: {step.next.action} -> {step.status}"
                 + (f" ({step.stop_reason})" if step.stop_reason else "")
             )
+            for command in step.fallback_commands:
+                lines.append(f"     fallback: {command}")
     else:
         lines.append("  none")
 
@@ -831,6 +846,8 @@ def write_orchestrator_run_next_loop_transcript(
                     lines.append(f"   raw_artifact={step.raw_artifact_path}")
                 if step.summary_artifact_path:
                     lines.append(f"   summary_artifact={step.summary_artifact_path}")
+            for command in step.fallback_commands:
+                lines.append(f"   fallback_command={command}")
     else:
         lines.append("none")
     lines.extend(
@@ -888,3 +905,42 @@ def _extract_execute_diagnosis(
                 diagnosis_reason = reason_match.group("value").strip()
 
     return diagnosis_status, diagnosis_reason, raw_path, summary_path
+
+
+_FALLBACK_ELIGIBLE_DIAGNOSES = {
+    "timeout",
+    "auth-runtime-failure",
+    "unsupported-model",
+    "runtime-stall",
+    "config-drift",
+}
+
+
+def _plan_fallback_commands(
+    *,
+    repo: str,
+    planned: OrchestratorNext,
+    diagnosis_status: str | None,
+) -> tuple[str, ...]:
+    if diagnosis_status not in _FALLBACK_ELIGIBLE_DIAGNOSES:
+        return ()
+
+    lifecycle = planned.lifecycle
+    if planned.action == "execute-worker" and lifecycle.issue_number is not None:
+        issue = lifecycle.issue_number
+        return (
+            f"signposter artifact write-worker-summary --repo {repo} --issue {issue} --apply",
+            f"signposter artifact validate-worker-summary --issue {issue}",
+            f"signposter report --repo {repo} --issue {issue} --apply",
+            f"signposter gate --repo {repo} --issue {issue}",
+        )
+
+    if planned.action == "review-pr" and lifecycle.pr_number is not None:
+        pr = lifecycle.pr_number
+        return (
+            f"signposter artifact write-review-summary --pr {pr} --apply",
+            f"signposter review validate-artifact --pr {pr}",
+            f"signposter review gate --repo {repo} --pr {pr}",
+        )
+
+    return ()
