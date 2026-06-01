@@ -164,6 +164,17 @@ def test_render_prompt_contains_key_sections():
     assert "Do not fetch the GitHub URL" in content
 
 
+def test_format_runner_plan_includes_role_policy_details():
+    from signposter.runner import format_runner_plan
+
+    plan = make_runner_plan_for_test("worker", "build", number=42)
+    output = format_runner_plan([plan])
+
+    assert "selected_role:" in output
+    assert "model:" in output
+    assert "reasoning:" in output
+
+
 def test_render_prompt_role_specific_instruction():
     from signposter.runner import render_prompt
 

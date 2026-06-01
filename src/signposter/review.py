@@ -20,6 +20,7 @@ from signposter.openclaw_preflight import (
     check_openclaw_preflight,
     format_openclaw_preflight_block,
 )
+from signposter.role_routing import select_role_for_review
 from signposter.runner import build_openclaw_session_key
 
 
@@ -53,6 +54,10 @@ class ReviewPlan:
 
     reviewer_profile: str
     prompt_artifact_path: str
+    selected_role_name: str = "REVIEWER_LIGHT"
+    selected_model: str = "openai/gpt-5.4-mini"
+    selected_reasoning_effort: str = "low"
+    role_selection_reason: str = "default review role selection"
 
 
 def _run_gh_pr_view(repo: str, pr: int, fields: list[str]) -> dict[str, Any]:
@@ -149,6 +154,13 @@ def _fetch_pr_files(repo: str, pr: int) -> dict[str, int]:
         "additions": data.get("additions", 0),
         "deletions": data.get("deletions", 0),
     }
+
+
+def _fetch_pr_file_paths(repo: str, pr: int) -> list[str]:
+    """Fetch changed file paths for routing and review heuristics."""
+    data = _run_gh_pr_view(repo, pr, ["files"])
+    files = data.get("files", []) or []
+    return [file_info.get("path", "") for file_info in files if isinstance(file_info, dict)]
 
 
 def _classify_risk_and_size(
@@ -271,17 +283,10 @@ def plan_review_for_pr(
     # Files
     try:
         files_info = _fetch_pr_files(repo, pr_number)
+        file_paths = _fetch_pr_file_paths(repo, pr_number)
     except Exception:
         files_info = {"files_changed": 0, "additions": 0, "deletions": 0}
-
-    # For risk classification we need file paths. We approximate with a second call if needed.
-    # For planning we keep it simple.
-    file_paths: list[str] = []
-    try:
-        files_data = _run_gh_pr_view(repo, pr_number, ["files"])
-        file_paths = [f.get("path", "") for f in files_data.get("files", [])]
-    except Exception:
-        pass
+        file_paths = []
 
     risk, size = _classify_risk_and_size(
         files_info["files_changed"],
@@ -322,6 +327,12 @@ def plan_review_for_pr(
         if risk == "high":
             notes.append("High-risk review planning is proceeding via explicit override.")
 
+    role_selection = select_role_for_review(
+        risk_level=risk,
+        size=size,
+        file_paths=file_paths,
+    )
+
     return ReviewPlan(
         pr_number=pr_number,
         title=title,
@@ -345,6 +356,10 @@ def plan_review_for_pr(
         notes=notes,
         reviewer_profile="reviewer",
         prompt_artifact_path=f"artifacts/prompts/pr-{pr_number}-review.md",
+        selected_role_name=role_selection.policy.name,
+        selected_model=role_selection.policy.model,
+        selected_reasoning_effort=role_selection.policy.reasoning_effort,
+        role_selection_reason=role_selection.reason,
     )
 
 
@@ -375,8 +390,12 @@ def format_review_plan(plan: ReviewPlan) -> str:
 
     lines.append("\nReviewer:")
     lines.append(f"  agent: {plan.reviewer_profile}")
+    lines.append(f"  selected role: {plan.selected_role_name}")
+    lines.append(f"  model: {plan.selected_model}")
+    lines.append(f"  reasoning: {plan.selected_reasoning_effort}")
     lines.append("  model/profile: existing OpenClaw reviewer profile")
     lines.append(f"  prompt artifact: {plan.prompt_artifact_path}")
+    lines.append(f"  reason: {plan.role_selection_reason}")
     lines.append(
         "  expected output: structured review opinion with verdict, "
         "confidence, risk, findings, recommendation"

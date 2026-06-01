@@ -129,6 +129,7 @@ from signposter.review import (
     validate_review_artifact,
     write_review_prompt_artifact,
 )
+from signposter.role_policy import format_role_policy_status, validate_role_registry
 from signposter.runner import cli_main as runner_cli_main
 from signposter.scan import cli_main as scan_cli_main
 from signposter.scheduler import (
@@ -334,6 +335,24 @@ def main() -> None:
         ),
     )
     run_parser.set_defaults(func=run_runner)
+
+    roles_parser = subparsers.add_parser(
+        "roles",
+        help="Inspect role-aware OpenClaw policy and routing registry",
+    )
+    roles_subparsers = roles_parser.add_subparsers(dest="roles_command")
+
+    roles_status_parser = roles_subparsers.add_parser(
+        "status",
+        help="Show the active role/model/reasoning registry",
+    )
+    roles_status_parser.set_defaults(func=run_roles_status)
+
+    roles_validate_parser = roles_subparsers.add_parser(
+        "validate",
+        help="Validate the active role/model/reasoning registry",
+    )
+    roles_validate_parser.set_defaults(func=run_roles_validate)
 
     # planner subcommand group — HARDENING-029A
     planner_parser = subparsers.add_parser(
@@ -1303,6 +1322,33 @@ def run_runner(args: argparse.Namespace) -> int:
         allow_dirty=allow_dirty,
         worktree=use_worktree,
     )  # noqa: E501
+
+
+def run_roles_status(args: argparse.Namespace) -> int:
+    """Render the active role policy registry."""
+    print(format_role_policy_status())
+    return 0
+
+
+def run_roles_validate(args: argparse.Namespace) -> int:
+    """Validate the active role policy registry."""
+    errors = validate_role_registry()
+    if errors:
+        print("Signposter Role Policy Validation")
+        print("")
+        print("Status:")
+        print("  fail")
+        print("")
+        print("Errors:")
+        for error in errors:
+            print(f"  - {error}")
+        return 1
+
+    print("Signposter Role Policy Validation")
+    print("")
+    print("Status:")
+    print("  pass")
+    return 0
 
 
 def run_report(args: argparse.Namespace) -> int:
