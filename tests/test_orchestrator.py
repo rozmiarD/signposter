@@ -825,6 +825,41 @@ def test_orchestrator_run_next_loop_blocks_multiple_done_issue_tails() -> None:
     assert result.stop_reason == "multiple resumable done issues require explicit --issue: #61, #62"
 
 
+def test_orchestrator_run_next_loop_ignores_completed_done_issue() -> None:
+    done = LabeledItem(61, "Done 61", "url", ["state:done"], "issue")
+    scheduler = SchedulerNext(
+        repo="example/repo",
+        status="completed",
+        issue=None,
+        reason="no open dependency-clear state:ready issue found",
+        skipped=[],
+        notes=[],
+    )
+    lifecycle_complete = _next(
+        issue_number=61,
+        workflow_state="state:done",
+        worker_summary_exists=True,
+        pr_number=90,
+        pr_state="MERGED",
+        action="none",
+        command="(none)",
+        status="complete",
+        reason="lifecycle already complete",
+    )
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", return_value=scheduler),
+        patch("signposter.orchestrator.fetch_open_issues", return_value=[done]),
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_complete),
+    ):
+        result = run_orchestrator_run_next_loop("example/repo", max_cycles=1, apply=True)
+
+    assert result.steps == []
+    assert result.status == "stopped"
+    assert result.stop_reason == "no open dependency-clear state:ready issue found"
+    assert result.stop_category == "no-ready"
+
+
 def test_orchestrator_run_next_loop_can_tolerate_active_ambiguity() -> None:
     active_1 = LabeledItem(1, "One", "url", ["state:active"], "issue")
     active_2 = LabeledItem(2, "Two", "url", ["state:active"], "issue")

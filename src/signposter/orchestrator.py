@@ -532,7 +532,7 @@ def _select_run_next_loop_issue(repo: str, *, limit: int) -> tuple[int | None, s
         issue
         for issue in open_issues
         if _issue_state(issue) == "done"
-        and plan_lifecycle_next(repo, issue=issue.number).status in {"actionable", "complete"}
+        and plan_lifecycle_next(repo, issue=issue.number).status == "actionable"
     ]
     if len(resumable_done) == 1:
         return resumable_done[0].number, None
