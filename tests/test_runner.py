@@ -931,6 +931,7 @@ def test_execute_plan_timeout_writes_bounded_summary(tmp_path, monkeypatch):
     from subprocess import TimeoutExpired
     from unittest.mock import patch
 
+    from signposter.bug_ledger import load_bug_ledger
     from signposter.runner import execute_plan
 
     monkeypatch.chdir(tmp_path)
@@ -961,6 +962,10 @@ def test_execute_plan_timeout_writes_bounded_summary(tmp_path, monkeypatch):
     summary = (tmp_path / result["summary_path"]).read_text(encoding="utf-8")
     assert "**Execution Status:** timeout" in summary
     assert "bounded subprocess timeout" in summary
+    assert "**Bug Ledger:** recorded BUG-0001" in summary
+    entries = load_bug_ledger(tmp_path / "artifacts/automation/bug-ledger.json")
+    assert entries[0].status == "runtime-blocker"
+    assert entries[0].current_issue == 48
 
 
 def test_execute_plan_timeout_decodes_bytes_output(tmp_path, monkeypatch):
@@ -1005,6 +1010,7 @@ def test_execute_plan_timeout_decodes_bytes_output(tmp_path, monkeypatch):
 def test_execute_plan_runtime_stall_writes_bounded_summary(tmp_path, monkeypatch):
     from unittest.mock import patch
 
+    from signposter.bug_ledger import load_bug_ledger
     from signposter.runner import execute_plan
 
     monkeypatch.chdir(tmp_path)
@@ -1038,6 +1044,10 @@ def test_execute_plan_runtime_stall_writes_bounded_summary(tmp_path, monkeypatch
     summary = (tmp_path / result["summary_path"]).read_text(encoding="utf-8")
     assert "**Execution Status:** runtime-stall" in summary
     assert "do not keep the orchestrator waiting" in summary
+    assert "**Bug Ledger:** recorded BUG-0001" in summary
+    entries = load_bug_ledger(tmp_path / "artifacts/automation/bug-ledger.json")
+    assert entries[0].status == "runtime-blocker"
+    assert entries[0].current_issue == 49
 
 
 def test_execute_plan_refuses_invalid_timeout_relationship(tmp_path, monkeypatch):

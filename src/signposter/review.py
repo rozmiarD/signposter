@@ -16,6 +16,10 @@ from pathlib import Path
 from typing import Any
 
 from signposter.artifact_safety import find_stale_or_failover_signal
+from signposter.bug_ledger import (
+    format_runtime_bug_ledger_record,
+    record_runtime_bug_ledger_entry,
+)
 from signposter.codex_cli_backend import (
     execute_codex_cli_invocation,
     plan_codex_cli_invocation,
@@ -978,6 +982,13 @@ def execute_pr_review(
             diagnostics_warnings=diagnostics_warnings,
         )
         summary_path.write_text(summary, encoding="utf-8")
+        _record_review_runtime_bug(
+            pr_number=pr_number,
+            plan=plan,
+            diagnosis=diagnosis,
+            raw_path=raw_path,
+            summary_path=summary_path,
+        )
         return {
             "exit_code": -1,
             "raw_path": str(raw_path),
@@ -1050,6 +1061,13 @@ def execute_pr_review(
             diagnostics_warnings=diagnostics_warnings,
         )
         summary_path.write_text(summary, encoding="utf-8")
+        _record_review_runtime_bug(
+            pr_number=pr_number,
+            plan=plan,
+            diagnosis=diagnosis,
+            raw_path=raw_path,
+            summary_path=summary_path,
+        )
 
         return {
             "exit_code": exit_code,
@@ -1089,6 +1107,13 @@ def execute_pr_review(
             diagnostics_warnings=diagnostics_warnings,
         )
         summary_path.write_text(summary, encoding="utf-8")
+        _record_review_runtime_bug(
+            pr_number=pr_number,
+            plan=plan,
+            diagnosis=diagnosis,
+            raw_path=raw_path,
+            summary_path=summary_path,
+        )
         return {
             "exit_code": -1,
             "raw_path": str(raw_path),
@@ -1119,6 +1144,13 @@ def execute_pr_review(
             diagnostics_warnings=diagnostics_warnings,
         )
         summary_path.write_text(summary, encoding="utf-8")
+        _record_review_runtime_bug(
+            pr_number=pr_number,
+            plan=plan,
+            diagnosis=diagnosis,
+            raw_path=raw_path,
+            summary_path=summary_path,
+        )
         return {
             "exit_code": -1,
             "raw_path": str(raw_path),
@@ -1127,6 +1159,33 @@ def execute_pr_review(
             "error": diagnosis.reason,
             "diagnosis_status": diagnosis.status,
         }
+
+
+def _record_review_runtime_bug(
+    *,
+    pr_number: int,
+    plan: ReviewPlan,
+    diagnosis: OpenClawExecutionDiagnosis,
+    raw_path: Path,
+    summary_path: Path,
+) -> None:
+    record = record_runtime_bug_ledger_entry(
+        target_kind="pr",
+        target_number=pr_number,
+        diagnosis_status=diagnosis.status,
+        diagnosis_reason=diagnosis.reason,
+        selected_role=plan.selected_role_name,
+        selected_model=plan.selected_model,
+        raw_path=str(raw_path),
+        summary_path=str(summary_path),
+    )
+    summary_path.write_text(
+        summary_path.read_text(encoding="utf-8")
+        + "\n## Bug ledger\n\n"
+        + format_runtime_bug_ledger_record(record)
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 # =============================================================================
