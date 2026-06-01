@@ -31,6 +31,20 @@ def test_generate_proposed_worktree():
     assert "signposter-work/42" in path
 
 
+def test_get_worktree_status_detects_current_issue_worktree(monkeypatch, tmp_path):
+    from signposter.worktree import get_worktree_status_for_issue
+
+    worktree_path = tmp_path / "signposter-work" / "42"
+    worktree_path.mkdir(parents=True)
+    monkeypatch.chdir(worktree_path)
+
+    status = get_worktree_status_for_issue(42, "Test issue")
+
+    assert status["exists"] is True
+    assert status["status"] == "available"
+    assert status["path"] == str(worktree_path)
+
+
 def test_worktree_plan_blocked_for_done_issue(monkeypatch):
     """Plan for a done issue should be blocked."""
     from signposter.dispatch import DispatchDecision
