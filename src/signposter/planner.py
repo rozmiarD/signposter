@@ -1722,6 +1722,7 @@ def build_planner_next_from_status(status: dict[str, Any]) -> dict[str, Any]:
 
     waiting: list[dict[str, Any]] = []
     blocked: list[dict[str, Any]] = []
+    ready_mainline: dict[str, Any] | None = None
 
     for task in tasks:
         state = str(task.get("state", "")).lower()
@@ -1753,20 +1754,29 @@ def build_planner_next_from_status(status: dict[str, Any]) -> dict[str, Any]:
             continue
 
         if state in {"open", "ready"}:
-            return {
-                "status": "ready",
-                "reason": "first dependency-ready open task selected",
-                "next": {
-                    "key": task["key"],
-                    "title": task["title"],
-                    "github_issue": task["github_issue"],
-                    "github_url": task["github_url"],
-                    "state": task["state"],
-                    "depends_on": task["depends_on"],
-                },
-                "waiting": waiting,
-                "blocked": blocked,
+            next_task = {
+                "key": task["key"],
+                "title": task["title"],
+                "github_issue": task["github_issue"],
+                "github_url": task["github_url"],
+                "state": task["state"],
+                "depends_on": task["depends_on"],
+                "mainline": task.get("mainline"),
+                "parent": task.get("parent"),
+                "return_to": task.get("return_to"),
+                "side_task": bool(task.get("side_task", False)),
             }
+            if task.get("side_task"):
+                return {
+                    "status": "ready",
+                    "reason": "dependency-ready side-task selected before mainline",
+                    "next": next_task,
+                    "waiting": waiting,
+                    "blocked": blocked,
+                }
+            if ready_mainline is None:
+                ready_mainline = next_task
+            continue
 
         blocked.append(
             {
@@ -1774,6 +1784,15 @@ def build_planner_next_from_status(status: dict[str, Any]) -> dict[str, Any]:
                 "reason": f"unsupported task state: {task.get('state')}",
             }
         )
+
+    if ready_mainline is not None:
+        return {
+            "status": "ready",
+            "reason": "first dependency-ready open task selected",
+            "next": ready_mainline,
+            "waiting": [],
+            "blocked": [],
+        }
 
     if len(completed) == len(tasks):
         return {
@@ -1817,6 +1836,18 @@ def format_planner_next_from_status(result: dict[str, Any]) -> str:
                 f"  depends on: {deps}",
             ]
         )
+        if task.get("side_task"):
+            parent = f"#{task['parent']}" if task.get("parent") is not None else "none"
+            return_to = f"#{task['return_to']}" if task.get("return_to") is not None else "none"
+            mainline = task.get("mainline") or "none"
+            lines.extend(
+                [
+                    "  side-task: yes",
+                    f"  parent: {parent}",
+                    f"  return-to: {return_to}",
+                    f"  mainline: {mainline}",
+                ]
+            )
 
     if result["waiting"]:
         lines.extend(["", "Waiting:"])
@@ -1914,6 +1945,18 @@ def build_planner_step_from_next(next_result: dict[str, Any]) -> dict[str, Any]:
             "command": run_command,
         },
     ]
+    if next_task.get("side_task") and next_task.get("return_to") is not None:
+        return_to = int(next_task["return_to"])
+        workflow_hints.append(
+            {
+                "label": "return target",
+                "command": (
+                    f"signposter lifecycle status --repo {repo} --issue {return_to}"
+                    if repo
+                    else f"signposter lifecycle status --issue {return_to}"
+                ),
+            }
+        )
 
     return {
         "status": "ready",
@@ -2015,6 +2058,10 @@ def build_planner_status(
                 "depends_on": issue.get("depends_on", []),
                 "github_depends_on": issue.get("github_depends_on", []),
                 "dependency_metadata": issue.get("dependency_metadata", []),
+                "mainline": issue.get("mainline"),
+                "parent": issue.get("parent"),
+                "return_to": issue.get("return_to"),
+                "side_task": bool(issue.get("side_task", False)),
             }
         )
 
@@ -2083,6 +2130,18 @@ def format_planner_status(status: dict[str, Any]) -> str:
                     for dependency in dependency_metadata
                 )
                 lines.append(f"    depends on: {deps}")
+            if task.get("side_task"):
+                parent = f"#{task['parent']}" if task.get("parent") is not None else "none"
+                return_to = (
+                    f"#{task['return_to']}" if task.get("return_to") is not None else "none"
+                )
+                mainline = task.get("mainline") or "none"
+                lines.append(
+                    "    side-task: yes"
+                    f" · parent: {parent}"
+                    f" · return-to: {return_to}"
+                    f" · mainline: {mainline}"
+                )
 
     lines.extend(["", "Notes:"])
     lines.extend(f"  {note}" for note in status["notes"])
@@ -2110,6 +2169,10 @@ def build_planner_seed_manifest(
                 "body_size": issue["body_size"],
                 "github_issue": None,
                 "github_url": "",
+                "mainline": issue.get("mainline"),
+                "parent": issue.get("parent"),
+                "return_to": issue.get("return_to"),
+                "side_task": bool(issue.get("side_task", False)),
             }
         )
 
