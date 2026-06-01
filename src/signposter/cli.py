@@ -19,6 +19,13 @@ from signposter.artifact import (
     validate_worker_summary_artifact,
     write_manual_artifact,
 )
+from signposter.bug_ledger import (
+    apply_bug_ledger_plan,
+    format_bug_ledger_plan,
+    plan_record_bug,
+    plan_show_bugs,
+    plan_update_bug,
+)
 from signposter.claim import cli_main as claim_cli_main
 from signposter.dispatch import cli_main as dispatch_cli_main
 from signposter.doctor import (
@@ -1098,6 +1105,61 @@ def main() -> None:
     )
     review_artifact_parser.set_defaults(func=run_artifact_review_summary)
 
+    record_bug_parser = artifact_subparsers.add_parser(
+        "record-bug",
+        help="Create a local automation bug ledger entry",
+    )
+    record_bug_parser.add_argument("--summary", required=True)
+    record_bug_parser.add_argument("--status", default="open")
+    record_bug_parser.add_argument("--source-issue", type=int, default=None)
+    record_bug_parser.add_argument("--source-pr", type=int, default=None)
+    record_bug_parser.add_argument("--current-issue", type=int, default=None)
+    record_bug_parser.add_argument("--current-pr", type=int, default=None)
+    record_bug_parser.add_argument("--follow-up-issue", type=int, default=None)
+    record_bug_parser.add_argument("--notes", default="")
+    record_bug_parser.add_argument(
+        "--ledger-path",
+        default="artifacts/automation/bug-ledger.json",
+    )
+    record_bug_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually write the ledger entry",
+    )
+    record_bug_parser.set_defaults(func=run_artifact_record_bug)
+
+    update_bug_parser = artifact_subparsers.add_parser(
+        "update-bug",
+        help="Update an existing local automation bug ledger entry",
+    )
+    update_bug_parser.add_argument("--key", required=True)
+    update_bug_parser.add_argument("--status", default=None)
+    update_bug_parser.add_argument("--current-issue", type=int, default=None)
+    update_bug_parser.add_argument("--current-pr", type=int, default=None)
+    update_bug_parser.add_argument("--follow-up-issue", type=int, default=None)
+    update_bug_parser.add_argument("--notes", default=None)
+    update_bug_parser.add_argument(
+        "--ledger-path",
+        default="artifacts/automation/bug-ledger.json",
+    )
+    update_bug_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually write the ledger update",
+    )
+    update_bug_parser.set_defaults(func=run_artifact_update_bug)
+
+    show_bugs_parser = artifact_subparsers.add_parser(
+        "show-bugs",
+        help="Render a bounded local automation bug ledger view",
+    )
+    show_bugs_parser.add_argument(
+        "--ledger-path",
+        default="artifacts/automation/bug-ledger.json",
+    )
+    show_bugs_parser.add_argument("--limit", type=int, default=8)
+    show_bugs_parser.set_defaults(func=run_artifact_show_bugs)
+
     # gate subcommand (dry-run gate decision)
     gate_parser = subparsers.add_parser(
         "gate",
@@ -1501,6 +1563,50 @@ def run_artifact_validate_worker_summary(args: argparse.Namespace) -> int:
     )
     print(format_worker_artifact_validation(result))
     return 0 if result.status == "pass" else 1
+
+
+def run_artifact_record_bug(args: argparse.Namespace) -> int:
+    """Create or plan a local automation bug ledger entry."""
+    plan = plan_record_bug(
+        summary=args.summary,
+        status=args.status,
+        source_issue=getattr(args, "source_issue", None),
+        source_pr=getattr(args, "source_pr", None),
+        current_issue=getattr(args, "current_issue", None),
+        current_pr=getattr(args, "current_pr", None),
+        follow_up_issue=getattr(args, "follow_up_issue", None),
+        notes=getattr(args, "notes", "") or "",
+        ledger_path=getattr(args, "ledger_path", "artifacts/automation/bug-ledger.json"),
+    )
+    apply_bug_ledger_plan(plan, apply=getattr(args, "apply", False))
+    print(format_bug_ledger_plan(plan, apply=getattr(args, "apply", False)))
+    return 0 if plan.status == "ready" else 1
+
+
+def run_artifact_update_bug(args: argparse.Namespace) -> int:
+    """Update an existing local automation bug ledger entry."""
+    plan = plan_update_bug(
+        key=args.key,
+        status=getattr(args, "status", None),
+        current_issue=getattr(args, "current_issue", None),
+        current_pr=getattr(args, "current_pr", None),
+        follow_up_issue=getattr(args, "follow_up_issue", None),
+        notes=getattr(args, "notes", None),
+        ledger_path=getattr(args, "ledger_path", "artifacts/automation/bug-ledger.json"),
+    )
+    apply_bug_ledger_plan(plan, apply=getattr(args, "apply", False))
+    print(format_bug_ledger_plan(plan, apply=getattr(args, "apply", False)))
+    return 0 if plan.status == "ready" else 1
+
+
+def run_artifact_show_bugs(args: argparse.Namespace) -> int:
+    """Render a bounded local automation bug ledger view."""
+    plan = plan_show_bugs(
+        ledger_path=getattr(args, "ledger_path", "artifacts/automation/bug-ledger.json"),
+        limit=getattr(args, "limit", 8),
+    )
+    print(format_bug_ledger_plan(plan, limit=getattr(args, "limit", 8)))
+    return 0
 
 
 def run_gate(args: argparse.Namespace) -> int:
