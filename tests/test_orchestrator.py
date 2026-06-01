@@ -343,6 +343,63 @@ def test_orchestrator_pr_tail_loop_runs_bounded_pr_steps() -> None:
     assert all(step.next.lifecycle.pr_number == 47 for step in result.steps)
 
 
+def test_orchestrator_pr_tail_loop_resumes_review_merge_integration_cleanup() -> None:
+    lifecycle_steps = [
+        _next(
+            query_issue=None,
+            query_pr=47,
+            issue_number=46,
+            pr_number=47,
+            action="review-pr",
+            command="signposter review plan --repo example/repo --pr 47",
+        ),
+        _next(
+            query_issue=None,
+            query_pr=47,
+            issue_number=46,
+            pr_number=47,
+            action="merge-pr",
+            command="signposter merge apply --repo example/repo --pr 47 --apply",
+        ),
+        _next(
+            query_issue=None,
+            query_pr=47,
+            issue_number=46,
+            pr_number=47,
+            pr_state="MERGED",
+            action="integrate-issue",
+            command="signposter integration apply --repo example/repo --pr 47 --apply",
+        ),
+        _next(
+            query_issue=None,
+            query_pr=47,
+            issue_number=46,
+            pr_number=47,
+            pr_state="MERGED",
+            action="cleanup",
+            command="signposter cleanup apply --repo example/repo --pr 47 --apply",
+        ),
+    ]
+    proc = type("Proc", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
+
+    with patch("signposter.orchestrator.plan_lifecycle_next", side_effect=lifecycle_steps):
+        result = run_orchestrator_loop(
+            "example/repo",
+            pr=47,
+            max_cycles=4,
+            apply=True,
+            run_command=Mock(return_value=proc),
+        )
+
+    assert [step.next.action for step in result.steps] == [
+        "review-pr",
+        "merge-pr",
+        "integrate-issue",
+        "cleanup",
+    ]
+    assert result.status == "limit-reached"
+
+
 def test_format_orchestrator_loop_summary_shows_pr_tail_stop() -> None:
     lifecycle_next = _next(
         query_issue=None,
@@ -643,6 +700,73 @@ def test_orchestrator_run_next_loop_resumes_single_active_issue() -> None:
     assert result.status == "limit-reached"
 
 
+def test_orchestrator_run_next_loop_resumes_single_done_issue_tail() -> None:
+    done = LabeledItem(
+        number=61,
+        title="Issue 61",
+        html_url="https://github.com/example/repo/issues/61",
+        labels=["state:done"],
+        item_type="issue",
+    )
+    scheduler = SchedulerNext(
+        repo="example/repo",
+        status="completed",
+        issue=None,
+        reason="no open dependency-clear state:ready issue found",
+        skipped=[],
+        notes=[],
+    )
+    lifecycle_steps = [
+        _next(
+            issue_number=61,
+            workflow_state="state:done",
+            worker_summary_exists=True,
+            pr_number=90,
+            pr_state="OPEN",
+            action="review-pr",
+            command="signposter review plan --repo example/repo --pr 90",
+            reason="PR is open and not approved",
+        ),
+        _next(
+            issue_number=61,
+            workflow_state="state:done",
+            worker_summary_exists=True,
+            pr_number=90,
+            pr_state="OPEN",
+            action="review-pr",
+            command="signposter review plan --repo example/repo --pr 90",
+            reason="PR is open and not approved",
+        ),
+        _next(
+            issue_number=61,
+            workflow_state="state:done",
+            worker_summary_exists=True,
+            pr_number=90,
+            pr_state="OPEN",
+            action="merge-pr",
+            command="signposter merge apply --repo example/repo --pr 90 --apply",
+            reason="PR is approved and may be mergeable",
+        ),
+    ]
+    proc = type("Proc", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", return_value=scheduler),
+        patch("signposter.orchestrator.fetch_open_issues", return_value=[done]),
+        patch("signposter.orchestrator.plan_lifecycle_next", side_effect=lifecycle_steps),
+    ):
+        result = run_orchestrator_run_next_loop(
+            "example/repo",
+            max_cycles=2,
+            apply=True,
+            run_command=Mock(return_value=proc),
+        )
+
+    assert [step.next.action for step in result.steps] == ["review-pr", "merge-pr"]
+    assert result.tasks_started == 1
+    assert result.status == "limit-reached"
+
+
 def test_orchestrator_run_next_loop_blocks_multiple_active_issues() -> None:
     active_1 = LabeledItem(1, "One", "url", ["state:active"], "issue")
     active_2 = LabeledItem(2, "Two", "url", ["state:active"], "issue")
@@ -666,6 +790,74 @@ def test_orchestrator_run_next_loop_blocks_multiple_active_issues() -> None:
     assert result.stop_reason == "multiple active issues require explicit --issue: #1, #2"
     assert result.stop_category == "active-ambiguity"
     assert result.stop_tolerated is False
+
+
+def test_orchestrator_run_next_loop_blocks_multiple_done_issue_tails() -> None:
+    done_1 = LabeledItem(61, "Done 61", "url", ["state:done"], "issue")
+    done_2 = LabeledItem(62, "Done 62", "url", ["state:done"], "issue")
+    scheduler = SchedulerNext(
+        repo="example/repo",
+        status="completed",
+        issue=None,
+        reason="no open dependency-clear state:ready issue found",
+        skipped=[],
+        notes=[],
+    )
+    done_tail = _next(
+        workflow_state="state:done",
+        worker_summary_exists=True,
+        pr_number=90,
+        pr_state="OPEN",
+        action="review-pr",
+        command="signposter review plan --repo example/repo --pr 90",
+        reason="PR is open and not approved",
+    )
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", return_value=scheduler),
+        patch("signposter.orchestrator.fetch_open_issues", return_value=[done_1, done_2]),
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=done_tail),
+    ):
+        result = run_orchestrator_run_next_loop("example/repo", max_cycles=2, apply=True)
+
+    assert result.steps == []
+    assert result.status == "stopped"
+    assert result.stop_reason == "multiple resumable done issues require explicit --issue: #61, #62"
+
+
+def test_orchestrator_run_next_loop_ignores_completed_done_issue() -> None:
+    done = LabeledItem(61, "Done 61", "url", ["state:done"], "issue")
+    scheduler = SchedulerNext(
+        repo="example/repo",
+        status="completed",
+        issue=None,
+        reason="no open dependency-clear state:ready issue found",
+        skipped=[],
+        notes=[],
+    )
+    lifecycle_complete = _next(
+        issue_number=61,
+        workflow_state="state:done",
+        worker_summary_exists=True,
+        pr_number=90,
+        pr_state="MERGED",
+        action="none",
+        command="(none)",
+        status="complete",
+        reason="lifecycle already complete",
+    )
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", return_value=scheduler),
+        patch("signposter.orchestrator.fetch_open_issues", return_value=[done]),
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_complete),
+    ):
+        result = run_orchestrator_run_next_loop("example/repo", max_cycles=1, apply=True)
+
+    assert result.steps == []
+    assert result.status == "stopped"
+    assert result.stop_reason == "no open dependency-clear state:ready issue found"
+    assert result.stop_category == "no-ready"
 
 
 def test_orchestrator_run_next_loop_can_tolerate_active_ambiguity() -> None:
