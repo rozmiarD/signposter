@@ -13,6 +13,10 @@ from pathlib import Path
 from signposter.claim import build_claim_plan, perform_claim_mutation, plan_claims
 from signposter.dependencies import is_dependency_blocked
 from signposter.dispatch import DispatchDecision, classify_candidate
+from signposter.execution_backend import (
+    build_backend_command_shape,
+    resolve_execution_backend,
+)
 from signposter.git_utils import find_uncommitted_repo_changes
 from signposter.openclaw_diagnostics import gather_openclaw_runtime_diagnostics
 from signposter.openclaw_preflight import (
@@ -64,6 +68,9 @@ class RunnerPlan:
     proposed_prompt_path: str
     proposed_command_shape: str
     reason: str
+    backend_reason: str = "default Signposter execution backend"
+    backend_execution_supported: bool = True
+    backend_notes: tuple[str, ...] = ()
     selected_role_name: str = "WORKER_CODE"
     selected_model: str = "openai/gpt-5.3-codex"
     selected_reasoning_effort: str = "low"
@@ -172,29 +179,34 @@ def build_openclaw_session_key(
     return f"signposter-{namespace}-{target_kind}-{target_number}-{profile}"
 
 
-def _select_runner_and_profile(dispatch: DispatchDecision) -> tuple[str, str]:
-    """Map role + phase to runner + OpenClaw profile."""
+def _select_runner_and_profile(
+    dispatch: DispatchDecision,
+    *,
+    backend: str | None = None,
+) -> tuple[str, str]:
+    """Map role + phase to execution backend + profile."""
+    backend_plan = resolve_execution_backend(backend)
     role = dispatch.role or ""
     phase = dispatch.phase or ""
 
     if role == "worker" and phase == "build":
-        return "openclaw", "worker"
+        return backend_plan.backend, "worker"
     elif role == "reviewer" and phase == "review":
-        return "openclaw", "reviewer"
+        return backend_plan.backend, "reviewer"
     elif role == "planner" and phase == "plan":
-        return "openclaw", "planner"
+        return backend_plan.backend, "planner"
     elif role == "gatekeeper":
-        return "openclaw", "gatekeeper"
+        return backend_plan.backend, "gatekeeper"
     else:
         # Conservative default
-        return "openclaw", "worker"
+        return backend_plan.backend, "worker"
 
 
 def _build_explicit_claim_plan(plan: RunnerPlan):
     return build_claim_plan(plan.dispatch)
 
 
-def plan_runner(repo: str, *, limit: int = 1) -> list[RunnerPlan]:
+def plan_runner(repo: str, *, limit: int = 1, backend: str | None = None) -> list[RunnerPlan]:
     """Produce runner plans for claimable items.
 
     Reuses the conservative claim planner (limit + deterministic ordering).
@@ -206,7 +218,8 @@ def plan_runner(repo: str, *, limit: int = 1) -> list[RunnerPlan]:
         dispatch = claim_plan.dispatch
         item = claim_plan.item
 
-        runner, profile = _select_runner_and_profile(dispatch)
+        backend_plan = resolve_execution_backend(backend)
+        runner, profile = _select_runner_and_profile(dispatch, backend=backend_plan.backend)
         role_selection = select_role_for_issue(item, dispatch)
 
         # Proposed paths (dry-run only)
@@ -225,12 +238,13 @@ def plan_runner(repo: str, *, limit: int = 1) -> list[RunnerPlan]:
             target_number=item.number,
             profile=profile,
         )
-        command_shape = (
-            f"openclaw agent --agent {profile} "
-            f"--session-key {session_key} "
-            f"--model {role_selection.policy.model} "
-            f"--thinking {role_selection.policy.reasoning_effort} "
-            f"--message \"$(cat {prompt_path})\" --local"
+        command_shape = build_backend_command_shape(
+            backend=runner,
+            agent=profile,
+            session_key=session_key,
+            model=role_selection.policy.model,
+            reasoning_effort=role_selection.policy.reasoning_effort,
+            prompt_path=prompt_path,
         )
 
         reason = (
@@ -247,6 +261,9 @@ def plan_runner(repo: str, *, limit: int = 1) -> list[RunnerPlan]:
             proposed_prompt_path=prompt_path,
             proposed_command_shape=command_shape,
             reason=reason,
+            backend_reason=backend_plan.reason,
+            backend_execution_supported=backend_plan.execution_supported,
+            backend_notes=backend_plan.notes,
             selected_role_name=role_selection.policy.name,
             selected_model=role_selection.policy.model,
             selected_reasoning_effort=role_selection.policy.reasoning_effort,
@@ -258,7 +275,12 @@ def plan_runner(repo: str, *, limit: int = 1) -> list[RunnerPlan]:
     return plans
 
 
-def plan_runner_for_issue(repo: str, issue: int) -> RunnerPlan | None:
+def plan_runner_for_issue(
+    repo: str,
+    issue: int,
+    *,
+    backend: str | None = None,
+) -> RunnerPlan | None:
     """Build a RunnerPlan for one specific issue by number.
 
     Works for state:ready, state:active, etc. Does not filter by claimability.
@@ -269,7 +291,8 @@ def plan_runner_for_issue(repo: str, issue: int) -> RunnerPlan | None:
         return None
 
     dispatch = classify_candidate(item)
-    runner, profile = _select_runner_and_profile(dispatch)
+    backend_plan = resolve_execution_backend(backend)
+    runner, profile = _select_runner_and_profile(dispatch, backend=backend_plan.backend)
     role_selection = select_role_for_issue(item, dispatch)
 
     # HARDENING-009: prefer isolated worktree path if it exists
@@ -289,12 +312,13 @@ def plan_runner_for_issue(repo: str, issue: int) -> RunnerPlan | None:
         target_number=item.number,
         profile=profile,
     )
-    command_shape = (
-        f"openclaw agent --agent {profile} "
-        f"--session-key {session_key} "
-        f"--model {role_selection.policy.model} "
-        f"--thinking {role_selection.policy.reasoning_effort} "
-        f"--message \"$(cat {prompt_path})\" --local"
+    command_shape = build_backend_command_shape(
+        backend=runner,
+        agent=profile,
+        session_key=session_key,
+        model=role_selection.policy.model,
+        reasoning_effort=role_selection.policy.reasoning_effort,
+        prompt_path=prompt_path,
     )
 
     reason = (
@@ -311,6 +335,9 @@ def plan_runner_for_issue(repo: str, issue: int) -> RunnerPlan | None:
         proposed_prompt_path=prompt_path,
         proposed_command_shape=command_shape,
         reason=reason,
+        backend_reason=backend_plan.reason,
+        backend_execution_supported=backend_plan.execution_supported,
+        backend_notes=backend_plan.notes,
         selected_role_name=role_selection.policy.name,
         selected_model=role_selection.policy.model,
         selected_reasoning_effort=role_selection.policy.reasoning_effort,
@@ -332,7 +359,12 @@ def _prompt_issue_number(prompt_path: Path) -> int | None:
         return None
 
 
-def plan_active_runner_from_prompts(repo: str, *, limit: int = 1) -> list[RunnerPlan]:
+def plan_active_runner_from_prompts(
+    repo: str,
+    *,
+    limit: int = 1,
+    backend: str | None = None,
+) -> list[RunnerPlan]:
     """Produce runner plans for already-active items with existing prompt artifacts."""
     prompt_dir = Path("artifacts/prompts")
     if not prompt_dir.exists():
@@ -356,7 +388,8 @@ def plan_active_runner_from_prompts(repo: str, *, limit: int = 1) -> list[Runner
             continue
 
         dispatch = classify_candidate(item)
-        runner, profile = _select_runner_and_profile(dispatch)
+        backend_plan = resolve_execution_backend(backend)
+        runner, profile = _select_runner_and_profile(dispatch, backend=backend_plan.backend)
         role_selection = select_role_for_issue(item, dispatch)
 
         working_dir = f"~/projects/signposter-work/{item.number}"
@@ -366,12 +399,13 @@ def plan_active_runner_from_prompts(repo: str, *, limit: int = 1) -> list[Runner
             target_number=item.number,
             profile=profile,
         )
-        command_shape = (
-            f"openclaw agent --agent {profile} "
-            f"--session-key {session_key} "
-            f"--model {role_selection.policy.model} "
-            f"--thinking {role_selection.policy.reasoning_effort} "
-            f'--message "$(cat {prompt_path_str})" --local'
+        command_shape = build_backend_command_shape(
+            backend=runner,
+            agent=profile,
+            session_key=session_key,
+            model=role_selection.policy.model,
+            reasoning_effort=role_selection.policy.reasoning_effort,
+            prompt_path=prompt_path_str,
         )
 
         plans.append(
@@ -384,6 +418,9 @@ def plan_active_runner_from_prompts(repo: str, *, limit: int = 1) -> list[Runner
                 proposed_prompt_path=prompt_path_str,
                 proposed_command_shape=command_shape,
                 reason="Already-active item with existing prompt artifact",
+                backend_reason=backend_plan.reason,
+                backend_execution_supported=backend_plan.execution_supported,
+                backend_notes=backend_plan.notes,
                 selected_role_name=role_selection.policy.name,
                 selected_model=role_selection.policy.model,
                 selected_reasoning_effort=role_selection.policy.reasoning_effort,
@@ -422,7 +459,11 @@ def format_runner_plan(plans: list[RunnerPlan]) -> str:
         lines.append("")
         lines.append("    Proposed Execution:")
         lines.append(f"      runner:           {plan.proposed_runner}")
-        lines.append(f"      openclaw_profile: {plan.proposed_profile}")
+        lines.append(f"      execution_profile: {plan.proposed_profile}")
+        lines.append(f"      backend_reason:   {plan.backend_reason}")
+        lines.append(
+            f"      execute_ready:    {'yes' if plan.backend_execution_supported else 'no'}"
+        )
         lines.append(f"      selected_role:    {plan.selected_role_name}")
         lines.append(f"      model:            {plan.selected_model}")
         lines.append(f"      reasoning:        {plan.selected_reasoning_effort}")
@@ -433,12 +474,14 @@ def format_runner_plan(plans: list[RunnerPlan]) -> str:
         lines.append("")
         lines.append(f"    Reason: {plan.reason}")
         lines.append(f"    Role Reason: {plan.role_selection_reason}")
+        for note in plan.backend_notes:
+            lines.append(f"    Backend Note: {note}")
         lines.append("")
 
     lines.append(f"Total items planned for execution: {len(plans)}")
     lines.append(
         "Note: This is a DRY RUN. "
-        "No OpenClaw session was started and no artifacts were written."
+        "No execution backend was started and no artifacts were written."
     )
 
     return "\n".join(lines)
@@ -481,6 +524,11 @@ def main() -> int:
         type=int,
         help="Target a specific issue number explicitly (bypasses claim planner)",
     )
+    parser.add_argument(
+        "--backend",
+        choices=["openclaw", "codex-cli"],
+        help="Execution backend to plan for; default is openclaw or SIGNPOSTER_EXECUTION_BACKEND",
+    )
     args = parser.parse_args()
 
     write_prompt = args.write_prompt
@@ -499,6 +547,7 @@ def main() -> int:
         issue=issue,
         allow_dirty=allow_dirty,
         worktree=use_worktree,
+        backend=args.backend,
     )  # noqa: E501
 
 
@@ -1107,6 +1156,7 @@ def cli_main(
     issue: int | None = None,
     allow_dirty: bool = False,
     worktree: bool = False,
+    backend: str | None = None,
 ) -> int:  # noqa: E501
     """Entry point for the run command.
 
@@ -1116,7 +1166,7 @@ def cli_main(
     try:
         if issue is not None:
             # Explicit single-issue targeting path (HARDENING-004)
-            plan = plan_runner_for_issue(repo, issue)
+            plan = plan_runner_for_issue(repo, issue, backend=backend)
             plans = [plan] if plan else []
             if not plans:
                 print(f"Error: Could not fetch issue #{issue} from {repo}.")
@@ -1193,7 +1243,7 @@ def cli_main(
 
             if claimed_issue:
                 print("\n=== Refreshing explicit issue plan from current GitHub state ===\n")
-                refreshed_plan = plan_runner_for_issue(repo, item_number)
+                refreshed_plan = plan_runner_for_issue(repo, item_number, backend=backend)
                 if refreshed_plan is None:
                     print(
                         f"  Warning: could not re-fetch issue #{item_number}; "
@@ -1211,10 +1261,17 @@ def cli_main(
                     print(f"Wrote: {path}")
 
             if execute and final_plans:
-                print("\n=== EXECUTING RUNNER (OpenClaw) ===\n")
+                print("\n=== EXECUTING RUNNER ===\n")
                 execution_failed = False
 
                 for p in final_plans:
+                    if not p.backend_execution_supported:
+                        print(
+                            f"Refusing execution via backend '{p.proposed_runner}': "
+                            "execution adapter is not implemented yet."
+                        )
+                        execution_failed = True
+                        continue
                     st = (p.dispatch.state or "").lower()
 
                     # HARDENING-010: explicit worktree execution path
@@ -1291,7 +1348,7 @@ def cli_main(
             return 0
 
         else:
-            plans = plan_runner(repo, limit=limit)
+            plans = plan_runner(repo, limit=limit, backend=backend)
             print(format_runner_plan(plans))
 
         claimed_numbers: list[int] = []
@@ -1332,6 +1389,14 @@ def cli_main(
                             proposed_prompt_path=old_plan.proposed_prompt_path,
                             proposed_command_shape=old_plan.proposed_command_shape,
                             reason=old_plan.reason,
+                            backend_reason=old_plan.backend_reason,
+                            backend_execution_supported=old_plan.backend_execution_supported,
+                            backend_notes=old_plan.backend_notes,
+                            selected_role_name=old_plan.selected_role_name,
+                            selected_model=old_plan.selected_model,
+                            selected_reasoning_effort=old_plan.selected_reasoning_effort,
+                            selected_openclaw_agent=old_plan.selected_openclaw_agent,
+                            role_selection_reason=old_plan.role_selection_reason,
                         )
                     )
             if refreshed:
@@ -1417,6 +1482,14 @@ def execute_plan(
     item = plan.item
     profile = plan.proposed_profile or "worker"
     prompt_path = plan.proposed_prompt_path
+    if not plan.backend_execution_supported:
+        return {
+            "exit_code": 1,
+            "raw_path": None,
+            "summary_path": None,
+            "error": f"execution backend '{plan.proposed_runner}' is not implemented yet",
+            "success": False,
+        }
     session_key = build_openclaw_session_key(
         target_kind="issue",
         target_number=item.number,

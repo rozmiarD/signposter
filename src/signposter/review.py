@@ -16,6 +16,10 @@ from pathlib import Path
 from typing import Any
 
 from signposter.artifact_safety import find_stale_or_failover_signal
+from signposter.execution_backend import (
+    build_backend_command_shape,
+    resolve_execution_backend,
+)
 from signposter.openclaw_diagnostics import gather_openclaw_runtime_diagnostics
 from signposter.openclaw_preflight import (
     check_openclaw_preflight,
@@ -61,6 +65,11 @@ class ReviewPlan:
 
     reviewer_profile: str
     prompt_artifact_path: str
+    proposed_runner: str = "openclaw"
+    proposed_command_shape: str = ""
+    backend_reason: str = "default Signposter execution backend"
+    backend_execution_supported: bool = True
+    backend_notes: tuple[str, ...] = ()
     selected_role_name: str = "REVIEWER_LIGHT"
     selected_model: str = "openai/gpt-5.4-mini"
     selected_reasoning_effort: str = "low"
@@ -300,6 +309,7 @@ def plan_review_for_pr(
     pr_number: int,
     *,
     allow_high_risk: bool = False,
+    backend: str | None = None,
 ) -> ReviewPlan:
     """Produce a dry-run ReviewPlan for a pull request."""
     try:
@@ -406,6 +416,21 @@ def plan_review_for_pr(
         size=size,
         file_paths=file_paths,
     )
+    backend_plan = resolve_execution_backend(backend)
+    session_key = build_openclaw_session_key(
+        target_kind="pr",
+        target_number=pr_number,
+        profile="reviewer",
+    )
+    prompt_path = f"artifacts/prompts/pr-{pr_number}-review.md"
+    command_shape = build_backend_command_shape(
+        backend=backend_plan.backend,
+        agent=role_selection.policy.openclaw_agent,
+        session_key=session_key,
+        model=role_selection.policy.model,
+        reasoning_effort=role_selection.policy.reasoning_effort,
+        prompt_path=prompt_path,
+    )
 
     return ReviewPlan(
         pr_number=pr_number,
@@ -429,7 +454,12 @@ def plan_review_for_pr(
         status=status,
         notes=notes,
         reviewer_profile="reviewer",
-        prompt_artifact_path=f"artifacts/prompts/pr-{pr_number}-review.md",
+        prompt_artifact_path=prompt_path,
+        proposed_runner=backend_plan.backend,
+        proposed_command_shape=command_shape,
+        backend_reason=backend_plan.reason,
+        backend_execution_supported=backend_plan.execution_supported,
+        backend_notes=backend_plan.notes,
         selected_role_name=role_selection.policy.name,
         selected_model=role_selection.policy.model,
         selected_reasoning_effort=role_selection.policy.reasoning_effort,
@@ -463,12 +493,15 @@ def format_review_plan(plan: ReviewPlan) -> str:
     lines.append(f"  size: {plan.size}")
 
     lines.append("\nReviewer:")
+    lines.append(f"  backend: {plan.proposed_runner}")
     lines.append(f"  agent: {plan.reviewer_profile}")
     lines.append(f"  selected role: {plan.selected_role_name}")
     lines.append(f"  model: {plan.selected_model}")
     lines.append(f"  reasoning: {plan.selected_reasoning_effort}")
-    lines.append("  model/profile: existing OpenClaw reviewer profile")
+    lines.append(f"  execute ready: {'yes' if plan.backend_execution_supported else 'no'}")
     lines.append(f"  prompt artifact: {plan.prompt_artifact_path}")
+    lines.append(f"  command shape: {plan.proposed_command_shape}")
+    lines.append(f"  backend reason: {plan.backend_reason}")
     lines.append(f"  reason: {plan.role_selection_reason}")
     lines.append(
         "  expected output: structured review opinion with verdict, "
@@ -481,6 +514,10 @@ def format_review_plan(plan: ReviewPlan) -> str:
     if plan.notes:
         lines.append("\nNotes:")
         for n in plan.notes:
+            lines.append(f"  {n}")
+    if plan.backend_notes:
+        lines.append("\nBackend notes:")
+        for n in plan.backend_notes:
             lines.append(f"  {n}")
 
     return "\n".join(lines)
@@ -796,6 +833,7 @@ def execute_pr_review(
     profile: str = "reviewer",
     runs_dir: Path | str = "artifacts/runs",
     allow_high_risk: bool = False,
+    backend: str | None = None,
 ) -> dict:
     """Execute the reviewer agent locally against an existing PR review prompt artifact.
 
@@ -805,13 +843,23 @@ def execute_pr_review(
     Returns a dict with execution result.
     """
     # Guard: plan must be ready
-    plan = plan_review_for_pr(repo, pr_number, allow_high_risk=allow_high_risk)
+    plan = plan_review_for_pr(repo, pr_number, allow_high_risk=allow_high_risk, backend=backend)
     if plan.status != "ready":
         return {
             "exit_code": 1,
             "raw_path": None,
             "summary_path": None,
             "error": f"review plan not ready: {plan.status}",
+            "success": False,
+        }
+    if not plan.backend_execution_supported:
+        return {
+            "exit_code": 1,
+            "raw_path": None,
+            "summary_path": None,
+            "error": (
+                f"execution backend '{plan.proposed_runner}' is not implemented for review execute"
+            ),
             "success": False,
         }
 

@@ -102,6 +102,42 @@ def test_format_review_plan_contains_key_sections():
     assert "No merge was performed" in output
     assert "selected role:" in output
     assert "reasoning:" in output
+    assert "backend:" in output
+    assert "execute ready:" in output
+
+
+def test_plan_review_accepts_codex_cli_backend_for_dry_run():
+    with (
+        patch("signposter.review._run_gh_pr_view") as mock_gh,
+        patch("signposter.review._fetch_pr_checks") as mock_checks,
+        patch("signposter.review._fetch_pr_files") as mock_files,
+        patch("signposter.review._fetch_pr_file_paths") as mock_paths,
+    ):
+        mock_gh.return_value = {
+            "number": 5,
+            "title": "Small PR",
+            "state": "OPEN",
+            "baseRefName": "main",
+            "headRefName": "work/issue-4-small-pr",
+            "mergeable": "MERGEABLE",
+            "reviewDecision": None,
+            "body": "",
+        }
+        mock_checks.return_value = {
+            "status": "pass",
+            "successful": 1,
+            "failing": 0,
+            "pending": 0,
+        }
+        mock_files.return_value = {"files_changed": 1, "additions": 5, "deletions": 0}
+        mock_paths.return_value = ["tests/test_example.py"]
+
+        plan = plan_review_for_pr("test/repo", 5, backend="codex-cli")
+
+    assert plan.proposed_runner == "codex-cli"
+    assert plan.backend_execution_supported is False
+    assert "codex exec" in plan.proposed_command_shape
+
 
 def test_fetch_pr_checks_handles_gh_checkrun_list_shape():
     from signposter.review import _fetch_pr_checks

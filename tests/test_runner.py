@@ -68,6 +68,42 @@ def test_select_runner_profile_default():
     assert profile == "worker"
 
 
+def test_select_runner_profile_accepts_codex_cli_backend():
+    d = make_dispatch(role="worker", phase="build")
+    runner, profile = _select_runner_and_profile(d, backend="codex-cli")
+    assert runner == "codex-cli"
+    assert profile == "worker"
+
+
+def test_format_runner_plan_includes_backend_visibility():
+    from signposter.runner import format_runner_plan
+
+    plan = make_runner_plan_for_test("worker", "build", number=42)
+    output = format_runner_plan([plan])
+
+    assert "runner:" in output
+    assert "backend_reason:" in output
+    assert "execute_ready:" in output
+
+
+def test_execute_plan_blocks_unimplemented_codex_cli_backend():
+    from signposter.runner import execute_plan
+
+    plan = make_runner_plan_for_test("worker", "build", number=42)
+    plan = plan.__class__(
+        **{
+            **plan.__dict__,
+            "proposed_runner": "codex-cli",
+            "backend_execution_supported": False,
+        }
+    )
+
+    result = execute_plan(plan, "test/repo")
+
+    assert result["exit_code"] == 1
+    assert "not implemented yet" in result["error"]
+
+
 def test_openclaw_session_key_uses_refreshed_default_namespace():
     from signposter.runner import build_openclaw_session_key
 
