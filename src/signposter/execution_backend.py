@@ -43,10 +43,10 @@ def resolve_execution_backend(
     return ExecutionBackendPlan(
         backend="codex-cli",
         reason="explicit Codex CLI backend selected for planning",
-        execution_supported=False,
+        execution_supported=True,
         notes=(
-            "Codex CLI adapter is available but not wired into runner/reviewer execute yet.",
-            "Dry-run can show intended routing; execute remains blocked until H046C wiring.",
+            "Codex CLI adapter is available for explicit --execute runs.",
+            "Local preflight still blocks when the codex binary or prompt artifact is missing.",
         ),
     )
 

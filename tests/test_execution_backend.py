@@ -20,8 +20,8 @@ def test_resolve_execution_backend_accepts_explicit_codex_cli() -> None:
     plan = resolve_execution_backend("codex-cli", env={})
 
     assert plan.backend == "codex-cli"
-    assert plan.execution_supported is False
-    assert "not wired" in " ".join(plan.notes)
+    assert plan.execution_supported is True
+    assert "adapter is available" in " ".join(plan.notes)
 
 
 def test_resolve_execution_backend_rejects_unknown_backend() -> None:

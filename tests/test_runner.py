@@ -86,7 +86,7 @@ def test_format_runner_plan_includes_backend_visibility():
     assert "execute_ready:" in output
 
 
-def test_execute_plan_blocks_unimplemented_codex_cli_backend():
+def test_execute_plan_uses_codex_cli_adapter(monkeypatch):
     from signposter.runner import execute_plan
 
     plan = make_runner_plan_for_test("worker", "build", number=42)
@@ -94,14 +94,37 @@ def test_execute_plan_blocks_unimplemented_codex_cli_backend():
         **{
             **plan.__dict__,
             "proposed_runner": "codex-cli",
-            "backend_execution_supported": False,
+            "backend_execution_supported": True,
         }
     )
+    result_obj = type(
+        "Result",
+        (),
+        {
+            "exit_code": 0,
+            "raw_path": "artifacts/runs/issue-42-worker.raw.txt",
+            "summary_path": "artifacts/runs/issue-42-worker.summary.md",
+            "success": True,
+            "reason": "ok",
+            "status": "success",
+        },
+    )()
+    called = {}
 
-    result = execute_plan(plan, "test/repo")
+    def fake_execute(invocation, *, raw_path, summary_path):
+        called["invocation"] = invocation
+        called["raw_path"] = raw_path
+        called["summary_path"] = summary_path
+        return result_obj
 
-    assert result["exit_code"] == 1
-    assert "not implemented yet" in result["error"]
+    monkeypatch.setattr("signposter.runner.execute_codex_cli_invocation", fake_execute)
+
+    result = execute_plan(plan, "test/repo", allow_dirty=True)
+
+    assert result["exit_code"] == 0
+    assert result["success"] is True
+    assert called["invocation"].agent == plan.selected_openclaw_agent
+    assert str(called["raw_path"]).endswith("issue-42-worker.raw.txt")
 
 
 def test_openclaw_session_key_uses_refreshed_default_namespace():

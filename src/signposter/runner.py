@@ -11,6 +11,10 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from signposter.claim import build_claim_plan, perform_claim_mutation, plan_claims
+from signposter.codex_cli_backend import (
+    execute_codex_cli_invocation,
+    plan_codex_cli_invocation,
+)
 from signposter.dependencies import is_dependency_blocked
 from signposter.dispatch import DispatchDecision, classify_candidate
 from signposter.execution_backend import (
@@ -1533,6 +1537,33 @@ def execute_plan(
                 "summary_path": None,
                 "error": "dirty working tree",
             }
+
+    if plan.proposed_runner == "codex-cli":
+        runs_dir = Path("artifacts/runs")
+        runs_dir.mkdir(parents=True, exist_ok=True)
+        raw_path = runs_dir / f"issue-{item.number}-{profile}.raw.txt"
+        summary_path = runs_dir / f"issue-{item.number}-{profile}.summary.md"
+        invocation = plan_codex_cli_invocation(
+            agent=plan.selected_openclaw_agent,
+            session_key=session_key,
+            model=plan.selected_model,
+            reasoning_effort=plan.selected_reasoning_effort,
+            prompt_path=prompt_path,
+            timeout_seconds=openclaw_timeout_settings().execute_timeout,
+        )
+        result = execute_codex_cli_invocation(
+            invocation,
+            raw_path=raw_path,
+            summary_path=summary_path,
+        )
+        return {
+            "exit_code": result.exit_code,
+            "raw_path": str(result.raw_path),
+            "summary_path": str(result.summary_path),
+            "success": result.success,
+            "error": None if result.success else result.reason,
+            "diagnosis_status": result.status,
+        }
 
     preflight = check_openclaw_preflight(artifact_kind="worker", target=item.number)
     if not preflight.ok:
