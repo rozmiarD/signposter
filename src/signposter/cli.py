@@ -19,6 +19,7 @@ from signposter.artifact import (
     validate_worker_summary_artifact,
     write_manual_artifact,
 )
+from signposter.backend_status import build_backend_status_report, format_backend_status_report
 from signposter.bug_ledger import (
     apply_bug_ledger_plan,
     format_bug_ledger_plan,
@@ -396,6 +397,22 @@ def main() -> None:
     )
     roles_matrix_parser.add_argument("--execute", action="store_true")
     roles_matrix_parser.set_defaults(func=run_roles_matrix)
+
+    backend_parser = subparsers.add_parser(
+        "backend",
+        help="Inspect execution backend health and fallback visibility",
+    )
+    backend_subparsers = backend_parser.add_subparsers(dest="backend_command")
+    backend_status_parser = backend_subparsers.add_parser(
+        "status",
+        help="Show read-only OpenClaw/Codex CLI backend status",
+    )
+    backend_status_parser.add_argument(
+        "--default",
+        choices=["openclaw", "codex-cli"],
+        help="Backend to mark as selected default for this read-only report",
+    )
+    backend_status_parser.set_defaults(func=run_backend_status)
 
     # planner subcommand group — HARDENING-029A
     planner_parser = subparsers.add_parser(
@@ -1507,6 +1524,13 @@ def run_roles_matrix(args: argparse.Namespace) -> int:
     print(format_role_smoke_matrix(matrix))
     all_success = all(entry.result_status == "success" for entry in matrix.entries)
     return 0 if all_success else 1
+
+
+def run_backend_status(args: argparse.Namespace) -> int:
+    """Render read-only backend health and fallback visibility."""
+    report = build_backend_status_report(default_backend=getattr(args, "default", None))
+    print(format_backend_status_report(report))
+    return 0
 
 
 def run_report(args: argparse.Namespace) -> int:
