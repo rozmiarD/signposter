@@ -22,6 +22,7 @@ from signposter.role_policy import (
     get_role_policy,
     validate_role_policy,
 )
+from signposter.runner import openclaw_session_namespace
 
 
 @dataclass(frozen=True)
@@ -67,10 +68,16 @@ DEFAULT_ROLE_SMOKE_TIMEOUT_SECONDS = 20
 DEFAULT_ROLE_SMOKE_SUBPROCESS_TIMEOUT_SECONDS = 30
 
 
+def build_role_smoke_session_key(role_name: str, env: dict[str, str] | None = None) -> str:
+    """Build a versioned session key for role smoke execution."""
+    namespace = openclaw_session_namespace(env)
+    return f"signposter-{namespace}-smoke-{role_name.lower()}"
+
+
 def build_role_smoke_plan(role_name: str) -> RoleSmokePlan:
     """Build a deterministic local smoke plan for a role policy."""
     policy = get_role_policy(role_name)
-    session_key = f"signposter-smoke-{role_name.lower()}"
+    session_key = build_role_smoke_session_key(role_name)
     message = f"Reply with exactly {role_name}_SMOKE_OK and nothing else."
     command_shape = (
         f"openclaw agent --agent {policy.openclaw_agent} "
