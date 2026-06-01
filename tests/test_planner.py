@@ -1995,7 +1995,7 @@ def test_apply_planner_advance_plan_refuses_blocked_plan() -> None:
     assert calls == []
 
 
-def test_apply_planner_advance_plan_requires_exactly_one_target(
+def test_apply_planner_advance_plan_executes_multi_target_apply(
     tmp_path: Path,
 ) -> None:
     advance_plan = {
@@ -2024,11 +2024,34 @@ def test_apply_planner_advance_plan_requires_exactly_one_target(
         run_command=lambda command: calls.append(command),
     )
 
-    assert result["status"] == "blocked"
-    assert result["promoted"] == []
-    assert result["commands"] == []
-    assert result["errors"] == ["expected exactly one advance target, found 2"]
-    assert calls == []
+    assert result["status"] == "applied"
+    assert result["promoted"] == [
+        {
+            "key": "WATCH-002",
+            "github_issue": 11,
+            "labels_added": ["state:ready"],
+        },
+        {
+            "key": "WATCH-003",
+            "github_issue": 12,
+            "labels_added": ["state:ready"],
+        },
+    ]
+    assert result["commands"] == [
+        "gh issue edit 11 -R ExatronOmega/signposter --add-label state:ready",
+        "gh issue edit 12 -R ExatronOmega/signposter --add-label state:ready",
+    ]
+    assert result["errors"] == []
+    assert calls == [
+        [
+            "gh", "issue", "edit", "11", "-R", "ExatronOmega/signposter",
+            "--add-label", "state:ready",
+        ],
+        [
+            "gh", "issue", "edit", "12", "-R", "ExatronOmega/signposter",
+            "--add-label", "state:ready",
+        ],
+    ]
 
 
 def test_build_planner_run_plan_from_status_reports_next_open_task(
