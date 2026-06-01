@@ -1410,9 +1410,16 @@ def cli_main(
                 print(f"Wrote: {path}")
 
         if execute and final_plans:
-            print("\n=== EXECUTING RUNNER (OpenClaw) ===\n")
+            print("\n=== EXECUTING RUNNER ===\n")
             execution_failed = False
             for plan in final_plans:
+                if not plan.backend_execution_supported:
+                    print(
+                        f"Refusing execution via backend '{plan.proposed_runner}': "
+                        "execution adapter is not implemented yet."
+                    )
+                    execution_failed = True
+                    continue
                 state = (plan.dispatch.state or "").lower()
                 if state == "ready" and not claim:
                     print(f"  Refusing to execute issue #{plan.item.number}: state=ready without --claim. Use --claim --execute to claim + run.")  # noqa: E501
@@ -1432,14 +1439,25 @@ def cli_main(
 
         # Fallback for --execute on already-active items with existing prompt artifacts.
         elif execute and not final_plans:
-            print('\n=== EXECUTING RUNNER (OpenClaw) - active item fallback ===\n')
+            print("\n=== EXECUTING RUNNER - active item fallback ===\n")
             execution_failed = False
             try:
-                active_plans = plan_active_runner_from_prompts(repo, limit=limit)
+                active_plans = plan_active_runner_from_prompts(
+                    repo,
+                    limit=limit,
+                    backend=backend,
+                )
                 if not active_plans:
                     print("No active items with prompt artifacts found.")
                     execution_failed = True
                 for plan in active_plans:
+                    if not plan.backend_execution_supported:
+                        print(
+                            f"Refusing execution via backend '{plan.proposed_runner}': "
+                            "execution adapter is not implemented yet."
+                        )
+                        execution_failed = True
+                        continue
                     result = execute_plan(plan, repo, allow_dirty=allow_dirty)
                     print(f"Execution completed for issue #{plan.item.number} (active fallback)")
                     print(f"  Exit code: {result.get('exit_code')}")
