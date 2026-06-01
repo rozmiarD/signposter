@@ -397,6 +397,59 @@ def test_build_review_prompt_keeps_structured_contract_with_budget_note():
     assert "Automerge eligible: yes | no" in prompt
 
 
+def test_build_review_prompt_compacts_body_and_changed_files():
+    from signposter.review import ReviewPlan, build_review_prompt
+
+    plan = ReviewPlan(
+        pr_number=6,
+        title="test",
+        state="OPEN",
+        base_branch="main",
+        head_branch="work/issue-5-test",
+        mergeable="MERGEABLE",
+        review_decision=None,
+        checks_status="pass",
+        successful_checks=1,
+        failing_checks=0,
+        pending_checks=0,
+        files_changed=40,
+        additions=80,
+        deletions=6,
+        risk_level="medium",
+        size="medium",
+        associated_issue=5,
+        branch_matches_convention=True,
+        status="ready",
+        notes=[],
+        reviewer_profile="reviewer",
+        prompt_artifact_path="artifacts/prompts/pr-6-review.md",
+    )
+    body = "\n".join(f"body line {i}" for i in range(80))
+    file_paths = [f"src/file_{i}.py" for i in range(30)]
+
+    prompt = build_review_prompt(plan, body, "+kept", file_paths=file_paths)
+
+    assert "## PR Body (bounded)" in prompt
+    assert "...[omitted " in prompt
+    assert "## Changed Files Excerpt (from GitHub metadata, bounded)" in prompt
+    assert "...[omitted 6 additional changed files]" in prompt
+
+
+def test_compact_review_text_respects_budget_with_omission_marker():
+    from signposter.review import _compact_review_text
+
+    body = "\n".join(f"body line {i} {'y' * 60}" for i in range(50))
+    compact = _compact_review_text(
+        body,
+        max_lines=10,
+        max_chars=300,
+        empty_fallback="<empty>",
+    )
+
+    assert "...[omitted " in compact
+    assert len(compact) <= 300
+
+
 # =============================================================================
 # HARDENING-016 tests: PR reviewer execution
 # =============================================================================
@@ -846,10 +899,10 @@ def test_build_review_prompt_includes_authoritative_changed_files():
         file_paths=["src/signposter/review.py", "tests/test_review.py"],
     )
 
-    assert "## Authoritative Changed Files (from GitHub metadata)" in prompt
+    assert "## Changed Files Excerpt (from GitHub metadata, bounded)" in prompt
     assert "- src/signposter/review.py" in prompt
     assert "- tests/test_review.py" in prompt
-    assert "canonical changed-file scope" in prompt
+    assert "bounded excerpt of the GitHub changed-file metadata" in prompt
 
 
 def test_execute_output_contains_safety_notes():

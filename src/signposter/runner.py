@@ -32,6 +32,24 @@ from signposter.worktree import get_worktree_status_for_issue
 
 DEFAULT_OPENCLAW_SESSION_NAMESPACE = "v2"
 OPENCLAW_SESSION_NAMESPACE_ENV = "SIGNPOSTER_OPENCLAW_SESSION_NAMESPACE"
+PROMPT_COMPACTION_LIMITS = {
+    "issue_body_lines": 48,
+    "issue_body_chars": 3200,
+    "comments_lines": 16,
+    "comments_chars": 1200,
+    "scan_lines": 60,
+    "scan_chars": 3600,
+    "claim_lines": 40,
+    "claim_chars": 2200,
+    "runs_lines": 30,
+    "runs_chars": 1800,
+    "prompt_preview_lines": 36,
+    "prompt_preview_chars": 2200,
+    "planner_body_lines": 36,
+    "planner_body_chars": 2400,
+    "planner_comments_lines": 10,
+    "planner_comments_chars": 800,
+}
 
 
 @dataclass(frozen=True)
@@ -520,6 +538,85 @@ Cite specific observations. Be conservative."""
 Execute the task according to the classification and constraints below."""
 
 
+def _compact_prompt_text(
+    text: str | None,
+    *,
+    max_lines: int,
+    max_chars: int,
+    empty_fallback: str,
+) -> str:
+    """Return a bounded prompt-safe excerpt with deterministic omission markers."""
+    normalized = (text or "").strip()
+    if not normalized:
+        return empty_fallback
+
+    lines = normalized.splitlines()
+    selected: list[str] = []
+    consumed_chars = 0
+
+    for line in lines:
+        line_cost = len(line) + (1 if selected else 0)
+        if len(selected) >= max_lines or consumed_chars + line_cost > max_chars:
+            break
+        selected.append(line)
+        consumed_chars += line_cost
+
+    excerpt = "\n".join(selected).strip()
+
+    while True:
+        omitted_lines = max(len(lines) - len(selected), 0)
+        omitted_chars = max(len(normalized) - len(excerpt), 0)
+        if not omitted_lines and not omitted_chars:
+            return excerpt or empty_fallback
+
+        omission_marker = f"...[omitted {omitted_lines} lines, {omitted_chars} chars]"
+        candidate = f"{excerpt}\n{omission_marker}".strip() if excerpt else omission_marker
+        if len(selected) <= max_lines and len(candidate) <= max_chars:
+            return candidate
+
+        if selected:
+            selected.pop()
+            excerpt = "\n".join(selected).strip()
+            continue
+
+        if len(omission_marker) > max_chars:
+            return omission_marker[:max_chars].rstrip()
+        return omission_marker
+
+
+def _compact_issue_body(text: str | None) -> str:
+    return _compact_prompt_text(
+        text,
+        max_lines=PROMPT_COMPACTION_LIMITS["issue_body_lines"],
+        max_chars=PROMPT_COMPACTION_LIMITS["issue_body_chars"],
+        empty_fallback="Issue body: empty",
+    )
+
+
+def _compact_comments(text: str | None) -> str:
+    return _compact_prompt_text(
+        text,
+        max_lines=PROMPT_COMPACTION_LIMITS["comments_lines"],
+        max_chars=PROMPT_COMPACTION_LIMITS["comments_chars"],
+        empty_fallback="(no comments)",
+    )
+
+
+def _compact_evidence_text(
+    text: str | None,
+    *,
+    max_lines: int,
+    max_chars: int,
+    empty_fallback: str,
+) -> str:
+    return _compact_prompt_text(
+        text,
+        max_lines=max_lines,
+        max_chars=max_chars,
+        empty_fallback=empty_fallback,
+    )
+
+
 def _ensure_evidence_dir(number: int) -> Path:
     """Ensure artifacts/evidence/issue-<number>/ exists."""
     path = Path(f"artifacts/evidence/issue-{number}")
@@ -560,12 +657,22 @@ def collect_evidence_bundle(repo: str, number: int, plan: RunnerPlan | None = No
 
     # Current scan output (exact CLI view)
     scan_out = _capture_command(["signposter", "scan", "--repo", repo])
-    evidence["scan"] = scan_out
+    evidence["scan"] = _compact_evidence_text(
+        scan_out,
+        max_lines=PROMPT_COMPACTION_LIMITS["scan_lines"],
+        max_chars=PROMPT_COMPACTION_LIMITS["scan_chars"],
+        empty_fallback="(no scan output)",
+    )
     (evidence_dir / "scan.txt").write_text(scan_out)
 
     # Claim dry-run (useful context for reviewer)
     claim_dry = _capture_command(["signposter", "claim", "--repo", repo, "--dry-run"])
-    evidence["claim_dry_run"] = claim_dry
+    evidence["claim_dry_run"] = _compact_evidence_text(
+        claim_dry,
+        max_lines=PROMPT_COMPACTION_LIMITS["claim_lines"],
+        max_chars=PROMPT_COMPACTION_LIMITS["claim_chars"],
+        empty_fallback="(no claim dry-run)",
+    )
     (evidence_dir / "claim-dry-run.txt").write_text(claim_dry)
 
     # Recent CI runs
@@ -573,7 +680,12 @@ def collect_evidence_bundle(repo: str, number: int, plan: RunnerPlan | None = No
         "gh", "run", "list", "-R", repo, "--limit", "5",
         "--json", "status,conclusion,workflowName,headBranch,updatedAt"
     ])
-    evidence["recent_runs"] = runs_out
+    evidence["recent_runs"] = _compact_evidence_text(
+        runs_out,
+        max_lines=PROMPT_COMPACTION_LIMITS["runs_lines"],
+        max_chars=PROMPT_COMPACTION_LIMITS["runs_chars"],
+        empty_fallback="(no runs)",
+    )
     (evidence_dir / "runs.txt").write_text(runs_out)
 
     # Working directory status
@@ -595,9 +707,13 @@ def collect_evidence_bundle(repo: str, number: int, plan: RunnerPlan | None = No
     if prompt_exists:
         try:
             with open(prompt_path, encoding="utf-8") as f:
-                preview = f.read(2500)  # bounded preview
-            lines = preview.splitlines()[:80]
-            prompt_preview = "\n".join(lines)
+                preview = f.read(6000)
+            prompt_preview = _compact_evidence_text(
+                preview,
+                max_lines=PROMPT_COMPACTION_LIMITS["prompt_preview_lines"],
+                max_chars=PROMPT_COMPACTION_LIMITS["prompt_preview_chars"],
+                empty_fallback="(prompt file not found)",
+            )
         except Exception as e:
             prompt_preview = f"(error reading prompt: {e})"
 
@@ -637,25 +753,25 @@ def render_prompt(
         labels = [lbl["name"] for lbl in issue_context.get("labels", [])]
         labels_str = ", ".join(labels) if labels else "(none)"
         body = issue_context.get("body") or ""
-        body_text = body.strip() if body.strip() else "Issue body: empty"
+        body_text = _compact_issue_body(body)
         state = issue_context.get("state", "unknown")
         comments = issue_context.get("comments", [])
         comments_text = ""
         if comments:
-            recent = comments[-3:]  # last 3 comments
+            recent = comments[-2:]
             comments_lines = []
             for c in recent:
                 author = c.get("author", {}).get("login", "unknown")
-                body_snip = (c.get("body", "") or "")[:300]
+                body_snip = (c.get("body", "") or "").strip()
                 comments_lines.append(f"- @{author}: {body_snip}")
-            comments_text = "\n".join(comments_lines)
+            comments_text = _compact_comments("\n".join(comments_lines))
         else:
             comments_text = "(no comments)"
         issue_state = state
     else:
         labels_str = ", ".join(item.labels) if item.labels else "(none)"
-        body_text = "Issue body: not embedded (context fetch failed)"
-        comments_text = "(not embedded)"
+        body_text = _compact_issue_body("Issue body: not embedded (context fetch failed)")
+        comments_text = _compact_comments("(not embedded)")
         issue_state = d.state or "unknown"
 
     role_profile = _get_role_profile(d.role)
@@ -691,18 +807,61 @@ def render_prompt(
             task_instruction=task_instruction,
             private_rule=private_rule,
         )
+    if d.role == "planner" and not evidence_bundle:
+        return _render_compact_planner_prompt(
+            repo=repo,
+            item=item,
+            dispatch=d,
+            plan=plan,
+            labels_str=labels_str,
+            body_text=_compact_evidence_text(
+                body_text,
+                max_lines=PROMPT_COMPACTION_LIMITS["planner_body_lines"],
+                max_chars=PROMPT_COMPACTION_LIMITS["planner_body_chars"],
+                empty_fallback="Issue body: empty",
+            ),
+            comments_text=_compact_evidence_text(
+                comments_text,
+                max_lines=PROMPT_COMPACTION_LIMITS["planner_comments_lines"],
+                max_chars=PROMPT_COMPACTION_LIMITS["planner_comments_chars"],
+                empty_fallback="(no comments)",
+            ),
+            issue_state=issue_state,
+            task_instruction=task_instruction,
+            private_rule=private_rule,
+        )
 
     # Evidence Bundle (only for reviewer/gatekeeper)
     evidence_section = ""
     if evidence_bundle and d.role in ("reviewer", "gatekeeper"):
-        scan = evidence_bundle.get("scan", "(no scan output)")
-        claim_dry = evidence_bundle.get("claim_dry_run", "(no claim dry-run)")
-        runs = evidence_bundle.get("recent_runs", "(no runs)")
+        scan = _compact_evidence_text(
+            evidence_bundle.get("scan"),
+            max_lines=PROMPT_COMPACTION_LIMITS["scan_lines"],
+            max_chars=PROMPT_COMPACTION_LIMITS["scan_chars"],
+            empty_fallback="(no scan output)",
+        )
+        claim_dry = _compact_evidence_text(
+            evidence_bundle.get("claim_dry_run"),
+            max_lines=PROMPT_COMPACTION_LIMITS["claim_lines"],
+            max_chars=PROMPT_COMPACTION_LIMITS["claim_chars"],
+            empty_fallback="(no claim dry-run)",
+        )
+        runs = _compact_evidence_text(
+            evidence_bundle.get("recent_runs"),
+            max_lines=PROMPT_COMPACTION_LIMITS["runs_lines"],
+            max_chars=PROMPT_COMPACTION_LIMITS["runs_chars"],
+            empty_fallback="(no runs)",
+        )
         wd = evidence_bundle.get("working_dir", "unknown")
         wd_status = evidence_bundle.get("working_dir_status", "unknown")
         prompt_path = evidence_bundle.get("prompt_path", plan.proposed_prompt_path)
         prompt_exists = evidence_bundle.get("prompt_exists", False)
-        prompt_preview = evidence_bundle.get("prompt_preview", "(no preview)")
+        prompt_preview = _compact_evidence_text(
+            evidence_bundle.get("prompt_preview"),
+            max_lines=PROMPT_COMPACTION_LIMITS["prompt_preview_lines"],
+            max_chars=PROMPT_COMPACTION_LIMITS["prompt_preview_chars"],
+            empty_fallback="(no preview)",
+        )
         cmd_shape = evidence_bundle.get("command_shape", plan.proposed_command_shape)
 
         evidence_section = f"""
@@ -850,6 +1009,67 @@ def _render_compact_worker_prompt(
 - Run targeted validation for changed files.
 - Run full validation when risk or shared behavior warrants it.
 - If OpenClaw/provider execution is unavailable, use the manual artifact fallback.
+"""
+
+
+def _render_compact_planner_prompt(
+    *,
+    repo: str,
+    item: LabeledItem,
+    dispatch: DispatchDecision,
+    plan: RunnerPlan,
+    labels_str: str,
+    body_text: str,
+    comments_text: str,
+    issue_state: str,
+    task_instruction: str,
+    private_rule: str,
+) -> str:
+    """Render a compact self-contained prompt for scoped planner tasks."""
+    workflow = (
+        f"{dispatch.proposed_route}/{dispatch.phase}/{dispatch.role}/"
+        f"{dispatch.risk}/{dispatch.area}/{dispatch.proposed_gate}"
+    )
+    return f"""# Signposter Planner Prompt
+
+## Context
+- Repository: {repo}
+- Issue: #{item.number} — {item.title}
+- URL reference only: {item.html_url}
+- State: {issue_state}
+- Labels: {labels_str}
+- Route/phase/role/risk/area/gate: {workflow}
+- Working directory: {plan.proposed_working_dir}
+- Prompt artifact: {plan.proposed_prompt_path}
+
+## Selected Role Policy
+- role identity: {plan.selected_role_name}
+- selected model: {plan.selected_model}
+- selected reasoning effort: {plan.selected_reasoning_effort}
+- OpenClaw agent/profile: {plan.selected_openclaw_agent}
+- role selection reason: {plan.role_selection_reason}
+
+## Issue Body
+{body_text}
+
+## Recent Comments
+{comments_text}
+
+## Rules
+- {private_rule}
+- Keep the plan scoped to this issue.
+- Prefer small deterministic steps over broad proposals.
+- Call out dependencies, blockers, and omitted context explicitly.
+- Do not mutate GitHub unless a later command explicitly asks.
+- If uncertain, state the uncertainty explicitly instead of guessing.
+
+## Task
+{task_instruction}
+
+## Output Contract
+- Return a compact phased plan.
+- Separate deterministic work from LLM-required work.
+- Keep acceptance criteria specific and bounded.
 """
 
 
