@@ -679,11 +679,15 @@ def test_execute_review_timeout_writes_bounded_summary(tmp_path):
     with patch("signposter.review.plan_review_for_pr", return_value=fake_plan), \
          patch("signposter.review.check_openclaw_preflight") as mock_preflight, \
          patch("signposter.review.gather_openclaw_runtime_diagnostics") as mock_diag, \
-         patch("signposter.review.openclaw_execute_timeout_seconds", return_value=20), \
-         patch("signposter.review.openclaw_subprocess_timeout_seconds", return_value=25), \
+         patch("signposter.review.openclaw_timeout_settings") as mock_timeouts, \
          patch("subprocess.run", side_effect=TimeoutExpired(cmd=["openclaw"], timeout=25)):
         mock_preflight.return_value = type("pf", (), {"ok": True})()
         mock_diag.return_value = type("diag", (), {"warnings": ()})()
+        mock_timeouts.return_value = type(
+            "timeouts",
+            (),
+            {"execute_timeout": 20, "subprocess_timeout": 25, "warnings": ()},
+        )()
         result = execute_pr_review("test/repo", 5, runs_dir=tmp_path / "runs")
 
     assert result["success"] is False

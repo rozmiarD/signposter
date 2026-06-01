@@ -22,8 +22,7 @@ from signposter.openclaw_preflight import (
 from signposter.openclaw_runtime import (
     OpenClawExecutionDiagnosis,
     classify_openclaw_execution,
-    openclaw_execute_timeout_seconds,
-    openclaw_subprocess_timeout_seconds,
+    openclaw_timeout_settings,
 )
 from signposter.role_policy import get_role_policy
 from signposter.role_routing import select_role_for_issue
@@ -1202,9 +1201,11 @@ def execute_plan(
         raise RuntimeError(f"Could not read prompt artifact {prompt_path}: {e}") from e
 
     # Final command for execution (no shell substitution)
-    execute_timeout = openclaw_execute_timeout_seconds()
-    subprocess_timeout = openclaw_subprocess_timeout_seconds()
     diagnostics = gather_openclaw_runtime_diagnostics()
+    timeout_settings = openclaw_timeout_settings()
+    execute_timeout = timeout_settings.execute_timeout
+    subprocess_timeout = timeout_settings.subprocess_timeout
+    diagnostics_warnings = diagnostics.warnings + timeout_settings.warnings
     exec_cmd = [
         "openclaw", "agent",
         "--agent", plan.selected_openclaw_agent,
@@ -1305,7 +1306,7 @@ def execute_plan(
             exit_code=exit_code,
             combined_output=combined,
             timed_out=False,
-            diagnostics_warnings=diagnostics.warnings,
+            diagnostics_warnings=diagnostics_warnings,
         )
 
         # Generate summary
@@ -1323,6 +1324,7 @@ def execute_plan(
             original_role_name=plan.selected_role_name if fallback_used else None,
             original_model=original_model if fallback_used else None,
             diagnosis=diagnosis,
+            diagnostics_warnings=diagnostics_warnings,
         )
         summary_path.write_text(summary, encoding="utf-8")
 
@@ -1349,7 +1351,7 @@ def execute_plan(
             exit_code=None,
             combined_output=combined,
             timed_out=True,
-            diagnostics_warnings=diagnostics.warnings,
+            diagnostics_warnings=diagnostics_warnings,
             timeout_seconds=subprocess_timeout,
         )
         summary = _generate_execution_summary(
@@ -1363,6 +1365,7 @@ def execute_plan(
             start_time=start_time,
             allow_dirty=allow_dirty,
             diagnosis=diagnosis,
+            diagnostics_warnings=diagnostics_warnings,
         )
         summary_path.write_text(summary, encoding="utf-8")
         return {
@@ -1380,7 +1383,7 @@ def execute_plan(
             exit_code=-1,
             combined_output=combined,
             timed_out=False,
-            diagnostics_warnings=diagnostics.warnings,
+            diagnostics_warnings=diagnostics_warnings,
         )
         summary = _generate_execution_summary(
             repo=repo,
@@ -1393,6 +1396,7 @@ def execute_plan(
             start_time=start_time,
             allow_dirty=allow_dirty,
             diagnosis=diagnosis,
+            diagnostics_warnings=diagnostics_warnings,
         )
         summary_path.write_text(summary, encoding="utf-8")
         return {
@@ -1413,6 +1417,7 @@ def _generate_execution_summary(
     original_role_name: str | None = None,
     original_model: str | None = None,
     diagnosis: OpenClawExecutionDiagnosis | None = None,
+    diagnostics_warnings: tuple[str, ...] = (),
 ) -> str:
     """Generate a mechanical summary for the execution run."""
     item = plan.item
@@ -1459,6 +1464,9 @@ def _generate_execution_summary(
     if diagnosis is not None and diagnosis.remediation:
         lines.append("\n## Remediation\n")
         lines.extend(f"- {item}" for item in diagnosis.remediation)
+    if diagnostics_warnings:
+        lines.append("\n## Runtime warnings\n")
+        lines.extend(f"- {warning}" for warning in diagnostics_warnings)
 
     # Excerpts
     lines.append("\n## First 30 lines of output\n")

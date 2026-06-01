@@ -21,28 +21,55 @@ class OpenClawExecutionDiagnosis:
     signal: str | None = None
 
 
-def openclaw_execute_timeout_seconds(env: dict[str, str] | None = None) -> int:
+@dataclass(frozen=True)
+class OpenClawTimeoutSettings:
+    execute_timeout: int
+    subprocess_timeout: int
+    warnings: tuple[str, ...] = ()
+
+
+def _parse_timeout_setting(
+    env_name: str,
+    default: int,
+    *,
+    env: dict[str, str] | None = None,
+) -> tuple[int, str | None]:
     source = env if env is not None else os.environ
-    value = source.get(OPENCLAW_EXECUTE_TIMEOUT_ENV, "").strip()
+    value = source.get(env_name, "").strip()
     if not value:
-        return DEFAULT_OPENCLAW_EXECUTE_TIMEOUT_SECONDS
+        return default, None
     try:
         parsed = int(value)
     except ValueError:
-        return DEFAULT_OPENCLAW_EXECUTE_TIMEOUT_SECONDS
-    return parsed if parsed > 0 else DEFAULT_OPENCLAW_EXECUTE_TIMEOUT_SECONDS
+        return default, f"{env_name} is invalid ({value!r}); defaulting to {default}s"
+    if parsed <= 0:
+        return default, f"{env_name} must be > 0; defaulting to {default}s"
+    return parsed, None
 
 
-def openclaw_subprocess_timeout_seconds(env: dict[str, str] | None = None) -> int:
-    source = env if env is not None else os.environ
-    value = source.get(OPENCLAW_SUBPROCESS_TIMEOUT_ENV, "").strip()
-    if not value:
-        return DEFAULT_OPENCLAW_SUBPROCESS_TIMEOUT_SECONDS
-    try:
-        parsed = int(value)
-    except ValueError:
-        return DEFAULT_OPENCLAW_SUBPROCESS_TIMEOUT_SECONDS
-    return parsed if parsed > 0 else DEFAULT_OPENCLAW_SUBPROCESS_TIMEOUT_SECONDS
+def openclaw_timeout_settings(env: dict[str, str] | None = None) -> OpenClawTimeoutSettings:
+    execute_timeout, execute_warning = _parse_timeout_setting(
+        OPENCLAW_EXECUTE_TIMEOUT_ENV,
+        DEFAULT_OPENCLAW_EXECUTE_TIMEOUT_SECONDS,
+        env=env,
+    )
+    subprocess_timeout, subprocess_warning = _parse_timeout_setting(
+        OPENCLAW_SUBPROCESS_TIMEOUT_ENV,
+        DEFAULT_OPENCLAW_SUBPROCESS_TIMEOUT_SECONDS,
+        env=env,
+    )
+    warnings = [warning for warning in (execute_warning, subprocess_warning) if warning]
+    if subprocess_timeout <= execute_timeout:
+        subprocess_timeout = execute_timeout + 15
+        warnings.append(
+            f"{OPENCLAW_SUBPROCESS_TIMEOUT_ENV} must exceed "
+            f"{OPENCLAW_EXECUTE_TIMEOUT_ENV}; adjusted to {subprocess_timeout}s"
+        )
+    return OpenClawTimeoutSettings(
+        execute_timeout=execute_timeout,
+        subprocess_timeout=subprocess_timeout,
+        warnings=tuple(warnings),
+    )
 
 
 def classify_openclaw_execution(
@@ -81,8 +108,10 @@ def classify_openclaw_execution(
         "token_invalidated" in lowered
         or "authentication failed" in lowered
         or "auth refresh request timed out" in lowered
-        or "401" in lowered
-        or "provider token" in lowered
+        or "status=401" in lowered
+        or '"status":401' in lowered
+        or "incorrect api key" in lowered
+        or "no provider token environment variable is configured" in lowered
     ):
         return OpenClawExecutionDiagnosis(
             status="auth-provider-failure",

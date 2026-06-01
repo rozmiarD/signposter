@@ -716,8 +716,7 @@ def test_execute_plan_timeout_writes_bounded_summary(tmp_path, monkeypatch):
     with patch("signposter.runner.find_uncommitted_repo_changes", return_value=[]), \
          patch("signposter.runner.check_openclaw_preflight") as mock_preflight, \
          patch("signposter.runner.gather_openclaw_runtime_diagnostics") as mock_diag, \
-         patch("signposter.runner.openclaw_execute_timeout_seconds", return_value=20), \
-         patch("signposter.runner.openclaw_subprocess_timeout_seconds", return_value=25), \
+         patch("signposter.runner.openclaw_timeout_settings") as mock_timeouts, \
          patch(
              "signposter.runner.subprocess.run",
              side_effect=TimeoutExpired(cmd=["openclaw"], timeout=25),
@@ -725,6 +724,11 @@ def test_execute_plan_timeout_writes_bounded_summary(tmp_path, monkeypatch):
          patch("builtins.open", create=True) as mock_open:
         mock_preflight.return_value = type("pf", (), {"ok": True})()
         mock_diag.return_value = type("diag", (), {"warnings": ()})()
+        mock_timeouts.return_value = type(
+            "timeouts",
+            (),
+            {"execute_timeout": 20, "subprocess_timeout": 25, "warnings": ()},
+        )()
         mock_open.return_value.__enter__.return_value.read.return_value = "mock prompt"
         result = execute_plan(plan, "test/repo", allow_dirty=False)
 

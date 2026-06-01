@@ -24,8 +24,7 @@ from signposter.openclaw_preflight import (
 from signposter.openclaw_runtime import (
     OpenClawExecutionDiagnosis,
     classify_openclaw_execution,
-    openclaw_execute_timeout_seconds,
-    openclaw_subprocess_timeout_seconds,
+    openclaw_timeout_settings,
 )
 from signposter.role_routing import select_role_for_review
 from signposter.runner import build_openclaw_session_key
@@ -650,6 +649,7 @@ def _generate_pr_reviewer_summary(
     *, pr_number: int, plan: ReviewPlan, session_key: str, exit_code: int,
     raw_path: str, stdout: str, stderr: str, start_time,
     diagnosis: OpenClawExecutionDiagnosis | None = None,
+    diagnostics_warnings: tuple[str, ...] = (),
 ) -> str:
     """Generate a bounded mechanical summary for a PR reviewer execution."""
     lines = [
@@ -680,6 +680,9 @@ def _generate_pr_reviewer_summary(
     if diagnosis is not None and diagnosis.remediation:
         lines.append("\n## Remediation\n")
         lines.extend(f"- {item}" for item in diagnosis.remediation)
+    if diagnostics_warnings:
+        lines.append("\n## Runtime warnings\n")
+        lines.extend(f"- {warning}" for warning in diagnostics_warnings)
 
     # Try to extract structured verdict if present in output
     verdict = None
@@ -781,9 +784,11 @@ def execute_pr_review(
         target_number=pr_number,
         profile=profile,
     )
-    execute_timeout = openclaw_execute_timeout_seconds()
-    subprocess_timeout = openclaw_subprocess_timeout_seconds()
     diagnostics = gather_openclaw_runtime_diagnostics()
+    timeout_settings = openclaw_timeout_settings()
+    execute_timeout = timeout_settings.execute_timeout
+    subprocess_timeout = timeout_settings.subprocess_timeout
+    diagnostics_warnings = diagnostics.warnings + timeout_settings.warnings
 
     exec_cmd = [
         "openclaw", "agent",
@@ -832,7 +837,7 @@ def execute_pr_review(
             exit_code=exit_code,
             combined_output=combined,
             timed_out=False,
-            diagnostics_warnings=diagnostics.warnings,
+            diagnostics_warnings=diagnostics_warnings,
         )
 
         summary = _generate_pr_reviewer_summary(
@@ -845,6 +850,7 @@ def execute_pr_review(
             stderr=stderr,
             start_time=start_time,
             diagnosis=diagnosis,
+            diagnostics_warnings=diagnostics_warnings,
         )
         summary_path.write_text(summary, encoding="utf-8")
 
@@ -870,7 +876,7 @@ def execute_pr_review(
             exit_code=None,
             combined_output=combined,
             timed_out=True,
-            diagnostics_warnings=diagnostics.warnings,
+            diagnostics_warnings=diagnostics_warnings,
             timeout_seconds=subprocess_timeout,
         )
         summary = _generate_pr_reviewer_summary(
@@ -883,6 +889,7 @@ def execute_pr_review(
             stderr=stderr,
             start_time=start_time,
             diagnosis=diagnosis,
+            diagnostics_warnings=diagnostics_warnings,
         )
         summary_path.write_text(summary, encoding="utf-8")
         return {
@@ -900,7 +907,7 @@ def execute_pr_review(
             exit_code=-1,
             combined_output=combined,
             timed_out=False,
-            diagnostics_warnings=diagnostics.warnings,
+            diagnostics_warnings=diagnostics_warnings,
         )
         summary = _generate_pr_reviewer_summary(
             pr_number=pr_number,
@@ -912,6 +919,7 @@ def execute_pr_review(
             stderr=str(e),
             start_time=start_time,
             diagnosis=diagnosis,
+            diagnostics_warnings=diagnostics_warnings,
         )
         summary_path.write_text(summary, encoding="utf-8")
         return {
