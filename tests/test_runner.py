@@ -576,6 +576,94 @@ def test_execute_plan_passes_model_and_thinking_flags():
     assert plan.selected_reasoning_effort in cmd
 
 
+def test_execute_plan_retries_once_with_explicit_fallback_on_unsupported_model():
+    from unittest.mock import patch
+
+    from signposter.runner import execute_plan
+
+    plan = make_runner_plan_for_test("worker", "build", number=47)
+
+    unsupported = type(
+        "proc",
+        (),
+        {
+            "stdout": "",
+            "stderr": (
+                "[diagnostic] lane task error: "
+                'error="FailoverError: Unknown model: openai-codex/gpt-5.3-codex"'
+            ),
+            "returncode": 1,
+        },
+    )()
+    fallback = type("proc", (), {"stdout": "ok", "stderr": "", "returncode": 0})()
+
+    with patch("signposter.runner.find_uncommitted_repo_changes", return_value=[]), \
+         patch("signposter.runner.check_openclaw_preflight") as mock_preflight, \
+         patch(
+             "signposter.runner.subprocess.run",
+             side_effect=[unsupported, fallback],
+         ) as mock_run, \
+         patch("builtins.open", create=True) as mock_open:
+        mock_preflight.return_value = type("pf", (), {"ok": True})()
+        mock_open.return_value.__enter__.return_value.read.return_value = "mock prompt"
+        result = execute_plan(plan, "test/repo", allow_dirty=False)
+
+    assert result["success"] is True
+    assert result["fallback_used"] is True
+    assert mock_run.call_count == 2
+    second_cmd = mock_run.call_args_list[1].args[0]
+    assert "openai/gpt-5.4" in second_cmd
+
+
+def test_generate_execution_summary_records_runtime_fallback():
+    from signposter.dispatch import DispatchDecision
+    from signposter.runner import RunnerPlan, _generate_execution_summary
+    from signposter.scan import LabeledItem
+
+    fake_item = LabeledItem(101, "Test", "url", ["state:active"], "issue")
+    fake_dispatch = DispatchDecision(
+        item=fake_item,
+        phase="build",
+        state="active",
+        role="worker",
+        risk="medium",
+        area=None,
+        proposed_route="worker",
+        proposed_gate="ci",
+        reason="test",
+    )
+    plan = RunnerPlan(
+        item=fake_item,
+        dispatch=fake_dispatch,
+        proposed_runner="openclaw",
+        proposed_profile="worker",
+        proposed_working_dir="~/work/101",
+        proposed_prompt_path="artifacts/prompts/issue-101.md",
+        proposed_command_shape="test",
+        reason="test",
+        selected_role_name="WORKER_CORE",
+        selected_model="openai/gpt-5.4",
+        selected_reasoning_effort="medium",
+    )
+
+    summary = _generate_execution_summary(
+        repo="test/repo",
+        plan=plan,
+        session_key="signposter-v2-issue-101-worker-fallback-worker_core",
+        exit_code=0,
+        raw_path="artifacts/runs/issue-101-worker.raw.txt",
+        stdout="ok",
+        stderr="",
+        start_time=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+        fallback_used=True,
+        original_role_name="WORKER_CODE",
+        original_model="openai/gpt-5.3-codex",
+    )
+
+    assert "**Runtime Fallback Used:** yes" in summary
+    assert "**Original Selected Model:** openai/gpt-5.3-codex" in summary
+
+
 def test_execute_plan_preflight_blocks_before_openclaw_and_artifacts(tmp_path):
     """OpenClaw preflight failure must block before subprocess/artifact writes."""
     from unittest.mock import patch
