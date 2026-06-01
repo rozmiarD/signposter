@@ -100,6 +100,8 @@ def test_format_review_plan_contains_key_sections():
     assert "artifacts/prompts/pr-5-review.md" in output
     assert "No review was executed" in output
     assert "No merge was performed" in output
+    assert "selected role:" in output
+    assert "reasoning:" in output
 
 def test_fetch_pr_checks_handles_gh_checkrun_list_shape():
     from signposter.review import _fetch_pr_checks

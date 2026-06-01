@@ -18,6 +18,7 @@ from signposter.openclaw_preflight import (
     check_openclaw_preflight,
     format_openclaw_preflight_block,
 )
+from signposter.role_routing import select_role_for_issue
 from signposter.scan import LabeledItem, fetch_issue_by_number, fetch_issue_context
 from signposter.worktree import get_worktree_status_for_issue
 
@@ -37,6 +38,11 @@ class RunnerPlan:
     proposed_prompt_path: str
     proposed_command_shape: str
     reason: str
+    selected_role_name: str = "WORKER_CODE"
+    selected_model: str = "openai/gpt-5.3-codex"
+    selected_reasoning_effort: str = "low"
+    selected_openclaw_agent: str = "worker"
+    role_selection_reason: str = "default role selection"
 
 
 def openclaw_session_namespace(env: dict[str, str] | None = None) -> str:
@@ -93,6 +99,7 @@ def plan_runner(repo: str, *, limit: int = 1) -> list[RunnerPlan]:
         item = claim_plan.item
 
         runner, profile = _select_runner_and_profile(dispatch)
+        role_selection = select_role_for_issue(item, dispatch)
 
         # Proposed paths (dry-run only)
         working_dir = f"~/projects/signposter-work/{item.number}"
@@ -130,6 +137,11 @@ def plan_runner(repo: str, *, limit: int = 1) -> list[RunnerPlan]:
             proposed_prompt_path=prompt_path,
             proposed_command_shape=command_shape,
             reason=reason,
+            selected_role_name=role_selection.policy.name,
+            selected_model=role_selection.policy.model,
+            selected_reasoning_effort=role_selection.policy.reasoning_effort,
+            selected_openclaw_agent=role_selection.policy.openclaw_agent,
+            role_selection_reason=role_selection.reason,
         )
         plans.append(plan)
 
@@ -148,6 +160,7 @@ def plan_runner_for_issue(repo: str, issue: int) -> RunnerPlan | None:
 
     dispatch = classify_candidate(item)
     runner, profile = _select_runner_and_profile(dispatch)
+    role_selection = select_role_for_issue(item, dispatch)
 
     # HARDENING-009: prefer isolated worktree path if it exists
     try:
@@ -186,6 +199,11 @@ def plan_runner_for_issue(repo: str, issue: int) -> RunnerPlan | None:
         proposed_prompt_path=prompt_path,
         proposed_command_shape=command_shape,
         reason=reason,
+        selected_role_name=role_selection.policy.name,
+        selected_model=role_selection.policy.model,
+        selected_reasoning_effort=role_selection.policy.reasoning_effort,
+        selected_openclaw_agent=role_selection.policy.openclaw_agent,
+        role_selection_reason=role_selection.reason,
     )
 
 
@@ -227,6 +245,7 @@ def plan_active_runner_from_prompts(repo: str, *, limit: int = 1) -> list[Runner
 
         dispatch = classify_candidate(item)
         runner, profile = _select_runner_and_profile(dispatch)
+        role_selection = select_role_for_issue(item, dispatch)
 
         working_dir = f"~/projects/signposter-work/{item.number}"
         prompt_path_str = str(prompt_path)
@@ -251,6 +270,11 @@ def plan_active_runner_from_prompts(repo: str, *, limit: int = 1) -> list[Runner
                 proposed_prompt_path=prompt_path_str,
                 proposed_command_shape=command_shape,
                 reason="Already-active item with existing prompt artifact",
+                selected_role_name=role_selection.policy.name,
+                selected_model=role_selection.policy.model,
+                selected_reasoning_effort=role_selection.policy.reasoning_effort,
+                selected_openclaw_agent=role_selection.policy.openclaw_agent,
+                role_selection_reason=role_selection.reason,
             )
         )
 
@@ -285,11 +309,16 @@ def format_runner_plan(plans: list[RunnerPlan]) -> str:
         lines.append("    Proposed Execution:")
         lines.append(f"      runner:           {plan.proposed_runner}")
         lines.append(f"      openclaw_profile: {plan.proposed_profile}")
+        lines.append(f"      selected_role:    {plan.selected_role_name}")
+        lines.append(f"      model:            {plan.selected_model}")
+        lines.append(f"      reasoning:        {plan.selected_reasoning_effort}")
+        lines.append(f"      role_agent:       {plan.selected_openclaw_agent}")
         lines.append(f"      working_dir:      {plan.proposed_working_dir}")
         lines.append(f"      prompt_artifact:  {plan.proposed_prompt_path}")
         lines.append(f"      command_shape:    {plan.proposed_command_shape}")
         lines.append("")
         lines.append(f"    Reason: {plan.reason}")
+        lines.append(f"    Role Reason: {plan.role_selection_reason}")
         lines.append("")
 
     lines.append(f"Total items planned for execution: {len(plans)}")
