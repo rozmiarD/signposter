@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from signposter.dependencies import parse_depends_on
+from signposter.scheduler import parse_graph_metadata
 
 
 @dataclass(frozen=True)
@@ -37,6 +38,7 @@ def build_issue_dag_manifest(
         seen.add(number)
         labels = [label["name"] for label in issue.get("labels", [])]
         body = issue.get("body") or ""
+        metadata = parse_graph_metadata(body)
         tasks.append(
             {
                 "id": f"issue-{number}",
@@ -44,6 +46,10 @@ def build_issue_dag_manifest(
                 "title": issue.get("title", ""),
                 "state": _workflow_state(labels) or issue.get("state", "UNKNOWN").lower(),
                 "depends_on": parse_depends_on(body),
+                "mainline": metadata.mainline,
+                "parent": metadata.parent,
+                "return_to": metadata.return_to,
+                "side_task": metadata.side_task,
                 "labels": labels,
             }
         )
@@ -109,9 +115,13 @@ def format_issue_dag_manifest_plan(plan: IssueManifestPlan) -> str:
         lines.append("  none")
     for task in tasks:
         deps = ", ".join(f"#{dep}" for dep in task.get("depends_on", [])) or "none"
+        side = " side-task=yes" if task.get("side_task") else ""
+        return_to = (
+            f" return-to=#{task['return_to']}" if task.get("return_to") is not None else ""
+        )
         lines.append(
-            f"  #{task['issue']}: {task.get('state', 'unknown')} deps={deps} "
-            f"title={task.get('title', '')}"
+            f"  #{task['issue']}: {task.get('state', 'unknown')} deps={deps}"
+            f"{side}{return_to} title={task.get('title', '')}"
         )
     lines.extend(["", "Notes:"])
     lines.extend(f"  {note}" for note in plan.notes)
