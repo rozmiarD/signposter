@@ -135,8 +135,75 @@ def test_plan_review_accepts_codex_cli_backend_for_dry_run():
         plan = plan_review_for_pr("test/repo", 5, backend="codex-cli")
 
     assert plan.proposed_runner == "codex-cli"
-    assert plan.backend_execution_supported is False
+    assert plan.backend_execution_supported is True
     assert "codex exec" in plan.proposed_command_shape
+
+
+def test_execute_pr_review_uses_codex_cli_backend(monkeypatch, tmp_path):
+    from signposter.review import execute_pr_review
+
+    prompt_dir = tmp_path / "artifacts" / "prompts"
+    prompt_dir.mkdir(parents=True)
+    prompt = prompt_dir / "pr-5-review.md"
+    prompt.write_text("review this", encoding="utf-8")
+    plan = ReviewPlan(
+        pr_number=5,
+        title="code change",
+        state="OPEN",
+        base_branch="main",
+        head_branch="work/issue-4-xxx",
+        mergeable="MERGEABLE",
+        review_decision=None,
+        checks_status="pass",
+        successful_checks=1,
+        failing_checks=0,
+        pending_checks=0,
+        files_changed=1,
+        additions=8,
+        deletions=0,
+        risk_level="medium",
+        size="small",
+        associated_issue=4,
+        branch_matches_convention=True,
+        status="ready",
+        notes=[],
+        reviewer_profile="reviewer",
+        prompt_artifact_path=str(prompt),
+        proposed_runner="codex-cli",
+        backend_execution_supported=True,
+        selected_role_name="REVIEWER_CORE",
+        selected_model="openai/gpt-5.4",
+        selected_reasoning_effort="medium",
+        selected_openclaw_agent="reviewer_core",
+    )
+    result_obj = type(
+        "Result",
+        (),
+        {
+            "exit_code": 0,
+            "raw_path": tmp_path / "raw.txt",
+            "summary_path": tmp_path / "summary.md",
+            "success": True,
+            "reason": "ok",
+            "status": "success",
+        },
+    )()
+    called = {}
+
+    def fake_execute(invocation, *, raw_path, summary_path):
+        called["invocation"] = invocation
+        called["raw_path"] = raw_path
+        called["summary_path"] = summary_path
+        return result_obj
+
+    monkeypatch.setattr("signposter.review.plan_review_for_pr", lambda *a, **k: plan)
+    monkeypatch.setattr("signposter.review.execute_codex_cli_invocation", fake_execute)
+
+    result = execute_pr_review("test/repo", 5, backend="codex-cli", runs_dir=tmp_path / "runs")
+
+    assert result["success"] is True
+    assert called["invocation"].agent == "reviewer_core"
+    assert str(called["raw_path"]).endswith("pr-5-reviewer.raw.txt")
 
 
 def test_fetch_pr_checks_handles_gh_checkrun_list_shape():
