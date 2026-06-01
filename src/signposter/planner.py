@@ -842,7 +842,9 @@ def apply_planner_seed_manifest(
     runner. The CLI layer must remain responsible for guarding real execution
     behind explicit --apply.
     """
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = _refresh_seed_manifest_dependency_metadata(
+        json.loads(manifest_path.read_text(encoding="utf-8"))
+    )
     repo = manifest.get("repo", "")
     issues = manifest.get("issues", [])
 
@@ -899,6 +901,7 @@ def apply_planner_seed_manifest(
         issue_url = _parse_github_issue_url(output)
         issue["github_issue"] = issue_number
         issue["github_url"] = issue_url
+        _refresh_seed_manifest_dependency_metadata(manifest)
         created.append(
             {
                 "key": issue["key"],
@@ -909,6 +912,7 @@ def apply_planner_seed_manifest(
         manifest["status"] = "partial"
         write_planner_seed_manifest(manifest, manifest_path)
 
+    _refresh_seed_manifest_dependency_metadata(manifest)
     manifest["status"] = "applied"
     manifest["applied_at"] = datetime.now(UTC).isoformat(timespec="seconds")
     write_planner_seed_manifest(manifest, manifest_path)
@@ -1022,6 +1026,7 @@ def prepare_planner_seed_manifest(
         }
 
     existing = json.loads(manifest_path.read_text(encoding="utf-8"))
+    _refresh_seed_manifest_dependency_metadata(existing)
     errors = _validate_seed_manifest_compatibility(
         existing=existing,
         expected=new_manifest,
@@ -1079,6 +1084,50 @@ def _seed_manifest_is_applied(manifest: dict[str, Any]) -> bool:
         and bool(issues)
         and all(issue.get("github_issue") is not None for issue in issues)
     )
+
+
+def _refresh_seed_manifest_dependency_metadata(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Materialize key-based dependencies into GitHub-ready manifest metadata."""
+    issues = manifest.get("issues", [])
+    issue_index = {
+        issue.get("key"): {
+            "github_issue": issue.get("github_issue"),
+            "github_url": issue.get("github_url", ""),
+        }
+        for issue in issues
+    }
+
+    for issue in issues:
+        dependency_metadata: list[dict[str, Any]] = []
+        github_depends_on: list[int] = []
+        github_dependency_urls: list[str] = []
+
+        for dependency_key in issue.get("depends_on", []):
+            dependency = issue_index.get(dependency_key, {})
+            github_issue = dependency.get("github_issue")
+            github_url = dependency.get("github_url", "")
+            dependency_metadata.append(
+                {
+                    "key": dependency_key,
+                    "github_issue": github_issue,
+                    "github_url": github_url,
+                }
+            )
+            if github_issue is not None:
+                github_depends_on.append(int(github_issue))
+            if github_url:
+                github_dependency_urls.append(str(github_url))
+
+        issue["dependency_metadata"] = dependency_metadata
+        issue["github_depends_on"] = github_depends_on
+        issue["github_dependency_urls"] = github_dependency_urls
+
+    manifest["issue_key_map"] = {
+        key: value["github_issue"]
+        for key, value in issue_index.items()
+        if value["github_issue"] is not None
+    }
+    return manifest
 
 
 
@@ -1945,6 +1994,7 @@ def build_planner_status(
     issue_states: dict[int, str] | None = None,
 ) -> dict[str, Any]:
     """Build a local planner status summary from a seed manifest."""
+    manifest = _refresh_seed_manifest_dependency_metadata(dict(manifest))
     issue_states = issue_states or {}
     tasks = []
 
@@ -1963,6 +2013,8 @@ def build_planner_status(
                 "state": state,
                 "labels": issue.get("labels", []),
                 "depends_on": issue.get("depends_on", []),
+                "github_depends_on": issue.get("github_depends_on", []),
+                "dependency_metadata": issue.get("dependency_metadata", []),
             }
         )
 
@@ -2022,6 +2074,15 @@ def format_planner_status(status: dict[str, Any]) -> str:
             lines.append(
                 f"  {task['key']} — issue: {issue_text} — state: {task['state']}{url}"
             )
+            dependency_metadata = task.get("dependency_metadata", [])
+            if dependency_metadata:
+                deps = ", ".join(
+                    f"{dependency['key']} (#{dependency['github_issue']})"
+                    if dependency.get("github_issue") is not None
+                    else dependency["key"]
+                    for dependency in dependency_metadata
+                )
+                lines.append(f"    depends on: {deps}")
 
     lines.extend(["", "Notes:"])
     lines.extend(f"  {note}" for note in status["notes"])
@@ -2048,10 +2109,12 @@ def build_planner_seed_manifest(
                 "body_file": str(body_file),
                 "body_size": issue["body_size"],
                 "github_issue": None,
+                "github_url": "",
             }
         )
 
-    return {
+    return _refresh_seed_manifest_dependency_metadata(
+        {
         "version": "planner.seed-manifest.v0.1",
         "plan": str(plan_path),
         "repo": repo,
@@ -2063,7 +2126,8 @@ def build_planner_seed_manifest(
             "No GitHub issue was created.",
             "No OpenClaw execution was performed.",
         ],
-    }
+        }
+    )
 
 
 
