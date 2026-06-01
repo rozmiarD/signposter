@@ -16,6 +16,10 @@ from pathlib import Path
 from typing import Any
 
 from signposter.artifact_safety import find_stale_or_failover_signal
+from signposter.codex_cli_backend import (
+    execute_codex_cli_invocation,
+    plan_codex_cli_invocation,
+)
 from signposter.execution_backend import (
     build_backend_command_shape,
     resolve_execution_backend,
@@ -73,6 +77,7 @@ class ReviewPlan:
     selected_role_name: str = "REVIEWER_LIGHT"
     selected_model: str = "openai/gpt-5.4-mini"
     selected_reasoning_effort: str = "low"
+    selected_openclaw_agent: str = "reviewer_light"
     role_selection_reason: str = "default review role selection"
 
 
@@ -463,6 +468,7 @@ def plan_review_for_pr(
         selected_role_name=role_selection.policy.name,
         selected_model=role_selection.policy.model,
         selected_reasoning_effort=role_selection.policy.reasoning_effort,
+        selected_openclaw_agent=role_selection.policy.openclaw_agent,
         role_selection_reason=role_selection.reason,
     )
 
@@ -496,6 +502,7 @@ def format_review_plan(plan: ReviewPlan) -> str:
     lines.append(f"  backend: {plan.proposed_runner}")
     lines.append(f"  agent: {plan.reviewer_profile}")
     lines.append(f"  selected role: {plan.selected_role_name}")
+    lines.append(f"  role agent: {plan.selected_openclaw_agent}")
     lines.append(f"  model: {plan.selected_model}")
     lines.append(f"  reasoning: {plan.selected_reasoning_effort}")
     lines.append(f"  execute ready: {'yes' if plan.backend_execution_supported else 'no'}")
@@ -880,6 +887,42 @@ def execute_pr_review(
                 "success": False,
             }
 
+    session_key = build_openclaw_session_key(
+        target_kind="pr",
+        target_number=pr_number,
+        profile=profile,
+    )
+    timeout_settings = openclaw_timeout_settings()
+    execute_timeout = timeout_settings.execute_timeout
+    subprocess_timeout = timeout_settings.subprocess_timeout
+    config_error = getattr(timeout_settings, "config_error", None)
+
+    if plan.proposed_runner == "codex-cli":
+        runs_dir = Path(runs_dir)
+        raw_path = runs_dir / f"pr-{pr_number}-{profile}.raw.txt"
+        summary_path = runs_dir / f"pr-{pr_number}-{profile}.summary.md"
+        invocation = plan_codex_cli_invocation(
+            agent=plan.selected_openclaw_agent,
+            session_key=session_key,
+            model=plan.selected_model,
+            reasoning_effort=plan.selected_reasoning_effort,
+            prompt_path=prompt_path,
+            timeout_seconds=execute_timeout,
+        )
+        result = execute_codex_cli_invocation(
+            invocation,
+            raw_path=raw_path,
+            summary_path=summary_path,
+        )
+        return {
+            "exit_code": result.exit_code,
+            "raw_path": str(result.raw_path),
+            "summary_path": str(result.summary_path),
+            "success": result.success,
+            "error": None if result.success else result.reason,
+            "diagnosis_status": result.status,
+        }
+
     preflight = check_openclaw_preflight(artifact_kind="review", target=pr_number)
     if not preflight.ok:
         print(format_openclaw_preflight_block(preflight))
@@ -904,17 +947,9 @@ def execute_pr_review(
             "success": False,
         }
 
-    session_key = build_openclaw_session_key(
-        target_kind="pr",
-        target_number=pr_number,
-        profile=profile,
-    )
     diagnostics = gather_openclaw_runtime_diagnostics()
-    timeout_settings = openclaw_timeout_settings()
-    execute_timeout = timeout_settings.execute_timeout
-    subprocess_timeout = timeout_settings.subprocess_timeout
     diagnostics_warnings = diagnostics.warnings + timeout_settings.warnings
-    config_error = getattr(timeout_settings, "config_error", None)
+
     if config_error:
         runs_dir = Path(runs_dir)
         runs_dir.mkdir(parents=True, exist_ok=True)

@@ -241,6 +241,7 @@ def _format_codex_cli_summary(
         [
             "# Signposter Codex CLI Execution Summary",
             "",
+            "Backend: codex-cli",
             f"Agent: {invocation.agent}",
             f"Model: {invocation.model}",
             f"Reasoning: {invocation.reasoning_effort}",
