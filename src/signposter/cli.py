@@ -23,11 +23,16 @@ from signposter.backend_status import build_backend_status_report, format_backen
 from signposter.bug_ledger import (
     apply_bug_ledger_plan,
     format_bug_ledger_plan,
+    load_bug_ledger,
     plan_record_bug,
     plan_show_bugs,
     plan_update_bug,
 )
 from signposter.claim import cli_main as claim_cli_main
+from signposter.control_status import (
+    build_control_plane_status,
+    format_control_plane_status,
+)
 from signposter.dispatch import cli_main as dispatch_cli_main
 from signposter.doctor import (
     CheckStatus,
@@ -1229,6 +1234,9 @@ def main() -> None:
 
     # H035E: simple GitHub-label scheduler (read-only)
     _register_scheduler_subcommands(subparsers)
+
+    # H045E: compact control-plane status (read-only)
+    _register_control_plane_subcommands(subparsers)
 
     # H037K: guarded issue factory from a local task list
     _register_issue_factory_subcommand(subparsers)
@@ -2864,6 +2872,94 @@ def _register_orchestrator_subcommands(
         help="Write a bounded local transcript artifact to PATH or the default runs path",
     )
     autonomy_smoke_parser.set_defaults(func=run_orchestrator_autonomy_smoke_cli)
+
+
+# =============================================================================
+# H045E: Compact control-plane status
+# =============================================================================
+
+
+def run_control_plane_status(args: argparse.Namespace) -> int:
+    """Handler for `signposter control-plane status`."""
+    repo = getattr(args, "repo", None)
+    if not repo:
+        print("Error: --repo is required", file=sys.stderr)
+        return 1
+
+    planner_run = None
+    manifest_path = getattr(args, "manifest", None)
+    if manifest_path is not None:
+        if not manifest_path.exists():
+            print("Signposter Control Plane Status")
+            print()
+            print("Status:")
+            print("  blocked")
+            print()
+            print("Reason:")
+            print(f"  manifest file not found: {manifest_path}")
+            print()
+            print("Notes:")
+            print("  No GitHub mutation was performed.")
+            print("  No manifest mutation was performed.")
+            print("  No lifecycle command was executed.")
+            print("  No OpenClaw execution was performed.")
+            return 1
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        issue_states = (
+            _fetch_manifest_issue_states(str(manifest.get("repo", repo)), manifest)
+            if getattr(args, "sync_github", False)
+            else {}
+        )
+        planner_status = build_planner_status(manifest, issue_states)
+        planner_run = build_planner_run_plan_from_status(
+            planner_status,
+            manifest_path=str(manifest_path),
+        )
+
+    scheduler_next = select_next_issue(repo, limit=getattr(args, "limit", 50))
+    orchestrator_next = None
+    if scheduler_next.issue is not None:
+        orchestrator_next = plan_orchestrator_next(repo, issue=scheduler_next.issue.number)
+
+    bugs = load_bug_ledger(getattr(args, "ledger_path", "artifacts/automation/bug-ledger.json"))
+    bug_limit = getattr(args, "bug_limit", 5)
+    if bug_limit > 0:
+        bugs = bugs[-bug_limit:]
+
+    result = build_control_plane_status(
+        repo=repo,
+        planner_run=planner_run,
+        scheduler_next=scheduler_next,
+        orchestrator_next=orchestrator_next,
+        bugs=bugs,
+    )
+    print(format_control_plane_status(result))
+    return 0 if result.status in {"ready", "completed"} else 1
+
+
+def _register_control_plane_subcommands(
+    subparsers: argparse._SubParsersAction,
+) -> None:
+    """Register compact read-only control-plane status commands."""
+    control_parser = subparsers.add_parser(
+        "control-plane",
+        help="Show compact read-only status across Signposter control-plane surfaces",
+    )
+    control_subparsers = control_parser.add_subparsers(dest="control_command")
+    status_parser = control_subparsers.add_parser(
+        "status",
+        help="Show planner, scheduler, orchestrator, and bug-ledger status",
+    )
+    status_parser.add_argument("--repo", required=True)
+    status_parser.add_argument("--manifest", type=Path, default=None)
+    status_parser.add_argument("--sync-github", action="store_true")
+    status_parser.add_argument("--limit", type=int, default=50)
+    status_parser.add_argument(
+        "--ledger-path",
+        default="artifacts/automation/bug-ledger.json",
+    )
+    status_parser.add_argument("--bug-limit", type=int, default=5)
+    status_parser.set_defaults(func=run_control_plane_status)
 
 
 # =============================================================================
