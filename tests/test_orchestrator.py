@@ -1007,6 +1007,102 @@ def test_write_orchestrator_run_next_loop_transcript_is_local_and_bounded(tmp_pa
     assert "no GitHub mutation was performed by transcript writing" in out
 
 
+def test_orchestrator_step_extracts_execute_diagnosis_from_summary_artifact(tmp_path) -> None:
+    lifecycle_next = _next(
+        issue_number=57,
+        action="execute-worker",
+        command="signposter run --repo example/repo --issue 57 --execute --worktree",
+    )
+    summary = tmp_path / "issue-57-worker.summary.md"
+    summary.write_text(
+        "\n".join(
+            [
+                "# Signposter Execution Summary",
+                "**Execution Status:** runtime-stall",
+                (
+                    "**Execution Reason:** OpenClaw runtime stalled without producing "
+                    "a usable bounded result."
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    proc = type(
+        "Proc",
+        (),
+        {
+            "returncode": 1,
+            "stdout": (
+                "Execution completed for issue #57\n"
+                "  Exit code: 1\n"
+                "  Raw output: artifacts/runs/issue-57-worker.raw.txt\n"
+                f"  Summary:   {summary}\n"
+            ),
+            "stderr": "",
+        },
+    )()
+
+    with patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next):
+        result = run_orchestrator_step(
+            "example/repo",
+            issue=57,
+            apply=True,
+            execute=True,
+            run_command=Mock(return_value=proc),
+        )
+
+    assert result.status == "failed"
+    assert result.diagnosis_status == "runtime-stall"
+    assert "stalled" in (result.diagnosis_reason or "")
+    assert result.raw_artifact_path == "artifacts/runs/issue-57-worker.raw.txt"
+    assert result.summary_artifact_path == str(summary)
+
+
+def test_write_orchestrator_transcript_includes_execute_diagnosis(tmp_path) -> None:
+    step = type(
+        "Step",
+        (),
+        {
+            "next": type(
+                "Next",
+                (),
+                {"lifecycle": _next(issue_number=57), "action": "execute-worker"},
+            )(),
+            "status": "failed",
+            "stop_reason": "step command failed",
+            "diagnosis_status": "timeout",
+            "diagnosis_reason": "OpenClaw execution exceeded the bounded subprocess timeout (25s).",
+            "raw_artifact_path": "artifacts/runs/issue-57-worker.raw.txt",
+            "summary_artifact_path": "artifacts/runs/issue-57-worker.summary.md",
+        },
+    )()
+    result = OrchestratorRunNextLoop(
+        status="completed",
+        cycles_requested=1,
+        cycles_run=1,
+        max_tasks=1,
+        tasks_started=1,
+        selected_issue=57,
+        steps=[step],
+        stop_reason="step command failed",
+        notes=[],
+        stop_category="failed-step",
+        stop_tolerated=True,
+    )
+
+    path = write_orchestrator_run_next_loop_transcript(result, tmp_path / "runs" / "loop.txt")
+    out = path.read_text(encoding="utf-8")
+
+    assert "diagnosis_status=timeout" in out
+    assert (
+        "diagnosis_reason=OpenClaw execution exceeded the bounded subprocess timeout (25s)."
+        in out
+    )
+    assert "raw_artifact=artifacts/runs/issue-57-worker.raw.txt" in out
+    assert "summary_artifact=artifacts/runs/issue-57-worker.summary.md" in out
+
+
 def test_run_next_loop_cli_writes_transcript(tmp_path, monkeypatch, capsys) -> None:
     transcript = tmp_path / "loop.txt"
     monkeypatch.setattr(
