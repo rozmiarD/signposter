@@ -465,10 +465,63 @@ def test_execute_refuses_when_prompt_missing():
             prompt_artifact_path="artifacts/prompts/pr-5-review.md",
         )
 
-        with patch("os.path.isfile", return_value=False):
+        with patch("signposter.review._resolve_existing_artifact_path", return_value=None), \
+             patch(
+                 "signposter.review.write_review_prompt_artifact",
+                 side_effect=RuntimeError("write failed"),
+             ):
             result = execute_pr_review("test/repo", 5)
             assert result["success"] is False
-            assert "prompt artifact missing" in result.get("error", "")
+            assert "could not be written" in result.get("error", "")
+
+
+def test_execute_rewrites_prompt_when_missing(tmp_path):
+    from signposter.review import ReviewPlan, execute_pr_review
+
+    prompt_path = tmp_path / "pr-5-review.md"
+    fake_plan = ReviewPlan(
+        pr_number=5,
+        title="docs change",
+        state="OPEN",
+        base_branch="main",
+        head_branch="work/issue-4-xxx",
+        mergeable="MERGEABLE",
+        review_decision=None,
+        checks_status="pass",
+        successful_checks=1,
+        failing_checks=0,
+        pending_checks=0,
+        files_changed=1,
+        additions=8,
+        deletions=0,
+        risk_level="low",
+        size="small",
+        associated_issue=4,
+        branch_matches_convention=True,
+        status="ready",
+        notes=[],
+        reviewer_profile="reviewer",
+        prompt_artifact_path="artifacts/prompts/pr-5-review.md",
+    )
+
+    def fake_write_prompt(*args, **kwargs):
+        prompt_path.write_text("review prompt", encoding="utf-8")
+        return str(prompt_path)
+
+    with patch("signposter.review.plan_review_for_pr", return_value=fake_plan), \
+         patch("signposter.review._resolve_existing_artifact_path", return_value=None), \
+         patch("signposter.review.write_review_prompt_artifact", side_effect=fake_write_prompt), \
+         patch("signposter.review.check_openclaw_preflight") as mock_preflight, \
+         patch("subprocess.run") as mock_run:
+        mock_preflight.return_value = type("pf", (), {"ok": True})()
+        mock_run.return_value = type(
+            "proc", (), {"stdout": "Verdict: APPROVE", "stderr": "", "returncode": 0}
+        )()
+
+        result = execute_pr_review("test/repo", 5, runs_dir=tmp_path / "runs")
+
+    assert result["success"] is True
+    assert prompt_path.exists()
 
 
 def test_execute_writes_artifacts_on_success(monkeypatch, tmp_path):
@@ -707,6 +760,28 @@ Automerge eligible: yes"""
         assert result.status == "pass"
         assert result.merge_eligible is True
         assert result.automerge_eligible is True
+
+
+def test_gate_finds_summary_outside_current_repo_root(tmp_path):
+    from signposter.review import evaluate_review_gate
+
+    summary = tmp_path / "pr-5-reviewer.summary.md"
+    summary.write_text(
+        "Verdict: APPROVE\n"
+        "Confidence: 0.95\n"
+        "Risk: low\n"
+        "Scope match: yes\n"
+        "CI considered: yes\n"
+        "Merge recommendation: yes\n"
+        "Automerge eligible: yes\n",
+        encoding="utf-8",
+    )
+
+    with patch("signposter.review._resolve_existing_artifact_path", return_value=str(summary)):
+        result = evaluate_review_gate("test/repo", 5)
+
+    assert result.gate_pass is True
+    assert result.summary_path == str(summary)
 
 
 def test_gate_blocked_for_needs_changes():
