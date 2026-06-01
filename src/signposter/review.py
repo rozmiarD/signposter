@@ -480,6 +480,13 @@ def build_review_prompt(plan: ReviewPlan, pr_body: str, diff: str) -> str:
 - Risk classification: {plan.risk_level}
 - Size classification: {plan.size}
 
+## Selected Role Policy
+- role identity: {plan.selected_role_name}
+- selected model: {plan.selected_model}
+- selected reasoning effort: {plan.selected_reasoning_effort}
+- OpenClaw agent/profile: {plan.reviewer_profile}
+- role selection reason: {plan.role_selection_reason}
+
 ## PR Body
 {pr_body or "<no body provided>"}
 
@@ -576,6 +583,10 @@ def _generate_pr_reviewer_summary(
         f"**PR:** #{pr_number}",
         f"**Title:** {plan.title}",
         "**Agent:** reviewer",
+        f"**Selected Role:** {plan.selected_role_name}",
+        f"**Selected Model:** {plan.selected_model}",
+        f"**Selected Reasoning Effort:** {plan.selected_reasoning_effort}",
+        f"**Role Selection Reason:** {plan.role_selection_reason}",
         f"**Session Key:** {session_key}",
         f"**Prompt Artifact:** {plan.prompt_artifact_path}",
         f"**Started (UTC):** {start_time.isoformat()}",
@@ -685,13 +696,20 @@ def execute_pr_review(
 
     exec_cmd = [
         "openclaw", "agent",
-        "--agent", profile,
+        "--agent", plan.reviewer_profile,
         "--session-key", session_key,
+        "--model", plan.selected_model,
+        "--thinking", plan.selected_reasoning_effort,
         "--message", prompt_content,
         "--local",
     ]
 
-    print(f"Running: openclaw agent --agent {profile} --session-key {session_key} --local")
+    print(
+        "Running: "
+        f"openclaw agent --agent {plan.reviewer_profile} "
+        f"--session-key {session_key} --model {plan.selected_model} "
+        f"--thinking {plan.selected_reasoning_effort} --local"
+    )
     print(f"Using prompt: {prompt_path} (length: {len(prompt_content)} chars)")
 
     runs_dir = Path(runs_dir)
