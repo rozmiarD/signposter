@@ -14,9 +14,16 @@ from signposter.claim import perform_claim_mutation, plan_claims
 from signposter.dependencies import is_dependency_blocked
 from signposter.dispatch import DispatchDecision, classify_candidate
 from signposter.git_utils import find_uncommitted_repo_changes
+from signposter.openclaw_diagnostics import gather_openclaw_runtime_diagnostics
 from signposter.openclaw_preflight import (
     check_openclaw_preflight,
     format_openclaw_preflight_block,
+)
+from signposter.openclaw_runtime import (
+    OpenClawExecutionDiagnosis,
+    classify_openclaw_execution,
+    openclaw_execute_timeout_seconds,
+    openclaw_subprocess_timeout_seconds,
 )
 from signposter.role_policy import get_role_policy
 from signposter.role_routing import select_role_for_issue
@@ -1195,6 +1202,9 @@ def execute_plan(
         raise RuntimeError(f"Could not read prompt artifact {prompt_path}: {e}") from e
 
     # Final command for execution (no shell substitution)
+    execute_timeout = openclaw_execute_timeout_seconds()
+    subprocess_timeout = openclaw_subprocess_timeout_seconds()
+    diagnostics = gather_openclaw_runtime_diagnostics()
     exec_cmd = [
         "openclaw", "agent",
         "--agent", plan.selected_openclaw_agent,
@@ -1203,13 +1213,14 @@ def execute_plan(
         "--thinking", plan.selected_reasoning_effort,
         "--message", prompt_content,
         "--local",
+        "--timeout", str(execute_timeout),
     ]
 
     print(
         "Running: "
         f"openclaw agent --agent {plan.selected_openclaw_agent} "
         f"--session-key {session_key} --model {plan.selected_model} "
-        f"--thinking {plan.selected_reasoning_effort} --local"
+        f"--thinking {plan.selected_reasoning_effort} --local --timeout {execute_timeout}"
     )
     print(f"Using prompt: {prompt_path} (length: {len(prompt_content)} chars)")
 
@@ -1228,7 +1239,7 @@ def execute_plan(
             capture_output=True,
             text=True,
             cwd=effective_cwd,  # HARDENING-010: run inside worktree when provided
-            timeout=600,  # 10 minute safety timeout
+            timeout=subprocess_timeout,
         )
         stdout = proc.stdout or ""
         stderr = proc.stderr or ""
@@ -1271,7 +1282,7 @@ def execute_plan(
                     capture_output=True,
                     text=True,
                     cwd=effective_cwd,
-                    timeout=600,
+                    timeout=subprocess_timeout,
                 )
                 fallback_stdout = fallback_proc.stdout or ""
                 fallback_stderr = fallback_proc.stderr or ""
@@ -1290,6 +1301,12 @@ def execute_plan(
 
         # Write raw output
         raw_path.write_text(combined, encoding="utf-8")
+        diagnosis = classify_openclaw_execution(
+            exit_code=exit_code,
+            combined_output=combined,
+            timed_out=False,
+            diagnostics_warnings=diagnostics.warnings,
+        )
 
         # Generate summary
         summary = _generate_execution_summary(
@@ -1305,6 +1322,7 @@ def execute_plan(
             fallback_used=fallback_used,
             original_role_name=plan.selected_role_name if fallback_used else None,
             original_model=original_model if fallback_used else None,
+            diagnosis=diagnosis,
         )
         summary_path.write_text(summary, encoding="utf-8")
 
@@ -1312,16 +1330,79 @@ def execute_plan(
             "exit_code": exit_code,
             "raw_path": str(raw_path),
             "summary_path": str(summary_path),
-            "success": exit_code == 0,
+            "success": diagnosis.status == "success",
             "fallback_used": fallback_used,
+            "error": None if diagnosis.status == "success" else diagnosis.reason,
+            "diagnosis_status": diagnosis.status,
         }
 
     except subprocess.TimeoutExpired as e:
-        raw_path.write_text(f"[TIMEOUT after 600s]\n{e}", encoding="utf-8")
-        return {"exit_code": -1, "raw_path": str(raw_path), "success": False}
+        stdout = e.stdout or ""
+        stderr = e.stderr or ""
+        combined = f"[TIMEOUT after {subprocess_timeout}s]\n"
+        if stdout:
+            combined += stdout
+        if stderr:
+            combined += "\n\n=== STDERR ===\n" + stderr
+        raw_path.write_text(combined, encoding="utf-8")
+        diagnosis = classify_openclaw_execution(
+            exit_code=None,
+            combined_output=combined,
+            timed_out=True,
+            diagnostics_warnings=diagnostics.warnings,
+            timeout_seconds=subprocess_timeout,
+        )
+        summary = _generate_execution_summary(
+            repo=repo,
+            plan=plan,
+            session_key=session_key,
+            exit_code=-1,
+            raw_path=str(raw_path),
+            stdout=stdout,
+            stderr=stderr,
+            start_time=start_time,
+            allow_dirty=allow_dirty,
+            diagnosis=diagnosis,
+        )
+        summary_path.write_text(summary, encoding="utf-8")
+        return {
+            "exit_code": -1,
+            "raw_path": str(raw_path),
+            "summary_path": str(summary_path),
+            "success": False,
+            "error": diagnosis.reason,
+            "diagnosis_status": diagnosis.status,
+        }
     except Exception as e:
-        raw_path.write_text(f"[ERROR]\n{e}", encoding="utf-8")
-        return {"exit_code": -1, "raw_path": str(raw_path), "success": False}
+        combined = f"[ERROR]\n{e}"
+        raw_path.write_text(combined, encoding="utf-8")
+        diagnosis = classify_openclaw_execution(
+            exit_code=-1,
+            combined_output=combined,
+            timed_out=False,
+            diagnostics_warnings=diagnostics.warnings,
+        )
+        summary = _generate_execution_summary(
+            repo=repo,
+            plan=plan,
+            session_key=session_key,
+            exit_code=-1,
+            raw_path=str(raw_path),
+            stdout="",
+            stderr=str(e),
+            start_time=start_time,
+            allow_dirty=allow_dirty,
+            diagnosis=diagnosis,
+        )
+        summary_path.write_text(summary, encoding="utf-8")
+        return {
+            "exit_code": -1,
+            "raw_path": str(raw_path),
+            "summary_path": str(summary_path),
+            "success": False,
+            "error": diagnosis.reason,
+            "diagnosis_status": diagnosis.status,
+        }
 
 
 def _generate_execution_summary(
@@ -1331,6 +1412,7 @@ def _generate_execution_summary(
     fallback_used: bool = False,
     original_role_name: str | None = None,
     original_model: str | None = None,
+    diagnosis: OpenClawExecutionDiagnosis | None = None,
 ) -> str:
     """Generate a mechanical summary for the execution run."""
     item = plan.item
@@ -1352,6 +1434,9 @@ def _generate_execution_summary(
         f"**Raw Output:** {raw_path}",
         "",
     ]
+    if diagnosis is not None:
+        lines.append(f"**Execution Status:** {diagnosis.status}")
+        lines.append(f"**Execution Reason:** {diagnosis.reason}")
 
     # HARDENING-006 micro-adjustment: record dirty tree guard status
     if plan.proposed_profile == "worker":
@@ -1371,6 +1456,9 @@ def _generate_execution_summary(
     line_count = len(raw_text.splitlines())
     byte_count = len(raw_text.encode("utf-8"))
     lines.append(f"**Output Size:** {line_count} lines, {byte_count} bytes")
+    if diagnosis is not None and diagnosis.remediation:
+        lines.append("\n## Remediation\n")
+        lines.extend(f"- {item}" for item in diagnosis.remediation)
 
     # Excerpts
     lines.append("\n## First 30 lines of output\n")

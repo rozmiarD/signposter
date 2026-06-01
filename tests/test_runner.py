@@ -599,12 +599,14 @@ def test_execute_plan_retries_once_with_explicit_fallback_on_unsupported_model()
 
     with patch("signposter.runner.find_uncommitted_repo_changes", return_value=[]), \
          patch("signposter.runner.check_openclaw_preflight") as mock_preflight, \
+         patch("signposter.runner.gather_openclaw_runtime_diagnostics") as mock_diag, \
          patch(
              "signposter.runner.subprocess.run",
              side_effect=[unsupported, fallback],
          ) as mock_run, \
          patch("builtins.open", create=True) as mock_open:
         mock_preflight.return_value = type("pf", (), {"ok": True})()
+        mock_diag.return_value = type("diag", (), {"warnings": ()})()
         mock_open.return_value.__enter__.return_value.read.return_value = "mock prompt"
         result = execute_plan(plan, "test/repo", allow_dirty=False)
 
@@ -700,6 +702,76 @@ def test_execute_plan_preflight_blocks_before_openclaw_and_artifacts(tmp_path):
     assert "provider token" in result["error"]
     mock_run.assert_not_called()
     mock_open.assert_not_called()
+
+
+def test_execute_plan_timeout_writes_bounded_summary(tmp_path, monkeypatch):
+    from subprocess import TimeoutExpired
+    from unittest.mock import patch
+
+    from signposter.runner import execute_plan
+
+    monkeypatch.chdir(tmp_path)
+    plan = make_runner_plan_for_test("worker", "build", number=48)
+
+    with patch("signposter.runner.find_uncommitted_repo_changes", return_value=[]), \
+         patch("signposter.runner.check_openclaw_preflight") as mock_preflight, \
+         patch("signposter.runner.gather_openclaw_runtime_diagnostics") as mock_diag, \
+         patch("signposter.runner.openclaw_execute_timeout_seconds", return_value=20), \
+         patch("signposter.runner.openclaw_subprocess_timeout_seconds", return_value=25), \
+         patch(
+             "signposter.runner.subprocess.run",
+             side_effect=TimeoutExpired(cmd=["openclaw"], timeout=25),
+         ), \
+         patch("builtins.open", create=True) as mock_open:
+        mock_preflight.return_value = type("pf", (), {"ok": True})()
+        mock_diag.return_value = type("diag", (), {"warnings": ()})()
+        mock_open.return_value.__enter__.return_value.read.return_value = "mock prompt"
+        result = execute_plan(plan, "test/repo", allow_dirty=False)
+
+    assert result["success"] is False
+    assert result["summary_path"] is not None
+    assert result["diagnosis_status"] == "timeout"
+    summary = (tmp_path / result["summary_path"]).read_text(encoding="utf-8")
+    assert "**Execution Status:** timeout" in summary
+    assert "bounded subprocess timeout" in summary
+
+
+def test_execute_plan_runtime_stall_writes_bounded_summary(tmp_path, monkeypatch):
+    from unittest.mock import patch
+
+    from signposter.runner import execute_plan
+
+    monkeypatch.chdir(tmp_path)
+    plan = make_runner_plan_for_test("worker", "build", number=49)
+    stalled = type(
+        "proc",
+        (),
+        {
+            "stdout": "",
+            "stderr": (
+                "[agent/embedded] codex app-server turn idle timed out waiting for progress\n"
+                "[agent/embedded] codex app-server client retired after timed-out turn"
+            ),
+            "returncode": 1,
+        },
+    )()
+
+    with patch("signposter.runner.find_uncommitted_repo_changes", return_value=[]), \
+         patch("signposter.runner.check_openclaw_preflight") as mock_preflight, \
+         patch("signposter.runner.gather_openclaw_runtime_diagnostics") as mock_diag, \
+         patch("signposter.runner.subprocess.run", return_value=stalled), \
+         patch("builtins.open", create=True) as mock_open:
+        mock_preflight.return_value = type("pf", (), {"ok": True})()
+        mock_diag.return_value = type("diag", (), {"warnings": ()})()
+        mock_open.return_value.__enter__.return_value.read.return_value = "mock prompt"
+        result = execute_plan(plan, "test/repo", allow_dirty=False)
+
+    assert result["success"] is False
+    assert result["summary_path"] is not None
+    assert result["diagnosis_status"] == "runtime-stall"
+    summary = (tmp_path / result["summary_path"]).read_text(encoding="utf-8")
+    assert "**Execution Status:** runtime-stall" in summary
+    assert "do not keep the orchestrator waiting" in summary
 
 
 # --- HARDENING-006 micro-adjustment: dirty guard in summary ---

@@ -645,6 +645,55 @@ def test_execute_review_preflight_blocks_before_openclaw_and_artifacts(tmp_path)
     mock_run.assert_not_called()
 
 
+def test_execute_review_timeout_writes_bounded_summary(tmp_path):
+    from subprocess import TimeoutExpired
+
+    from signposter.review import ReviewPlan, execute_pr_review
+
+    fake_plan = ReviewPlan(
+        pr_number=5,
+        title="docs change",
+        state="OPEN",
+        base_branch="main",
+        head_branch="work/issue-4-xxx",
+        mergeable="MERGEABLE",
+        review_decision=None,
+        checks_status="pass",
+        successful_checks=1,
+        failing_checks=0,
+        pending_checks=0,
+        files_changed=1,
+        additions=8,
+        deletions=0,
+        risk_level="low",
+        size="small",
+        associated_issue=4,
+        branch_matches_convention=True,
+        status="ready",
+        notes=[],
+        reviewer_profile="reviewer",
+        prompt_artifact_path=str(tmp_path / "pr-5-review.md"),
+    )
+    (tmp_path / "pr-5-review.md").write_text("review prompt", encoding="utf-8")
+
+    with patch("signposter.review.plan_review_for_pr", return_value=fake_plan), \
+         patch("signposter.review.check_openclaw_preflight") as mock_preflight, \
+         patch("signposter.review.gather_openclaw_runtime_diagnostics") as mock_diag, \
+         patch("signposter.review.openclaw_execute_timeout_seconds", return_value=20), \
+         patch("signposter.review.openclaw_subprocess_timeout_seconds", return_value=25), \
+         patch("subprocess.run", side_effect=TimeoutExpired(cmd=["openclaw"], timeout=25)):
+        mock_preflight.return_value = type("pf", (), {"ok": True})()
+        mock_diag.return_value = type("diag", (), {"warnings": ()})()
+        result = execute_pr_review("test/repo", 5, runs_dir=tmp_path / "runs")
+
+    assert result["success"] is False
+    assert result["summary_path"] is not None
+    assert result["diagnosis_status"] == "timeout"
+    summary = open(result["summary_path"], encoding="utf-8").read()
+    assert "**Execution Status:** timeout" in summary
+    assert "bounded subprocess timeout" in summary
+
+
 def test_execute_review_passes_model_and_thinking_flags(tmp_path):
     from signposter.review import ReviewPlan, execute_pr_review
 
