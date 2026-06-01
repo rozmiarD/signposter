@@ -645,6 +645,59 @@ def test_execute_review_preflight_blocks_before_openclaw_and_artifacts(tmp_path)
     mock_run.assert_not_called()
 
 
+def test_execute_review_timeout_writes_bounded_summary(tmp_path):
+    from subprocess import TimeoutExpired
+
+    from signposter.review import ReviewPlan, execute_pr_review
+
+    fake_plan = ReviewPlan(
+        pr_number=5,
+        title="docs change",
+        state="OPEN",
+        base_branch="main",
+        head_branch="work/issue-4-xxx",
+        mergeable="MERGEABLE",
+        review_decision=None,
+        checks_status="pass",
+        successful_checks=1,
+        failing_checks=0,
+        pending_checks=0,
+        files_changed=1,
+        additions=8,
+        deletions=0,
+        risk_level="low",
+        size="small",
+        associated_issue=4,
+        branch_matches_convention=True,
+        status="ready",
+        notes=[],
+        reviewer_profile="reviewer",
+        prompt_artifact_path=str(tmp_path / "pr-5-review.md"),
+    )
+    (tmp_path / "pr-5-review.md").write_text("review prompt", encoding="utf-8")
+
+    with patch("signposter.review.plan_review_for_pr", return_value=fake_plan), \
+         patch("signposter.review.check_openclaw_preflight") as mock_preflight, \
+         patch("signposter.review.gather_openclaw_runtime_diagnostics") as mock_diag, \
+         patch("signposter.review.openclaw_timeout_settings") as mock_timeouts, \
+         patch("subprocess.run", side_effect=TimeoutExpired(cmd=["openclaw"], timeout=25)):
+        mock_preflight.return_value = type("pf", (), {"ok": True})()
+        mock_diag.return_value = type("diag", (), {"warnings": ()})()
+        mock_timeouts.return_value = type(
+            "timeouts",
+            (),
+            {"execute_timeout": 20, "subprocess_timeout": 25, "warnings": ()},
+        )()
+        result = execute_pr_review("test/repo", 5, runs_dir=tmp_path / "runs")
+
+    assert result["success"] is False
+    assert result["summary_path"] is not None
+    assert result["diagnosis_status"] == "timeout"
+    summary = open(result["summary_path"], encoding="utf-8").read()
+    assert "**Execution Status:** timeout" in summary
+    assert "bounded subprocess timeout" in summary
+
+
 def test_execute_review_passes_model_and_thinking_flags(tmp_path):
     from signposter.review import ReviewPlan, execute_pr_review
 
@@ -695,11 +748,120 @@ def test_execute_review_passes_model_and_thinking_flags(tmp_path):
     assert "medium" in cmd
 
 
+def test_build_review_prompt_includes_authoritative_changed_files():
+    from signposter.review import ReviewPlan, build_review_prompt
+
+    plan = ReviewPlan(
+        pr_number=6,
+        title="core change",
+        state="OPEN",
+        base_branch="main",
+        head_branch="work/issue-6-xxx",
+        mergeable="MERGEABLE",
+        review_decision=None,
+        checks_status="pass",
+        successful_checks=1,
+        failing_checks=0,
+        pending_checks=0,
+        files_changed=2,
+        additions=10,
+        deletions=2,
+        risk_level="high",
+        size="small",
+        associated_issue=6,
+        branch_matches_convention=True,
+        status="ready",
+        notes=[],
+        reviewer_profile="reviewer",
+        prompt_artifact_path="artifacts/prompts/pr-6-review.md",
+        selected_role_name="REVIEWER_CORE",
+        selected_model="openai/gpt-5.4",
+        selected_reasoning_effort="medium",
+        role_selection_reason="test",
+    )
+
+    prompt = build_review_prompt(
+        plan,
+        "## Summary\nbody",
+        "diff --git a/x b/x",
+        file_paths=["src/signposter/review.py", "tests/test_review.py"],
+    )
+
+    assert "## Authoritative Changed Files (from GitHub metadata)" in prompt
+    assert "- src/signposter/review.py" in prompt
+    assert "- tests/test_review.py" in prompt
+    assert "canonical changed-file scope" in prompt
+
+
 def test_execute_output_contains_safety_notes():
     """Sanity check that the CLI handler path would include the safety notes."""
     # This is a structural test; real handler tested via integration in real runs
     assert "No GitHub review was submitted"  # marker for later handler verification
     assert "No merge was performed"
+
+
+def test_execute_review_refuses_invalid_timeout_relationship(tmp_path):
+    from unittest.mock import patch
+
+    from signposter.review import ReviewPlan, execute_pr_review
+
+    fake_plan = ReviewPlan(
+        pr_number=7,
+        title="core change",
+        state="OPEN",
+        base_branch="main",
+        head_branch="work/issue-7-xxx",
+        mergeable="MERGEABLE",
+        review_decision=None,
+        checks_status="pass",
+        successful_checks=1,
+        failing_checks=0,
+        pending_checks=0,
+        files_changed=2,
+        additions=10,
+        deletions=2,
+        risk_level="high",
+        size="small",
+        associated_issue=7,
+        branch_matches_convention=True,
+        status="ready",
+        notes=[],
+        reviewer_profile="reviewer",
+        prompt_artifact_path=str(tmp_path / "pr-7-review.md"),
+        selected_role_name="REVIEWER_CORE",
+        selected_model="openai/gpt-5.4",
+        selected_reasoning_effort="medium",
+        role_selection_reason="test",
+    )
+    (tmp_path / "pr-7-review.md").write_text("review prompt", encoding="utf-8")
+
+    with patch("signposter.review.plan_review_for_pr", return_value=fake_plan), \
+         patch("signposter.review.check_openclaw_preflight") as mock_preflight, \
+         patch("signposter.review.gather_openclaw_runtime_diagnostics") as mock_diag, \
+         patch("signposter.review.openclaw_timeout_settings") as mock_timeouts, \
+         patch("subprocess.run") as mock_run:
+        mock_preflight.return_value = type("pf", (), {"ok": True})()
+        mock_diag.return_value = type("diag", (), {"warnings": ()})()
+        mock_timeouts.return_value = type(
+            "timeouts",
+            (),
+            {
+                "execute_timeout": 40,
+                "subprocess_timeout": 30,
+                "warnings": (),
+                "config_error": (
+                    "SIGNPOSTER_OPENCLAW_SUBPROCESS_TIMEOUT_SECONDS must exceed "
+                    "SIGNPOSTER_OPENCLAW_EXECUTE_TIMEOUT_SECONDS"
+                ),
+            },
+        )()
+        result = execute_pr_review("test/repo", 7, runs_dir=tmp_path / "runs")
+
+    assert result["success"] is False
+    assert result["diagnosis_status"] == "config-error"
+    mock_run.assert_not_called()
+    summary = open(result["summary_path"], encoding="utf-8").read()
+    assert "**Execution Status:** config-error" in summary
 
 
 # =============================================================================

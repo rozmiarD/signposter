@@ -16,9 +16,15 @@ from pathlib import Path
 from typing import Any
 
 from signposter.artifact_safety import find_stale_or_failover_signal
+from signposter.openclaw_diagnostics import gather_openclaw_runtime_diagnostics
 from signposter.openclaw_preflight import (
     check_openclaw_preflight,
     format_openclaw_preflight_block,
+)
+from signposter.openclaw_runtime import (
+    OpenClawExecutionDiagnosis,
+    classify_openclaw_execution,
+    openclaw_timeout_settings,
 )
 from signposter.role_routing import select_role_for_review
 from signposter.runner import build_openclaw_session_key
@@ -507,7 +513,19 @@ def get_pr_diff(repo: str, pr_number: int, max_lines: int = 150) -> str:
     return diff or "<no diff content>"
 
 
-def build_review_prompt(plan: ReviewPlan, pr_body: str, diff: str) -> str:
+def _format_authoritative_changed_files(file_paths: list[str]) -> str:
+    if not file_paths:
+        return "- <no changed files returned by GitHub>"
+    return "\n".join(f"- {path}" for path in file_paths)
+
+
+def build_review_prompt(
+    plan: ReviewPlan,
+    pr_body: str,
+    diff: str,
+    *,
+    file_paths: list[str] | None = None,
+) -> str:
     """Render the complete reviewer prompt with structured output contract."""
     plan_notes = "\n".join(f"- {n}" for n in plan.notes) if plan.notes else "- none"
 
@@ -553,6 +571,12 @@ def build_review_prompt(plan: ReviewPlan, pr_body: str, diff: str) -> str:
 - selected reasoning effort: {plan.selected_reasoning_effort}
 - OpenClaw agent/profile: {plan.reviewer_profile}
 - role selection reason: {plan.role_selection_reason}
+
+## Authoritative Changed Files (from GitHub metadata)
+{_format_authoritative_changed_files(file_paths or [])}
+
+Treat the list above as the canonical changed-file scope even if the PR body summary is stale
+or incomplete.
 
 ## PR Body
 {pr_body or "<no body provided>"}
@@ -620,9 +644,10 @@ def write_review_prompt_artifact(
     except Exception:
         pr_body = ""
 
-    diff = get_pr_diff(repo, pr_number, max_lines=120)
+    diff = get_pr_diff(repo, pr_number, max_lines=180)
+    file_paths = _fetch_pr_file_paths(repo, pr_number)
 
-    content = build_review_prompt(plan, pr_body, diff)
+    content = build_review_prompt(plan, pr_body, diff, file_paths=file_paths)
 
     path = _preferred_artifact_path(plan.prompt_artifact_path)
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -642,6 +667,8 @@ def write_review_prompt_artifact(
 def _generate_pr_reviewer_summary(
     *, pr_number: int, plan: ReviewPlan, session_key: str, exit_code: int,
     raw_path: str, stdout: str, stderr: str, start_time,
+    diagnosis: OpenClawExecutionDiagnosis | None = None,
+    diagnostics_warnings: tuple[str, ...] = (),
 ) -> str:
     """Generate a bounded mechanical summary for a PR reviewer execution."""
     lines = [
@@ -661,11 +688,20 @@ def _generate_pr_reviewer_summary(
         f"**Raw Output:** {raw_path}",
         "",
     ]
+    if diagnosis is not None:
+        lines.append(f"**Execution Status:** {diagnosis.status}")
+        lines.append(f"**Execution Reason:** {diagnosis.reason}")
 
     raw_text = stdout + ("\n" + stderr if stderr else "")
     line_count = len(raw_text.splitlines())
     byte_count = len(raw_text.encode("utf-8"))
     lines.append(f"**Output Size:** {line_count} lines, {byte_count} bytes")
+    if diagnosis is not None and diagnosis.remediation:
+        lines.append("\n## Remediation\n")
+        lines.extend(f"- {item}" for item in diagnosis.remediation)
+    if diagnostics_warnings:
+        lines.append("\n## Runtime warnings\n")
+        lines.extend(f"- {warning}" for warning in diagnostics_warnings)
 
     # Try to extract structured verdict if present in output
     verdict = None
@@ -767,6 +803,48 @@ def execute_pr_review(
         target_number=pr_number,
         profile=profile,
     )
+    diagnostics = gather_openclaw_runtime_diagnostics()
+    timeout_settings = openclaw_timeout_settings()
+    execute_timeout = timeout_settings.execute_timeout
+    subprocess_timeout = timeout_settings.subprocess_timeout
+    diagnostics_warnings = diagnostics.warnings + timeout_settings.warnings
+    config_error = getattr(timeout_settings, "config_error", None)
+    if config_error:
+        runs_dir = Path(runs_dir)
+        runs_dir.mkdir(parents=True, exist_ok=True)
+        raw_path = runs_dir / f"pr-{pr_number}-reviewer.raw.txt"
+        summary_path = runs_dir / f"pr-{pr_number}-reviewer.summary.md"
+        combined = "[CONFIG ERROR]\n" + config_error
+        raw_path.write_text(combined, encoding="utf-8")
+        diagnosis = OpenClawExecutionDiagnosis(
+            status="config-error",
+            reason=config_error,
+            remediation=(
+                "Fix the timeout environment configuration before rerunning OpenClaw.",
+                "Do not continue review or merge automation with invalid timeout bounds.",
+            ),
+        )
+        summary = _generate_pr_reviewer_summary(
+            pr_number=pr_number,
+            plan=plan,
+            session_key=session_key,
+            exit_code=-1,
+            raw_path=str(raw_path),
+            stdout="",
+            stderr=config_error,
+            start_time=datetime.datetime.now(datetime.UTC),
+            diagnosis=diagnosis,
+            diagnostics_warnings=diagnostics_warnings,
+        )
+        summary_path.write_text(summary, encoding="utf-8")
+        return {
+            "exit_code": -1,
+            "raw_path": str(raw_path),
+            "summary_path": str(summary_path),
+            "success": False,
+            "error": diagnosis.reason,
+            "diagnosis_status": diagnosis.status,
+        }
 
     exec_cmd = [
         "openclaw", "agent",
@@ -776,13 +854,14 @@ def execute_pr_review(
         "--thinking", plan.selected_reasoning_effort,
         "--message", prompt_content,
         "--local",
+        "--timeout", str(execute_timeout),
     ]
 
     print(
         "Running: "
         f"openclaw agent --agent {plan.reviewer_profile} "
         f"--session-key {session_key} --model {plan.selected_model} "
-        f"--thinking {plan.selected_reasoning_effort} --local"
+        f"--thinking {plan.selected_reasoning_effort} --local --timeout {execute_timeout}"
     )
     print(f"Using prompt: {prompt_path} (length: {len(prompt_content)} chars)")
 
@@ -799,7 +878,7 @@ def execute_pr_review(
             exec_cmd,
             capture_output=True,
             text=True,
-            timeout=600,  # 10 min safety cap
+            timeout=subprocess_timeout,
         )
         stdout = proc.stdout or ""
         stderr = proc.stderr or ""
@@ -810,6 +889,12 @@ def execute_pr_review(
         exit_code = proc.returncode
 
         raw_path.write_text(combined, encoding="utf-8")
+        diagnosis = classify_openclaw_execution(
+            exit_code=exit_code,
+            combined_output=combined,
+            timed_out=False,
+            diagnostics_warnings=diagnostics_warnings,
+        )
 
         summary = _generate_pr_reviewer_summary(
             pr_number=pr_number,
@@ -820,6 +905,8 @@ def execute_pr_review(
             stdout=stdout,
             stderr=stderr,
             start_time=start_time,
+            diagnosis=diagnosis,
+            diagnostics_warnings=diagnostics_warnings,
         )
         summary_path.write_text(summary, encoding="utf-8")
 
@@ -827,15 +914,78 @@ def execute_pr_review(
             "exit_code": exit_code,
             "raw_path": str(raw_path),
             "summary_path": str(summary_path),
-            "success": exit_code == 0,
+            "success": diagnosis.status == "success",
+            "error": None if diagnosis.status == "success" else diagnosis.reason,
+            "diagnosis_status": diagnosis.status,
         }
 
     except subprocess.TimeoutExpired as e:
-        raw_path.write_text(f"[TIMEOUT after 600s]\n{e}", encoding="utf-8")
-        return {"exit_code": -1, "raw_path": str(raw_path), "success": False}
+        stdout = e.stdout or ""
+        stderr = e.stderr or ""
+        combined = f"[TIMEOUT after {subprocess_timeout}s]\n"
+        if stdout:
+            combined += stdout
+        if stderr:
+            combined += "\n\n=== STDERR ===\n" + stderr
+        raw_path.write_text(combined, encoding="utf-8")
+        diagnosis = classify_openclaw_execution(
+            exit_code=None,
+            combined_output=combined,
+            timed_out=True,
+            diagnostics_warnings=diagnostics_warnings,
+            timeout_seconds=subprocess_timeout,
+        )
+        summary = _generate_pr_reviewer_summary(
+            pr_number=pr_number,
+            plan=plan,
+            session_key=session_key,
+            exit_code=-1,
+            raw_path=str(raw_path),
+            stdout=stdout,
+            stderr=stderr,
+            start_time=start_time,
+            diagnosis=diagnosis,
+            diagnostics_warnings=diagnostics_warnings,
+        )
+        summary_path.write_text(summary, encoding="utf-8")
+        return {
+            "exit_code": -1,
+            "raw_path": str(raw_path),
+            "summary_path": str(summary_path),
+            "success": False,
+            "error": diagnosis.reason,
+            "diagnosis_status": diagnosis.status,
+        }
     except Exception as e:
-        raw_path.write_text(f"[ERROR]\n{e}", encoding="utf-8")
-        return {"exit_code": -1, "raw_path": str(raw_path), "success": False}
+        combined = f"[ERROR]\n{e}"
+        raw_path.write_text(combined, encoding="utf-8")
+        diagnosis = classify_openclaw_execution(
+            exit_code=-1,
+            combined_output=combined,
+            timed_out=False,
+            diagnostics_warnings=diagnostics_warnings,
+        )
+        summary = _generate_pr_reviewer_summary(
+            pr_number=pr_number,
+            plan=plan,
+            session_key=session_key,
+            exit_code=-1,
+            raw_path=str(raw_path),
+            stdout="",
+            stderr=str(e),
+            start_time=start_time,
+            diagnosis=diagnosis,
+            diagnostics_warnings=diagnostics_warnings,
+        )
+        summary_path.write_text(summary, encoding="utf-8")
+        return {
+            "exit_code": -1,
+            "raw_path": str(raw_path),
+            "summary_path": str(summary_path),
+            "success": False,
+            "error": diagnosis.reason,
+            "diagnosis_status": diagnosis.status,
+        }
 
 
 # =============================================================================
