@@ -400,6 +400,69 @@ def test_orchestrator_pr_tail_loop_resumes_review_merge_integration_cleanup() ->
     assert result.status == "limit-reached"
 
 
+def test_orchestrator_pr_tail_loop_stops_with_bounded_ci_wait() -> None:
+    lifecycle_next = _next(
+        query_issue=None,
+        query_pr=47,
+        issue_number=46,
+        pr_number=47,
+        action="review-pr",
+        command="signposter review gate --repo example/repo --pr 47",
+    )
+    proc = type(
+        "Proc",
+        (),
+        {"returncode": 0, "stdout": "pending — checks are still running", "stderr": ""},
+    )()
+
+    with patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next):
+        result = run_orchestrator_loop(
+            "example/repo",
+            pr=47,
+            max_cycles=3,
+            apply=True,
+            run_command=Mock(return_value=proc),
+        )
+
+    assert result.status == "stopped"
+    assert result.cycles_run == 1
+    assert (
+        result.stop_reason
+        == "ci checks pending; bounded wait reached, rerun tail loop to continue"
+    )
+    assert result.stop_category == "waiting-ci"
+
+
+def test_orchestrator_pr_tail_loop_blocks_on_ci_failure() -> None:
+    lifecycle_next = _next(
+        query_issue=None,
+        query_pr=47,
+        issue_number=46,
+        pr_number=47,
+        action="review-pr",
+        command="signposter review gate --repo example/repo --pr 47",
+    )
+    proc = type(
+        "Proc",
+        (),
+        {"returncode": 0, "stdout": "blocked — checks are failing", "stderr": ""},
+    )()
+
+    with patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next):
+        result = run_orchestrator_loop(
+            "example/repo",
+            pr=47,
+            max_cycles=3,
+            apply=True,
+            run_command=Mock(return_value=proc),
+        )
+
+    assert result.status == "stopped"
+    assert result.cycles_run == 1
+    assert result.stop_reason == "ci checks failing; stop and inspect review/merge diagnostics"
+    assert result.stop_category == "failing-ci"
+
+
 def test_format_orchestrator_loop_summary_shows_pr_tail_stop() -> None:
     lifecycle_next = _next(
         query_issue=None,
@@ -421,6 +484,7 @@ def test_format_orchestrator_loop_summary_shows_pr_tail_stop() -> None:
         "action: review-pr",
         "status: stopped",
         "stop: dry-run; rerun with --apply to execute this step",
+        "stop_category: blocked-lifecycle",
         "steps: 1",
     ]
 

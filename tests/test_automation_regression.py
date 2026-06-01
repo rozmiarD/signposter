@@ -90,6 +90,33 @@ def test_regression_pr_tail_dry_run_does_not_execute_command() -> None:
     run_command.assert_not_called()
 
 
+def test_regression_run_next_loop_ci_pending_sets_waiting_category() -> None:
+    active = LabeledItem(1, "One", "url", ["state:active"], "issue")
+    scheduler = SchedulerNext("example/repo", "completed", None, "none", [], [])
+    proc = _proc(returncode=0, stdout="pending — checks are still running", stderr="")
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", return_value=scheduler),
+        patch("signposter.orchestrator.fetch_open_issues", return_value=[active]),
+        patch(
+            "signposter.orchestrator.plan_lifecycle_next",
+            return_value=_next(action="review-pr"),
+        ),
+    ):
+        result = run_orchestrator_run_next_loop(
+            "example/repo",
+            max_cycles=2,
+            apply=True,
+            execute=True,
+            run_command=Mock(return_value=proc),
+        )
+
+    out = format_orchestrator_run_next_loop_summary(result)
+    assert result.status == "stopped"
+    assert result.stop_category == "waiting-ci"
+    assert "ci checks pending" in out
+
+
 def test_regression_issue_factory_apply_guard(tmp_path) -> None:
     tasks = tmp_path / "tasks.json"
     tasks.write_text(json.dumps([{"id": "H200A", "title": "New"}]), encoding="utf-8")
