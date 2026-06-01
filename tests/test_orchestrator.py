@@ -8,6 +8,7 @@ import pytest
 from signposter.cli import main
 from signposter.lifecycle import LifecycleNext, LifecyclePreflight
 from signposter.orchestrator import (
+    OrchestratorAutonomySmoke,
     OrchestratorRunNextLoop,
     format_orchestrator_loop_summary,
     format_orchestrator_next,
@@ -19,6 +20,7 @@ from signposter.orchestrator import (
     plan_orchestrator_next,
     plan_orchestrator_run_next,
     plan_orchestrator_tail,
+    run_orchestrator_autonomy_smoke,
     run_orchestrator_loop,
     run_orchestrator_run_next,
     run_orchestrator_run_next_loop,
@@ -1563,3 +1565,164 @@ def test_run_next_loop_cli_writes_transcript(tmp_path, monkeypatch, capsys) -> N
     assert run_loop.call_args.kwargs["tolerate_active_ambiguity"] is True
     assert run_loop.call_args.kwargs["tolerate_blocked_lifecycle"] is True
     assert run_loop.call_args.kwargs["tolerate_failed_step"] is True
+
+
+def test_run_orchestrator_autonomy_smoke_writes_summary_and_transcript(tmp_path) -> None:
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        (
+            "{\n"
+            '  "repo": "example/repo",\n'
+            '  "status": "seeded",\n'
+            '  "issues": [\n'
+            "    {\n"
+            '      "key": "AUTO-001",\n'
+            '      "title": "Task",\n'
+            '      "github_issue": 55,\n'
+            '      "github_url": "https://github.com/example/repo/issues/55",\n'
+            '      "depends_on": []\n'
+            "    }\n"
+            "  ]\n"
+            "}\n"
+        ),
+        encoding="utf-8",
+    )
+    artifact_path = tmp_path / "smoke.txt"
+    transcript_path = tmp_path / "smoke.transcript.txt"
+
+    scheduler_issue = LabeledItem(
+        number=55,
+        title="Issue 55",
+        html_url="https://github.com/example/repo/issues/55",
+        labels=["state:ready"],
+        item_type="issue",
+    )
+    scheduler = SchedulerNext(
+        repo="example/repo",
+        status="ready",
+        issue=scheduler_issue,
+        reason="first ready",
+        skipped=[],
+        notes=[],
+    )
+    loop = OrchestratorRunNextLoop(
+        status="completed",
+        cycles_requested=1,
+        cycles_run=0,
+        max_tasks=1,
+        tasks_started=0,
+        selected_issue=None,
+        steps=[],
+        stop_reason="no ready or resumable active issue found",
+        notes=[],
+        stop_category="no-ready",
+        stop_tolerated=True,
+    )
+
+    with (
+        patch(
+            "signposter.orchestrator._fetch_manifest_issue_states",
+            return_value={55: "ready"},
+        ),
+        patch(
+            "signposter.orchestrator.run_orchestrator_run_next",
+            return_value=type(
+                "RunNext",
+                (),
+                {
+                    "scheduler": scheduler,
+                    "next": type("Next", (), {"action": "create-worktree"})(),
+                    "step": None,
+                    "status": "ready",
+                    "notes": [],
+                },
+            )(),
+        ),
+        patch("signposter.orchestrator.run_orchestrator_run_next_loop", return_value=loop),
+    ):
+        result = run_orchestrator_autonomy_smoke(
+            "example/repo",
+            manifest_path=manifest_path,
+            sync_github=True,
+            artifact_path=artifact_path,
+            transcript_path=transcript_path,
+        )
+
+    assert result.status == "completed"
+    assert artifact_path.exists()
+    assert transcript_path.exists()
+    text = artifact_path.read_text(encoding="utf-8")
+    assert "Signposter Autonomy Smoke" in text
+    assert "selected: AUTO-001 -> #55" in text
+    assert "No GitHub mutation was performed." in text
+    assert "No OpenClaw execution was performed." in text
+
+
+def test_autonomy_smoke_cli_writes_artifact(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path,
+) -> None:
+    artifact_path = tmp_path / "smoke.txt"
+    result = OrchestratorAutonomySmoke(
+        repo="example/repo",
+        manifest_path="manifest.json",
+        status="completed",
+        planner_next={"status": "ready", "reason": "ok", "next": None},
+        run_next=type(
+            "RunNext",
+            (),
+            {
+                "scheduler": SchedulerNext(
+                    repo="example/repo",
+                    status="completed",
+                    issue=None,
+                    reason="none",
+                    skipped=[],
+                    notes=[],
+                ),
+                "next": None,
+                "step": None,
+                "status": "completed",
+                "notes": [],
+            },
+        )(),
+        loop=OrchestratorRunNextLoop(
+            status="completed",
+            cycles_requested=1,
+            cycles_run=0,
+            max_tasks=1,
+            tasks_started=0,
+            selected_issue=None,
+            steps=[],
+            stop_reason="none",
+            notes=[],
+            stop_category="no-ready",
+            stop_tolerated=True,
+        ),
+        artifact_path=str(artifact_path),
+        transcript_path=None,
+        notes=["No GitHub mutation was performed."],
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "orchestrator",
+            "autonomy-smoke",
+            "--repo",
+            "example/repo",
+            "--artifact",
+            str(artifact_path),
+        ],
+    )
+
+    with patch("signposter.cli.run_orchestrator_autonomy_smoke", return_value=result):
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+    captured = capsys.readouterr()
+    assert exc_info.value.code == 0
+    assert "Signposter Autonomy Smoke" in captured.out
+    assert "summary:" in captured.out
