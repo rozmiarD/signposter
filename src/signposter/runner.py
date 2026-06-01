@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import os
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from signposter.claim import perform_claim_mutation, plan_claims
@@ -18,6 +18,7 @@ from signposter.openclaw_preflight import (
     check_openclaw_preflight,
     format_openclaw_preflight_block,
 )
+from signposter.role_policy import get_role_policy
 from signposter.role_routing import select_role_for_issue
 from signposter.scan import LabeledItem, fetch_issue_by_number, fetch_issue_context
 from signposter.worktree import get_worktree_status_for_issue
@@ -43,6 +44,59 @@ class RunnerPlan:
     selected_reasoning_effort: str = "low"
     selected_openclaw_agent: str = "worker"
     role_selection_reason: str = "default role selection"
+
+
+def _contains_unsupported_model_signal(text: str, model: str) -> bool:
+    lowered = text.lower()
+    model_lower = model.lower()
+    model_name = model_lower.split("/", 1)[-1]
+    return (
+        "unknown model:" in lowered
+        and (model_lower in lowered or model_name in lowered)
+    ) or "reason=model_not_found" in lowered
+
+
+def _fallback_runner_plan(plan: RunnerPlan) -> RunnerPlan | None:
+    try:
+        policy = get_role_policy(plan.selected_role_name)
+    except KeyError:
+        return None
+
+    fallback_role = policy.escalation_role or policy.fallback_role
+    if not fallback_role:
+        return None
+
+    fallback_policy = get_role_policy(fallback_role)
+    if fallback_policy.model == plan.selected_model:
+        return None
+
+    base_session_key = build_openclaw_session_key(
+        target_kind="issue",
+        target_number=plan.item.number,
+        profile=plan.proposed_profile or "worker",
+    )
+    fallback_session_key = (
+        f"{base_session_key}-fallback-{fallback_policy.name.lower()}"
+    )
+
+    return replace(
+        plan,
+        selected_role_name=fallback_policy.name,
+        selected_model=fallback_policy.model,
+        selected_reasoning_effort=fallback_policy.reasoning_effort,
+        selected_openclaw_agent=fallback_policy.openclaw_agent,
+        role_selection_reason=(
+            f"fallback from {plan.selected_role_name} after runtime reported "
+            f"unsupported model for {plan.selected_model}"
+        ),
+        proposed_command_shape=(
+            f"openclaw agent --agent {fallback_policy.openclaw_agent} "
+            f"--session-key {fallback_session_key} "
+            f"--model {fallback_policy.model} "
+            f"--thinking {fallback_policy.reasoning_effort} "
+            f'--message "$(cat {plan.proposed_prompt_path})" --local'
+        ),
+    )
 
 
 def openclaw_session_namespace(env: dict[str, str] | None = None) -> str:
@@ -1183,6 +1237,56 @@ def execute_plan(
             combined += "\n\n=== STDERR ===\n" + stderr
 
         exit_code = proc.returncode
+        effective_plan = plan
+        effective_session_key = session_key
+        fallback_used = False
+        original_model = plan.selected_model
+        fallback_plan = None
+
+        if exit_code != 0 and _contains_unsupported_model_signal(combined, plan.selected_model):
+            fallback_plan = _fallback_runner_plan(plan)
+            if fallback_plan is not None:
+                fallback_used = True
+                effective_plan = fallback_plan
+                effective_session_key = (
+                    f"{session_key}-fallback-{fallback_plan.selected_role_name.lower()}"
+                )
+                fallback_cmd = [
+                    "openclaw", "agent",
+                    "--agent", fallback_plan.selected_openclaw_agent,
+                    "--session-key", effective_session_key,
+                    "--model", fallback_plan.selected_model,
+                    "--thinking", fallback_plan.selected_reasoning_effort,
+                    "--message", prompt_content,
+                    "--local",
+                ]
+                print(
+                    "Unsupported model detected for "
+                    f"{plan.selected_role_name} ({plan.selected_model}). "
+                    f"Retrying once with {fallback_plan.selected_role_name} "
+                    f"({fallback_plan.selected_model})."
+                )
+                fallback_proc = subprocess.run(
+                    fallback_cmd,
+                    capture_output=True,
+                    text=True,
+                    cwd=effective_cwd,
+                    timeout=600,
+                )
+                fallback_stdout = fallback_proc.stdout or ""
+                fallback_stderr = fallback_proc.stderr or ""
+                fallback_combined = fallback_stdout
+                if fallback_stderr:
+                    fallback_combined += "\n\n=== STDERR ===\n" + fallback_stderr
+                combined = (
+                    "=== PRIMARY ATTEMPT ===\n"
+                    + combined
+                    + "\n\n=== FALLBACK ATTEMPT ===\n"
+                    + fallback_combined
+                )
+                stdout = fallback_stdout
+                stderr = fallback_stderr
+                exit_code = fallback_proc.returncode
 
         # Write raw output
         raw_path.write_text(combined, encoding="utf-8")
@@ -1190,14 +1294,17 @@ def execute_plan(
         # Generate summary
         summary = _generate_execution_summary(
             repo=repo,
-            plan=plan,
-            session_key=session_key,
+            plan=effective_plan,
+            session_key=effective_session_key,
             exit_code=exit_code,
             raw_path=str(raw_path),
             stdout=stdout,
             stderr=stderr,
             start_time=start_time,
             allow_dirty=allow_dirty,
+            fallback_used=fallback_used,
+            original_role_name=plan.selected_role_name if fallback_used else None,
+            original_model=original_model if fallback_used else None,
         )
         summary_path.write_text(summary, encoding="utf-8")
 
@@ -1206,6 +1313,7 @@ def execute_plan(
             "raw_path": str(raw_path),
             "summary_path": str(summary_path),
             "success": exit_code == 0,
+            "fallback_used": fallback_used,
         }
 
     except subprocess.TimeoutExpired as e:
@@ -1220,6 +1328,9 @@ def _generate_execution_summary(
     *, repo: str, plan: RunnerPlan, session_key: str, exit_code: int,
     raw_path: str, stdout: str, stderr: str, start_time,
     allow_dirty: bool = False,
+    fallback_used: bool = False,
+    original_role_name: str | None = None,
+    original_model: str | None = None,
 ) -> str:
     """Generate a mechanical summary for the execution run."""
     item = plan.item
@@ -1248,6 +1359,12 @@ def _generate_execution_summary(
             lines.append("**Dirty Guard:** bypassed by --allow-dirty")
         else:
             lines.append("**Dirty Guard:** clean")
+    if fallback_used:
+        lines.append("**Runtime Fallback Used:** yes")
+        lines.append(f"**Original Selected Role:** {original_role_name or 'unknown'}")
+        lines.append(f"**Original Selected Model:** {original_model or 'unknown'}")
+    else:
+        lines.append("**Runtime Fallback Used:** no")
 
     # Basic stats
     raw_text = stdout + ("\n" + stderr if stderr else "")
