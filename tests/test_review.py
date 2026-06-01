@@ -261,6 +261,8 @@ def test_build_review_prompt_contains_contract_and_rules():
     assert "confidence >= 0.85" in prompt.lower()
     assert "blocks automerge" in prompt.lower()
     assert "MUST NOT claim that you submitted a GitHub review" in prompt
+    assert "## Selected Role Policy" in prompt
+    assert "selected reasoning effort" in prompt
 
 
 def test_write_prompt_refuses_when_plan_not_ready():
@@ -588,6 +590,56 @@ def test_execute_review_preflight_blocks_before_openclaw_and_artifacts(tmp_path)
     assert "OpenClaw CLI" in result["error"]
     assert not (tmp_path / "runs").exists()
     mock_run.assert_not_called()
+
+
+def test_execute_review_passes_model_and_thinking_flags(tmp_path):
+    from signposter.review import ReviewPlan, execute_pr_review
+
+    fake_plan = ReviewPlan(
+        pr_number=6,
+        title="core change",
+        state="OPEN",
+        base_branch="main",
+        head_branch="work/issue-6-xxx",
+        mergeable="MERGEABLE",
+        review_decision=None,
+        checks_status="pass",
+        successful_checks=1,
+        failing_checks=0,
+        pending_checks=0,
+        files_changed=2,
+        additions=10,
+        deletions=2,
+        risk_level="high",
+        size="small",
+        associated_issue=6,
+        branch_matches_convention=True,
+        status="ready",
+        notes=[],
+        reviewer_profile="reviewer",
+        prompt_artifact_path=str(tmp_path / "pr-6-review.md"),
+        selected_role_name="REVIEWER_CORE",
+        selected_model="openai/gpt-5.4",
+        selected_reasoning_effort="medium",
+        role_selection_reason="test",
+    )
+    (tmp_path / "pr-6-review.md").write_text("review prompt", encoding="utf-8")
+
+    with patch("signposter.review.plan_review_for_pr", return_value=fake_plan), \
+         patch("signposter.review.check_openclaw_preflight") as mock_preflight, \
+         patch("subprocess.run") as mock_run:
+        mock_preflight.return_value = type("pf", (), {"ok": True})()
+        mock_run.return_value = type(
+            "proc", (), {"stdout": "Verdict: APPROVE", "stderr": "", "returncode": 0}
+        )()
+
+        execute_pr_review("test/repo", 6, runs_dir=tmp_path / "runs")
+
+    cmd = mock_run.call_args.args[0]
+    assert "--model" in cmd
+    assert "openai/gpt-5.4" in cmd
+    assert "--thinking" in cmd
+    assert "medium" in cmd
 
 
 def test_execute_output_contains_safety_notes():
