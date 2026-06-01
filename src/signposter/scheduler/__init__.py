@@ -25,6 +25,7 @@ class SchedulerNext:
     skipped: list[str]
     notes: list[str]
     active_notes: list[str] | None = None
+    active_counts: dict[str, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -105,6 +106,7 @@ def select_next_issue(repo: str, *, limit: int = 50) -> SchedulerNext:
     """Select the first dependency-clear open issue labeled state:ready."""
     skipped: list[str] = []
     active_notes: list[str] = []
+    active_counts: dict[str, int] = {}
     ready_mainline: LabeledItem | None = None
 
     for issue in sorted(fetch_open_issues(repo, limit=limit), key=lambda item: item.number):
@@ -113,7 +115,9 @@ def select_next_issue(repo: str, *, limit: int = 50) -> SchedulerNext:
             if state in TERMINAL_STATES or state == "active":
                 skipped.append(f"#{issue.number}: state:{state}")
             if state == "active":
-                active_notes.append(_active_issue_note(issue))
+                note, category = _active_issue_diagnostics(issue)
+                active_notes.append(note)
+                active_counts[category] = active_counts.get(category, 0) + 1
             continue
 
         context = fetch_issue_context(repo, issue.number) or {}
@@ -137,6 +141,7 @@ def select_next_issue(repo: str, *, limit: int = 50) -> SchedulerNext:
                     "No OpenClaw execution was performed.",
                 ],
                 active_notes=active_notes,
+                active_counts=active_counts,
             )
 
         if ready_mainline is not None:
@@ -157,6 +162,7 @@ def select_next_issue(repo: str, *, limit: int = 50) -> SchedulerNext:
                 "No OpenClaw execution was performed.",
             ],
             active_notes=active_notes,
+            active_counts=active_counts,
         )
 
     return SchedulerNext(
@@ -172,7 +178,50 @@ def select_next_issue(repo: str, *, limit: int = 50) -> SchedulerNext:
             "No OpenClaw execution was performed.",
         ],
         active_notes=active_notes,
+        active_counts=active_counts,
     )
+
+
+def _active_issue_diagnostics(
+    issue: LabeledItem,
+    *,
+    stale_after: timedelta = timedelta(days=2),
+    now: datetime | None = None,
+) -> tuple[str, str]:
+    checks: list[str] = []
+    prompt = Path("artifacts") / "prompts" / f"issue-{issue.number}.md"
+    summary = Path("artifacts") / "runs" / f"issue-{issue.number}-worker.summary.md"
+    worktree_exists = _active_issue_worktree_exists(issue.number)
+    prompt_exists = prompt.exists()
+    summary_exists = summary.exists()
+    checks.append(f"worktree={'present' if worktree_exists else 'missing'}")
+    checks.append(f"prompt={'present' if prompt_exists else 'missing'}")
+    checks.append(f"summary={'present' if summary_exists else 'missing'}")
+
+    age = _issue_age(issue.updated_at, now=now)
+    is_stale = False
+    if age is None:
+        checks.append("activity_age=unknown")
+    elif age > stale_after:
+        checks.append(f"activity_age=stale({age.days}d)")
+        is_stale = True
+    else:
+        checks.append("activity_age=fresh")
+
+    category = _classify_active_issue(
+        worktree_exists=worktree_exists,
+        prompt_exists=prompt_exists,
+        summary_exists=summary_exists,
+        is_stale=is_stale,
+    )
+    can_resume = category in {
+        "healthy-active",
+        "resumable-from-prompt",
+        "resumable-from-tail",
+    }
+    checks.append(f"category={category}")
+    checks.append(f"resume={'possible' if can_resume else 'needs inspection'}")
+    return f"#{issue.number}: " + ", ".join(checks), category
 
 
 def _active_issue_note(
@@ -181,24 +230,26 @@ def _active_issue_note(
     stale_after: timedelta = timedelta(days=2),
     now: datetime | None = None,
 ) -> str:
-    checks: list[str] = []
-    prompt = Path("artifacts") / "prompts" / f"issue-{issue.number}.md"
-    worktree_exists = _active_issue_worktree_exists(issue.number)
-    prompt_exists = prompt.exists()
-    checks.append(f"worktree={'present' if worktree_exists else 'missing'}")
-    checks.append(f"prompt={'present' if prompt_exists else 'missing'}")
+    note, _ = _active_issue_diagnostics(issue, stale_after=stale_after, now=now)
+    return note
 
-    age = _issue_age(issue.updated_at, now=now)
-    if age is None:
-        checks.append("activity_age=unknown")
-    elif age > stale_after:
-        checks.append(f"activity_age=stale({age.days}d)")
-    else:
-        checks.append("activity_age=fresh")
 
-    can_resume = worktree_exists or prompt_exists
-    checks.append(f"resume={'possible' if can_resume else 'needs inspection'}")
-    return f"#{issue.number}: " + ", ".join(checks)
+def _classify_active_issue(
+    *,
+    worktree_exists: bool,
+    prompt_exists: bool,
+    summary_exists: bool,
+    is_stale: bool,
+) -> str:
+    if summary_exists:
+        return "resumable-from-tail"
+    if prompt_exists:
+        return "resumable-from-prompt"
+    if worktree_exists and not is_stale:
+        return "healthy-active"
+    if is_stale:
+        return "stale-active"
+    return "blocked-active"
 
 
 def _active_issue_worktree_exists(issue_number: int) -> bool:
@@ -285,6 +336,10 @@ def format_scheduler_next(result: SchedulerNext) -> str:
     if result.active_notes:
         lines.extend(["", "Active issues:"])
         lines.extend(f"  {item}" for item in result.active_notes)
+    if result.active_counts:
+        lines.extend(["", "Active summary:"])
+        for category, count in sorted(result.active_counts.items()):
+            lines.append(f"  {category}: {count}")
     lines.extend(["", "Notes:"])
     lines.extend(f"  {note}" for note in result.notes)
     return "\n".join(lines)
@@ -316,6 +371,12 @@ def format_scheduler_explain(result: SchedulerNext) -> str:
     lines.extend(["", "Active issues:"])
     if result.active_notes:
         lines.extend(f"  {item}" for item in result.active_notes)
+    else:
+        lines.append("  none")
+    lines.extend(["", "Active summary:"])
+    if result.active_counts:
+        for category, count in sorted(result.active_counts.items()):
+            lines.append(f"  {category}: {count}")
     else:
         lines.append("  none")
 
