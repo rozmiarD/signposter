@@ -13,11 +13,12 @@ import shlex
 import subprocess
 import sys
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from signposter.lifecycle import LifecycleNext, plan_lifecycle_next
 from signposter.planner import build_planner_next_from_status, build_planner_status
-from signposter.scan import LabeledItem, fetch_open_issues
+from signposter.scan import LabeledItem, fetch_issue_by_number, fetch_open_issues
 from signposter.scheduler import SchedulerNext, select_next_issue
 
 EXECUTION_REQUIRED_ACTIONS = {"execute-worker"}
@@ -53,6 +54,8 @@ class OrchestratorNext:
     would_execute: bool
     would_mutate: bool
     stop_reason: str | None
+    takeover_category: str | None
+    takeover_reason: str | None
     notes: list[str]
 
 
@@ -146,12 +149,16 @@ def plan_orchestrator_next(
     would_mutate = action in MUTATION_REQUIRED_ACTIONS
     stop_reason: str | None = None
     status = lifecycle.status
+    takeover_category: str | None = None
+    takeover_reason: str | None = None
 
     if would_execute and not allow_execute:
         status = "blocked"
         stop_reason = "OpenClaw execution requires explicit --execute"
     elif lifecycle.status == "blocked":
         stop_reason = lifecycle.reason
+
+    takeover_category, takeover_reason = _plan_takeover(repo, lifecycle)
 
     notes = [
         "Read-only orchestrator planning only.",
@@ -172,6 +179,8 @@ def plan_orchestrator_next(
         would_execute=would_execute,
         would_mutate=would_mutate,
         stop_reason=stop_reason,
+        takeover_category=takeover_category,
+        takeover_reason=takeover_reason,
         notes=notes,
     )
 
@@ -628,6 +637,15 @@ def format_orchestrator_next(result: OrchestratorNext) -> str:
 
     if result.stop_reason:
         lines.extend(["", "Stop:", f"  {result.stop_reason}"])
+    if result.takeover_category:
+        lines.extend(
+            [
+                "",
+                "Takeover:",
+                f"  category: {result.takeover_category}",
+                f"  reason: {result.takeover_reason or 'none'}",
+            ]
+        )
 
     lines.extend(["", "Status:", f"  {result.status}"])
     lines.extend(["", "Notes:"])
@@ -751,6 +769,8 @@ def format_orchestrator_run_next(result: OrchestratorRunNext) -> str:
         )
         if result.next.stop_reason:
             lines.append(f"  stop: {result.next.stop_reason}")
+        if result.next.takeover_category:
+            lines.append(f"  takeover: {result.next.takeover_category}")
     else:
         lines.append("  none")
 
@@ -1201,6 +1221,101 @@ def _plan_fallback_commands(
         )
 
     return ()
+
+
+def _plan_takeover(repo: str, lifecycle: LifecycleNext) -> tuple[str | None, str | None]:
+    if lifecycle.workflow_state != "state:active" or lifecycle.issue_number is None:
+        return None, None
+    if lifecycle.worker_summary_exists:
+        return None, None
+
+    issue_updated_at = _safe_issue_updated_at(repo, lifecycle.issue_number)
+    if not _is_stale_active_work(lifecycle, issue_updated_at=issue_updated_at):
+        return None, None
+
+    if lifecycle.worktree_exists and lifecycle.prompt_exists:
+        return (
+            "resume-existing-worktree",
+            "active issue is stale but still has worktree and prompt; "
+            "resume from the existing worktree before replacing artifacts",
+        )
+    if lifecycle.worktree_exists and not lifecycle.prompt_exists:
+        return (
+            "regenerate-prompt",
+            "active issue is stale with a worktree but no prompt artifact; "
+            "regenerate the prompt before execution",
+        )
+    if lifecycle.prompt_exists and not lifecycle.worktree_exists:
+        return (
+            "manual-worker-fallback",
+            "active issue is stale with a prompt but no local worktree; "
+            "prefer a manual worker fallback or repair the worktree first",
+        )
+    return (
+        "inspect-blocker",
+        "active issue is stale and lacks a safe resume path; inspect labels, "
+        "worktree, prompt, artifacts, and blocker evidence before continuing",
+    )
+
+
+def _safe_issue_updated_at(repo: str, issue_number: int) -> str | None:
+    try:
+        issue = fetch_issue_by_number(repo, issue_number)
+    except Exception:
+        return None
+    if issue is None:
+        return None
+    return issue.updated_at
+
+
+def _is_stale_active_work(
+    lifecycle: LifecycleNext,
+    *,
+    issue_updated_at: str | None,
+    stale_after_hours: int = 48,
+) -> bool:
+    if lifecycle.issue_number is None:
+        return False
+
+    newest_artifact = _newest_existing_mtime(
+        [
+            Path(f"artifacts/prompts/issue-{lifecycle.issue_number}-worker.md"),
+            Path(f"artifacts/runs/issue-{lifecycle.issue_number}-worker.raw.txt"),
+        ]
+    )
+    if newest_artifact is not None:
+        return _is_stale_datetime(newest_artifact, stale_after_hours=stale_after_hours)
+
+    return _is_stale_issue(issue_updated_at, stale_after_hours=stale_after_hours)
+
+
+def _newest_existing_mtime(paths: list[Path]) -> datetime | None:
+    existing = [path for path in paths if path.exists()]
+    if not existing:
+        return None
+    return datetime.fromtimestamp(
+        max(path.stat().st_mtime for path in existing),
+        tz=UTC,
+    )
+
+
+def _is_stale_issue(updated_at: str | None, *, stale_after_hours: int = 48) -> bool:
+    if not updated_at:
+        return False
+    text = updated_at.strip()
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        updated = datetime.fromisoformat(text)
+    except ValueError:
+        return False
+    if updated.tzinfo is None:
+        updated = updated.replace(tzinfo=UTC)
+    return _is_stale_datetime(updated, stale_after_hours=stale_after_hours)
+
+
+def _is_stale_datetime(updated: datetime, *, stale_after_hours: int) -> bool:
+    return (datetime.now(UTC) - updated).total_seconds() > stale_after_hours * 3600
 
 
 def _has_ci_pending_signal(step: OrchestratorStep) -> bool:
