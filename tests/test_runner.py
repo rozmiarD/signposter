@@ -160,6 +160,9 @@ def test_render_prompt_contains_key_sections():
     assert "Do not mutate GitHub unless explicitly instructed" in content
     # New structure assertions
     assert "## Role Profile" in content
+    assert "## Selected Role Policy" in content
+    assert "selected model:" in content
+    assert "selected reasoning effort:" in content
     assert "## Private Repository Rule" in content
     assert "Do not fetch the GitHub URL" in content
 
@@ -193,6 +196,7 @@ def test_render_prompt_worker_uses_compact_format():
 
     assert "# Signposter Worker Prompt" in content
     assert "## Context" in content
+    assert "## Selected Role Policy" in content
     assert "## Rules" in content
     assert "## Validation" in content
     assert "## Role Profile" not in content
@@ -548,6 +552,30 @@ def test_execute_plan_reviewer_does_not_block_on_dirty(monkeypatch):
     assert result.get("error") != "dirty working tree"
 
 
+def test_execute_plan_passes_model_and_thinking_flags():
+    from unittest.mock import patch
+
+    from signposter.runner import execute_plan
+
+    plan = make_runner_plan_for_test("worker", "build", number=46)
+
+    with patch("signposter.runner.find_uncommitted_repo_changes", return_value=[]), \
+         patch("signposter.runner.check_openclaw_preflight") as mock_preflight, \
+         patch("signposter.runner.subprocess.run") as mock_run, \
+         patch("builtins.open", create=True) as mock_open:
+        mock_preflight.return_value = type("pf", (), {"ok": True})()
+        mock_open.return_value.__enter__.return_value.read.return_value = "mock prompt"
+        mock_run.return_value = type("proc", (), {"stdout": "ok", "stderr": "", "returncode": 0})()
+
+        execute_plan(plan, "test/repo", allow_dirty=False)
+
+    cmd = mock_run.call_args.args[0]
+    assert "--model" in cmd
+    assert plan.selected_model in cmd
+    assert "--thinking" in cmd
+    assert plan.selected_reasoning_effort in cmd
+
+
 def test_execute_plan_preflight_blocks_before_openclaw_and_artifacts(tmp_path):
     """OpenClaw preflight failure must block before subprocess/artifact writes."""
     from unittest.mock import patch
@@ -621,6 +649,8 @@ def test_generate_execution_summary_records_dirty_bypass_for_worker():
 
     assert "**Dirty Guard:** bypassed by --allow-dirty" in summary
     assert "**Dirty Guard:** clean" not in summary
+    assert "**Selected Model:**" in summary
+    assert "**Selected Reasoning Effort:**" in summary
 
 
 def test_generate_execution_summary_records_clean_for_worker_when_not_bypassed():

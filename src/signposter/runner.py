@@ -120,6 +120,8 @@ def plan_runner(repo: str, *, limit: int = 1) -> list[RunnerPlan]:
         command_shape = (
             f"openclaw agent --agent {profile} "
             f"--session-key {session_key} "
+            f"--model {role_selection.policy.model} "
+            f"--thinking {role_selection.policy.reasoning_effort} "
             f"--message \"$(cat {prompt_path})\" --local"
         )
 
@@ -182,6 +184,8 @@ def plan_runner_for_issue(repo: str, issue: int) -> RunnerPlan | None:
     command_shape = (
         f"openclaw agent --agent {profile} "
         f"--session-key {session_key} "
+        f"--model {role_selection.policy.model} "
+        f"--thinking {role_selection.policy.reasoning_effort} "
         f"--message \"$(cat {prompt_path})\" --local"
     )
 
@@ -257,6 +261,8 @@ def plan_active_runner_from_prompts(repo: str, *, limit: int = 1) -> list[Runner
         command_shape = (
             f"openclaw agent --agent {profile} "
             f"--session-key {session_key} "
+            f"--model {role_selection.policy.model} "
+            f"--thinking {role_selection.policy.reasoning_effort} "
             f'--message "$(cat {prompt_path_str})" --local'
         )
 
@@ -640,6 +646,13 @@ def render_prompt(
 ## Role Profile
 {role_profile}
 
+## Selected Role Policy
+- role identity: {plan.selected_role_name}
+- selected model: {plan.selected_model}
+- selected reasoning effort: {plan.selected_reasoning_effort}
+- OpenClaw agent/profile: {plan.selected_openclaw_agent}
+- role selection reason: {plan.role_selection_reason}
+
 ## Private Repository Rule
 {private_rule}
 
@@ -676,6 +689,7 @@ def render_prompt(
 - Do not mutate GitHub unless explicitly instructed in a later step.
 - Do not commit unless explicitly instructed.
 - Report findings with evidence.
+- If you are uncertain, say exactly what is missing rather than guessing.
 
 ## Task
 {task_instruction}
@@ -717,6 +731,13 @@ def _render_compact_worker_prompt(
 - Working directory: {plan.proposed_working_dir}
 - Prompt artifact: {plan.proposed_prompt_path}
 
+## Selected Role Policy
+- role identity: {plan.selected_role_name}
+- selected model: {plan.selected_model}
+- selected reasoning effort: {plan.selected_reasoning_effort}
+- OpenClaw agent/profile: {plan.selected_openclaw_agent}
+- role selection reason: {plan.role_selection_reason}
+
 ## Issue Body
 {body_text}
 
@@ -730,6 +751,7 @@ def _render_compact_worker_prompt(
 - Do not commit unless explicitly instructed.
 - Keep raw OpenClaw output local under artifacts/runs/.
 - Report changed files, validation, safety notes, and remaining risks.
+- If uncertain, state the uncertainty explicitly instead of guessing.
 
 ## Task
 {task_instruction}
@@ -1121,13 +1143,20 @@ def execute_plan(
     # Final command for execution (no shell substitution)
     exec_cmd = [
         "openclaw", "agent",
-        "--agent", profile,
+        "--agent", plan.selected_openclaw_agent,
         "--session-key", session_key,
+        "--model", plan.selected_model,
+        "--thinking", plan.selected_reasoning_effort,
         "--message", prompt_content,
         "--local",
     ]
 
-    print(f"Running: openclaw agent --agent {profile} --session-key {session_key} --local")
+    print(
+        "Running: "
+        f"openclaw agent --agent {plan.selected_openclaw_agent} "
+        f"--session-key {session_key} --model {plan.selected_model} "
+        f"--thinking {plan.selected_reasoning_effort} --local"
+    )
     print(f"Using prompt: {prompt_path} (length: {len(prompt_content)} chars)")
 
     # Ensure output directory
@@ -1199,6 +1228,11 @@ def _generate_execution_summary(
         f"**Repository:** {repo}",
         f"**Issue:** #{item.number} — {item.title}",
         f"**Agent:** {plan.proposed_profile}",
+        f"**Selected Role:** {plan.selected_role_name}",
+        f"**Selected Model:** {plan.selected_model}",
+        f"**Selected Reasoning Effort:** {plan.selected_reasoning_effort}",
+        f"**Selected OpenClaw Agent:** {plan.selected_openclaw_agent}",
+        f"**Role Selection Reason:** {plan.role_selection_reason}",
         f"**Session Key:** {session_key}",
         f"**Command Shape:** {plan.proposed_command_shape}",
         f"**Prompt Artifact:** {plan.proposed_prompt_path}",
