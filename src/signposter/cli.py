@@ -334,6 +334,11 @@ def main() -> None:
         help="Run OpenClaw agent locally for already-active item (explicit)",
     )
     run_parser.add_argument(
+        "--backend",
+        choices=["openclaw", "codex-cli"],
+        help="Execution backend to plan for; default is openclaw",
+    )
+    run_parser.add_argument(
         "--issue",
         type=int,
         help="Target a specific issue number explicitly (bypasses claim planner)",
@@ -755,6 +760,11 @@ def main() -> None:
         action="store_true",
         help="Explicitly allow high-risk PR review planning",
     )
+    review_plan_parser.add_argument(
+        "--backend",
+        choices=["openclaw", "codex-cli"],
+        help="Execution backend to plan for; default is openclaw",
+    )
     review_plan_parser.set_defaults(func=run_review_plan)
 
     # write-prompt subcommand (HARDENING-015)
@@ -785,6 +795,14 @@ def main() -> None:
         "--allow-high-risk",
         action="store_true",
         help="Explicitly allow high-risk reviewer execution planning",
+    )
+    execute_parser.add_argument(
+        "--backend",
+        choices=["openclaw", "codex-cli"],
+        help=(
+            "Execution backend to execute; codex-cli execution is blocked "
+            "until adapter support lands"
+        ),
     )
     execute_parser.set_defaults(func=run_review_execute)
 
@@ -1405,6 +1423,7 @@ def run_runner(args: argparse.Namespace) -> int:
     issue = getattr(args, "issue", None)
     allow_dirty = getattr(args, "allow_dirty", False)
     use_worktree = getattr(args, "worktree", False)
+    backend = getattr(args, "backend", None)
     return runner_cli_main(
         repo,
         limit=limit,
@@ -1414,6 +1433,7 @@ def run_runner(args: argparse.Namespace) -> int:
         issue=issue,
         allow_dirty=allow_dirty,
         worktree=use_worktree,
+        backend=backend,
     )  # noqa: E501
 
 
@@ -1722,7 +1742,8 @@ def run_review_plan(args: argparse.Namespace) -> int:
         plan = plan_review_for_pr(
             repo,
             pr,
-                allow_high_risk=getattr(args, "allow_high_risk", False),
+            allow_high_risk=getattr(args, "allow_high_risk", False),
+            backend=getattr(args, "backend", None),
         )
         print(format_review_plan(plan))
         return 0 if plan.status == "ready" else 1
@@ -1744,7 +1765,7 @@ def run_review_write_prompt(args: argparse.Namespace) -> int:
         path = write_review_prompt_artifact(
             repo,
             pr,
-                allow_high_risk=getattr(args, "allow_high_risk", False),
+            allow_high_risk=getattr(args, "allow_high_risk", False),
         )
         print(f"Signposter Review Prompt — PR #{pr}")
         print("")
@@ -1782,7 +1803,8 @@ def run_review_execute(args: argparse.Namespace) -> int:
         result = execute_pr_review(
             repo,
             pr,
-                allow_high_risk=getattr(args, "allow_high_risk", False),
+            allow_high_risk=getattr(args, "allow_high_risk", False),
+            backend=getattr(args, "backend", None),
         )
 
         print(f"Signposter Review Execute — PR #{pr}")
