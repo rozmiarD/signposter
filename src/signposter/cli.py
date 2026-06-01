@@ -56,6 +56,7 @@ from signposter.merge import (
     plan_merge_for_pr,
 )
 from signposter.orchestrator import (
+    format_orchestrator_autonomy_smoke,
     format_orchestrator_loop,
     format_orchestrator_loop_summary,
     format_orchestrator_next,
@@ -66,6 +67,7 @@ from signposter.orchestrator import (
     format_orchestrator_step,
     plan_orchestrator_next,
     plan_orchestrator_tail,
+    run_orchestrator_autonomy_smoke,
     run_orchestrator_loop,
     run_orchestrator_run_next_loop,
     run_orchestrator_step,
@@ -2508,6 +2510,31 @@ def run_orchestrator_run_next_loop_cli(args: argparse.Namespace) -> int:
         return 2
 
 
+def run_orchestrator_autonomy_smoke_cli(args: argparse.Namespace) -> int:
+    """Handler for `signposter orchestrator autonomy-smoke --repo ...`."""
+    repo = getattr(args, "repo", None)
+    if not repo:
+        print("Error: --repo is required", file=sys.stderr)
+        return 1
+
+    try:
+        result = run_orchestrator_autonomy_smoke(
+            repo,
+            manifest_path=args.manifest,
+            limit=args.limit,
+            max_cycles=args.max_cycles,
+            max_tasks=args.max_tasks,
+            sync_github=args.sync_github,
+            artifact_path=args.artifact,
+            transcript_path=args.transcript,
+        )
+        print(format_orchestrator_autonomy_smoke(result))
+        return 0 if result.status == "completed" else 1
+    except Exception as e:
+        print(f"Orchestrator autonomy-smoke failed: {e}", file=sys.stderr)
+        return 2
+
+
 def _register_orchestrator_subcommands(
     subparsers: argparse._SubParsersAction,
 ) -> None:
@@ -2649,6 +2676,42 @@ def _register_orchestrator_subcommands(
         help="Write a bounded local transcript artifact to PATH or the default runs path",
     )
     run_next_loop_parser.set_defaults(func=run_orchestrator_run_next_loop_cli)
+
+    autonomy_smoke_parser = orchestrator_subparsers.add_parser(
+        "autonomy-smoke",
+        help="Run a read-only planner + orchestrator autonomy smoke",
+        description=(
+            "Run a read-only planner + orchestrator autonomy smoke. "
+            "Optional GitHub sync uses read-only issue fetches only."
+        ),
+    )
+    autonomy_smoke_parser.add_argument("--repo", required=True)
+    autonomy_smoke_parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=Path("artifacts/plans/autonomy-seed-manifest.json"),
+    )
+    autonomy_smoke_parser.add_argument("--limit", type=int, default=50)
+    autonomy_smoke_parser.add_argument("--max-cycles", type=int, default=2)
+    autonomy_smoke_parser.add_argument("--max-tasks", type=int, default=1)
+    autonomy_smoke_parser.add_argument(
+        "--sync-github",
+        action="store_true",
+        help="Fetch current GitHub issue states read-only before planner evaluation",
+    )
+    autonomy_smoke_parser.add_argument(
+        "--artifact",
+        type=Path,
+        default=Path("artifacts/runs/orchestrator-autonomy-smoke.txt"),
+    )
+    autonomy_smoke_parser.add_argument(
+        "--transcript",
+        nargs="?",
+        const=Path("artifacts/runs/orchestrator-autonomy-smoke.transcript.txt"),
+        type=Path,
+        help="Write a bounded local transcript artifact to PATH or the default runs path",
+    )
+    autonomy_smoke_parser.set_defaults(func=run_orchestrator_autonomy_smoke_cli)
 
 
 # =============================================================================

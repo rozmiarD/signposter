@@ -7,6 +7,7 @@ metadata that a future bounded loop can consume.
 
 from __future__ import annotations
 
+import json
 import re
 import shlex
 import subprocess
@@ -15,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from signposter.lifecycle import LifecycleNext, plan_lifecycle_next
+from signposter.planner import build_planner_next_from_status, build_planner_status
 from signposter.scan import LabeledItem, fetch_open_issues
 from signposter.scheduler import SchedulerNext, select_next_issue
 
@@ -112,6 +114,21 @@ class OrchestratorRunNextLoop:
     notes: list[str]
     stop_category: str | None = None
     stop_tolerated: bool = False
+
+
+@dataclass(frozen=True)
+class OrchestratorAutonomySmoke:
+    """Read-only autonomy smoke report for planner + orchestrator surfaces."""
+
+    repo: str
+    manifest_path: str
+    status: str
+    planner_next: dict[str, object]
+    run_next: OrchestratorRunNext
+    loop: OrchestratorRunNextLoop
+    artifact_path: str
+    transcript_path: str | None
+    notes: list[str]
 
 
 def plan_orchestrator_next(
@@ -895,6 +912,209 @@ def write_orchestrator_run_next_loop_transcript(
 
     transcript_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return transcript_path
+
+
+def _fetch_manifest_issue_states(
+    repo: str,
+    manifest: dict[str, object],
+    *,
+    run_command=subprocess.run,
+) -> dict[int, str]:
+    """Fetch workflow-aware issue states for seeded planner tasks."""
+    states: dict[int, str] = {}
+    for issue in manifest.get("issues", []):
+        if not isinstance(issue, dict):
+            continue
+        issue_number = issue.get("github_issue")
+        if issue_number is None:
+            continue
+
+        result = run_command(
+            [
+                "gh",
+                "issue",
+                "view",
+                str(issue_number),
+                "-R",
+                repo,
+                "--json",
+                "state,labels",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=20,
+        )
+        if result.returncode != 0:
+            continue
+
+        payload = json.loads(result.stdout or "{}")
+        if not isinstance(payload, dict):
+            continue
+
+        workflow_state = None
+        labels = payload.get("labels", [])
+        if isinstance(labels, list):
+            for label in labels:
+                if isinstance(label, dict):
+                    name = str(label.get("name", ""))
+                else:
+                    name = str(label)
+                if not name.startswith("state:"):
+                    continue
+                workflow_state = name.split(":", 1)[1].strip().lower()
+                if workflow_state:
+                    break
+
+        github_state = str(payload.get("state", "")).strip().lower()
+        state = workflow_state or github_state
+        if state:
+            states[int(issue_number)] = state
+    return states
+
+
+def run_orchestrator_autonomy_smoke(
+    repo: str,
+    *,
+    manifest_path: str | Path,
+    limit: int = 50,
+    max_cycles: int = 2,
+    max_tasks: int = 1,
+    sync_github: bool = False,
+    artifact_path: str | Path = "artifacts/runs/orchestrator-autonomy-smoke.txt",
+    transcript_path: str | Path | None = None,
+    run_command=subprocess.run,
+) -> OrchestratorAutonomySmoke:
+    """Run a read-only end-to-end autonomy smoke across planner and orchestrator."""
+    manifest_file = Path(manifest_path)
+    artifact_file = Path(artifact_path)
+    notes = [
+        "Read-only autonomy smoke.",
+        "No GitHub mutation was performed.",
+        "No local mutation was performed.",
+        "No OpenClaw execution was performed.",
+    ]
+
+    planner_next: dict[str, object]
+    if manifest_file.exists():
+        manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+        issue_states = (
+            _fetch_manifest_issue_states(repo, manifest, run_command=run_command)
+            if sync_github
+            else {}
+        )
+        planner_status = build_planner_status(manifest, issue_states)
+        planner_next = build_planner_next_from_status(planner_status)
+    else:
+        planner_next = {
+            "status": "blocked",
+            "reason": f"manifest file not found: {manifest_file}",
+            "next": None,
+            "waiting": [],
+            "blocked": [],
+        }
+
+    run_next = run_orchestrator_run_next(
+        repo,
+        limit=limit,
+        apply=False,
+        execute=False,
+        run_command=run_command,
+    )
+    loop = run_orchestrator_run_next_loop(
+        repo,
+        limit=limit,
+        max_cycles=max_cycles,
+        max_tasks=max_tasks,
+        apply=False,
+        execute=False,
+        tolerate_no_ready=True,
+        tolerate_active_ambiguity=True,
+        tolerate_blocked_lifecycle=True,
+        tolerate_failed_step=True,
+        run_command=run_command,
+    )
+
+    artifact_file.parent.mkdir(parents=True, exist_ok=True)
+    result = OrchestratorAutonomySmoke(
+        repo=repo,
+        manifest_path=str(manifest_file),
+        status="completed" if manifest_file.exists() else "blocked",
+        planner_next=planner_next,
+        run_next=run_next,
+        loop=loop,
+        artifact_path=str(artifact_file),
+        transcript_path=str(transcript_path) if transcript_path else None,
+        notes=notes,
+    )
+    artifact_file.write_text(format_orchestrator_autonomy_smoke(result) + "\n", encoding="utf-8")
+
+    if transcript_path:
+        write_orchestrator_run_next_loop_transcript(loop, transcript_path)
+
+    return result
+
+
+def format_orchestrator_autonomy_smoke(result: OrchestratorAutonomySmoke) -> str:
+    """Render compact autonomy smoke output."""
+    planner_next = result.planner_next.get("next")
+    planner_selected = "none"
+    if isinstance(planner_next, dict):
+        planner_selected = (
+            f"{planner_next.get('key')} -> #{planner_next.get('github_issue')}"
+        )
+
+    run_next_issue = (
+        f"#{result.run_next.scheduler.issue.number}"
+        if result.run_next.scheduler.issue is not None
+        else "none"
+    )
+    loop_issue = "none"
+    if result.loop.selected_issue is not None:
+        loop_issue = f"#{result.loop.selected_issue}"
+    elif result.loop.steps:
+        issue_number = result.loop.steps[-1].next.lifecycle.issue_number
+        if issue_number is not None:
+            loop_issue = f"#{issue_number}"
+
+    lines = [
+        "Signposter Autonomy Smoke",
+        "",
+        "Inputs:",
+        f"  repo: {result.repo}",
+        f"  manifest: {result.manifest_path}",
+        "",
+        "Planner:",
+        f"  status: {result.planner_next.get('status', 'unknown')}",
+        f"  selected: {planner_selected}",
+        f"  reason: {result.planner_next.get('reason', 'none')}",
+        "",
+        "Run next:",
+        f"  status: {result.run_next.status}",
+        f"  selected: {run_next_issue}",
+        f"  action: {result.run_next.next.action if result.run_next.next else 'none'}",
+        "",
+        "Loop:",
+        f"  status: {result.loop.status}",
+        f"  selected: {loop_issue}",
+        f"  stop: {result.loop.stop_reason or 'none'}",
+        f"  stop_category: {result.loop.stop_category or 'none'}",
+        "",
+        "Artifacts:",
+        f"  summary: {result.artifact_path}",
+        (
+            f"  transcript: {result.transcript_path}"
+            if result.transcript_path
+            else "  transcript: none"
+        ),
+        "",
+        "Status:",
+        f"  {result.status}",
+        "",
+        "Notes:",
+    ]
+    lines.extend(f"  {note}" for note in result.notes)
+    return "\n".join(lines)
 
 
 _ARTIFACT_PATTERNS = (
