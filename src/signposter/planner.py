@@ -1135,6 +1135,62 @@ def _refresh_seed_manifest_dependency_metadata(manifest: dict[str, Any]) -> dict
 COMPLETED_PLANNER_STATES = {"closed", "done", "merged"}
 
 
+def build_planner_status_counts(tasks: list[dict[str, Any]]) -> dict[str, int]:
+    """Return compact planner task counts for dashboard rendering."""
+    counts = {
+        "total": len(tasks),
+        "pending": 0,
+        "ready": 0,
+        "active": 0,
+        "done": 0,
+        "merged": 0,
+        "blocked": 0,
+        "completed": 0,
+    }
+
+    for task in tasks:
+        state = str(task.get("state", "")).lower()
+        if state in {"ready", "open"}:
+            counts["ready"] += 1
+        elif state == "active":
+            counts["active"] += 1
+        elif state == "done":
+            counts["done"] += 1
+            counts["completed"] += 1
+        elif state == "merged":
+            counts["merged"] += 1
+            counts["completed"] += 1
+        elif state == "closed":
+            counts["completed"] += 1
+        elif state in {"blocked", "failed"}:
+            counts["blocked"] += 1
+        else:
+            counts["pending"] += 1
+
+    return counts
+
+
+def _planner_run_reconcile_hints(next_plan: dict[str, Any]) -> list[str]:
+    """Build bounded reconcile hints from deterministic next-task analysis."""
+    hints: list[str] = []
+
+    blocked_items = next_plan.get("blocked", [])
+    for blocked in blocked_items[:3]:
+        key = blocked.get("key", "unknown")
+        reason = blocked.get("reason", "blocked")
+        hints.append(f"{key}: {reason}")
+
+    waiting = next_plan.get("waiting", [])
+    if waiting:
+        hints.append(f"{len(waiting)} task(s) waiting for dependencies")
+
+    if len(blocked_items) > 3:
+        remaining = len(blocked_items) - 3
+        hints.append(f"{remaining} additional blocked task(s) omitted")
+
+    return hints
+
+
 def _planner_impact_level(score: int) -> str:
     """Map deterministic impact score to a compact level."""
     if score >= 60:
@@ -1307,6 +1363,7 @@ def build_planner_run_plan_from_status(
         "repo": status.get("repo", ""),
         "manifest_path": manifest_path,
         "planner_status": status.get("status", "unknown"),
+        "status_counts": build_planner_status_counts(status.get("tasks", [])),
         "next": next_plan,
         "step": step_plan,
         "advance_candidates": advance_candidates,
@@ -1344,6 +1401,23 @@ def format_planner_run_plan(result: dict[str, Any]) -> str:
         f"  {result.get('planner_status', 'unknown')}",
     ]
 
+    counts = result.get("status_counts", {})
+    if counts:
+        lines.extend(
+            [
+                "",
+                "Task counts:",
+                f"  total: {counts.get('total', 0)}",
+                f"  pending: {counts.get('pending', 0)}",
+                f"  ready: {counts.get('ready', 0)}",
+                f"  active: {counts.get('active', 0)}",
+                f"  done: {counts.get('done', 0)}",
+                f"  merged: {counts.get('merged', 0)}",
+                f"  blocked: {counts.get('blocked', 0)}",
+                f"  completed: {counts.get('completed', 0)}",
+            ]
+        )
+
     next_plan = result.get("next", {})
     next_task = next_plan.get("next")
     lines.extend(["", "Next task:"])
@@ -1357,6 +1431,13 @@ def format_planner_run_plan(result: dict[str, Any]) -> str:
                 f"  depends on: {deps}",
             ]
         )
+    else:
+        lines.append("  none")
+
+    reconcile_hints = _planner_run_reconcile_hints(next_plan)
+    lines.extend(["", "Reconcile hints:"])
+    if reconcile_hints:
+        lines.extend(f"  - {hint}" for hint in reconcile_hints)
     else:
         lines.append("  none")
 
