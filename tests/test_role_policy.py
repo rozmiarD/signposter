@@ -24,15 +24,12 @@ def test_get_role_policy_returns_expected_core_roles():
     assert get_role_policy("PLANNER_MAIN").openclaw_agent == "planner"
 
 
-def test_gpt_55_is_reserved_for_manual_critical_override():
-    roles = [
-        policy.name
-        for policy in ACTIVE_ROLE_POLICIES.values()
-        if policy.model == "openai/gpt-5.5"
-    ]
+def test_critical_override_uses_gpt54_with_manual_high_reasoning():
+    policy = ACTIVE_ROLE_POLICIES["CRITICAL_OVERRIDE"]
 
-    assert roles == ["CRITICAL_OVERRIDE"]
-    assert ACTIVE_ROLE_POLICIES["CRITICAL_OVERRIDE"].manual_only is True
+    assert policy.model == "openai/gpt-5.4"
+    assert policy.reasoning_effort == "high"
+    assert policy.manual_only is True
 
 
 def test_gpt_52_is_reserved_for_explicit_legacy_backup():
@@ -87,6 +84,19 @@ def test_validate_role_policy_rejects_non_manual_gpt55_and_high_reasoning():
         "high reasoning may only appear on manual escalation roles" in error
         for error in errors
     )
+
+
+def test_validate_role_policy_allows_manual_high_reasoning_without_gpt55():
+    policy = RolePolicy(
+        name="CRITICAL_OVERRIDE",
+        openclaw_agent="main",
+        model="openai/gpt-5.4",
+        reasoning_effort="high",
+        use_case="manual escalation",
+        manual_only=True,
+    )
+
+    assert validate_role_policy(policy) == []
 
 
 def test_validate_role_registry_rejects_unknown_references():

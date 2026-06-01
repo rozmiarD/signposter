@@ -127,8 +127,8 @@ ACTIVE_ROLE_POLICIES: dict[str, RolePolicy] = {
     "CRITICAL_OVERRIDE": RolePolicy(
         name="CRITICAL_OVERRIDE",
         openclaw_agent="main",
-        model="openai/gpt-5.5",
-        reasoning_effort="medium",
+        model="openai/gpt-5.4",
+        reasoning_effort="high",
         use_case="Explicit critical/manual escalation path only.",
         restrictions=(
             "Must not be the default.",
