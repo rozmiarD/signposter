@@ -15,6 +15,8 @@ from signposter.dispatch import DispatchDecision, run_dry_run
 from signposter.labels import check_labels
 from signposter.scan import LabeledItem, fetch_issue_context
 
+DEFAULT_LEASE_OWNER = "local-worker"
+
 
 @dataclass(frozen=True)
 class ClaimDryRunResult:
@@ -35,6 +37,30 @@ class ClaimPlan:
     labels_to_remove: list[str]
     labels_to_add: list[str]
     reason: str
+
+
+def build_claim_plan(decision: DispatchDecision) -> ClaimPlan:
+    """Build a deterministic claim plan from a ready dispatch decision."""
+    if decision.state != "ready":
+        raise ValueError("claim planning requires state:ready")
+
+    gate = decision.proposed_gate
+    labels_to_remove = ["state:ready"]
+    labels_to_add = ["state:active"]
+    if gate:
+        gate_label = f"gate:{gate}"
+        if gate_label not in labels_to_add:
+            labels_to_add.append(gate_label)
+
+    return ClaimPlan(
+        item=decision.item,
+        dispatch=decision,
+        lease_owner=DEFAULT_LEASE_OWNER,
+        proposed_state="active",
+        labels_to_remove=labels_to_remove,
+        labels_to_add=labels_to_add,
+        reason=f"Claiming ready item for route '{decision.proposed_route}'",
+    )
 
 
 def perform_claim_mutation(plan: ClaimPlan, repo: str, *, dry_run: bool = True) -> list[str]:
@@ -133,29 +159,7 @@ def plan_claims(repo: str, *, limit: int | None = 1) -> ClaimDryRunResult:
             # Skip dependency-blocked ready items (do not claim)
             continue
 
-        lease_owner = "local-dry-run-worker"
-
-        labels_to_remove = ["state:ready"]
-        labels_to_add = ["state:active"]
-
-        gate = decision.proposed_gate
-        if gate:
-            gate_label = f"gate:{gate}"
-            if gate_label not in labels_to_add:
-                labels_to_add.append(gate_label)
-
-        reason = f"Claiming ready item for route '{decision.proposed_route}'"
-
-        plan = ClaimPlan(
-            item=decision.item,
-            dispatch=decision,
-            lease_owner=lease_owner,
-            proposed_state="active",
-            labels_to_remove=labels_to_remove,
-            labels_to_add=labels_to_add,
-            reason=reason,
-        )
-        all_plans.append(plan)
+        all_plans.append(build_claim_plan(decision))
 
     # Apply deterministic conservative ordering
     all_plans.sort(key=_claim_sort_key)

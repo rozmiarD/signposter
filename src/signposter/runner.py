@@ -10,7 +10,7 @@ import subprocess
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from signposter.claim import ClaimPlan, perform_claim_mutation, plan_claims
+from signposter.claim import build_claim_plan, perform_claim_mutation, plan_claims
 from signposter.dependencies import is_dependency_blocked
 from signposter.dispatch import DispatchDecision, classify_candidate
 from signposter.git_utils import find_uncommitted_repo_changes
@@ -147,23 +147,8 @@ def _select_runner_and_profile(dispatch: DispatchDecision) -> tuple[str, str]:
         return "openclaw", "worker"
 
 
-def _build_explicit_claim_plan(plan: RunnerPlan) -> ClaimPlan:
-    gate = plan.dispatch.proposed_gate
-    labels_to_add = ["state:active"]
-    if gate:
-        gate_label = f"gate:{gate}"
-        if gate_label not in labels_to_add:
-            labels_to_add.append(gate_label)
-
-    return ClaimPlan(
-        item=plan.item,
-        dispatch=plan.dispatch,
-        lease_owner="local-dry-run-worker",
-        proposed_state="active",
-        labels_to_remove=["state:ready"],
-        labels_to_add=labels_to_add,
-        reason=f"Claiming ready item for route '{plan.dispatch.proposed_route}'",
-    )
+def _build_explicit_claim_plan(plan: RunnerPlan):
+    return build_claim_plan(plan.dispatch)
 
 
 def plan_runner(repo: str, *, limit: int = 1) -> list[RunnerPlan]:
