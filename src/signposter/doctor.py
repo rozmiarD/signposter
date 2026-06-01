@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from signposter.openclaw_diagnostics import gather_openclaw_runtime_diagnostics
+
 
 class CheckStatus(StrEnum):
     OK = "ok"
@@ -155,6 +157,38 @@ def check_reviewer_token_present() -> CheckResult:
         name="reviewer-token",
         status=CheckStatus.WARN,
         message="SIGNPOSTER_REVIEWER_GH_TOKEN is not set",
+    )
+
+
+def check_openclaw_runtime_hygiene() -> CheckResult:
+    """Check whether OpenClaw runtime config drifts from Signposter's active role policy."""
+    diagnostics = gather_openclaw_runtime_diagnostics()
+    if not diagnostics.available:
+        return CheckResult(
+            name="openclaw-runtime-hygiene",
+            status=CheckStatus.WARN,
+            message="OpenClaw runtime diagnostics unavailable",
+            details=diagnostics.error,
+        )
+    if not diagnostics.command_ok:
+        return CheckResult(
+            name="openclaw-runtime-hygiene",
+            status=CheckStatus.WARN,
+            message="OpenClaw runtime diagnostics could not complete cleanly",
+            details=diagnostics.error,
+        )
+    if diagnostics.warnings:
+        return CheckResult(
+            name="openclaw-runtime-hygiene",
+            status=CheckStatus.WARN,
+            message="OpenClaw runtime/config drift detected",
+            details=" | ".join(diagnostics.warnings),
+        )
+    return CheckResult(
+        name="openclaw-runtime-hygiene",
+        status=CheckStatus.OK,
+        message="OpenClaw runtime aligns with the active Signposter role policy",
+        details=f"default={diagnostics.default_model or 'unknown'}",
     )
 
 
@@ -364,6 +398,7 @@ def run_automation_doctor_checks() -> list[CheckResult]:
         check_command_available("gh"),
         check_gh_auth(),
         check_command_available("openclaw"),
+        check_openclaw_runtime_hygiene(),
         check_reviewer_token_present(),
     ]
 
