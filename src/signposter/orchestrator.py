@@ -83,6 +83,7 @@ class OrchestratorLoop:
     steps: list[OrchestratorStep]
     stop_reason: str | None
     notes: list[str]
+    stop_category: str | None = None
 
 
 @dataclass(frozen=True)
@@ -301,6 +302,13 @@ def run_orchestrator_loop(
         )
         steps.append(step)
 
+        if _has_ci_pending_signal(step):
+            stop_reason = "ci checks pending; bounded wait reached, rerun tail loop to continue"
+            break
+        if _has_ci_failing_signal(step):
+            stop_reason = "ci checks failing; stop and inspect review/merge diagnostics"
+            break
+
         if step.status != "applied":
             stop_reason = step.stop_reason or step.status
             break
@@ -320,6 +328,7 @@ def run_orchestrator_loop(
             "Bounded orchestrator loop.",
             "Stops after any blocked, failed, complete, or dry-run step.",
         ],
+        stop_category=_loop_stop_category(steps, stop_reason),
     )
 
 
@@ -444,6 +453,13 @@ def run_orchestrator_run_next_loop(
         )
         steps.append(step)
 
+        if _has_ci_pending_signal(step):
+            stop_reason = "ci checks pending; bounded wait reached, rerun tail loop to continue"
+            break
+        if _has_ci_failing_signal(step):
+            stop_reason = "ci checks failing; stop and inspect review/merge diagnostics"
+            break
+
         if step.status == "complete":
             selected_issue = None
             continue
@@ -503,6 +519,10 @@ def _run_next_loop_stop_category(
     if not steps:
         return "no-ready"
     last_step = steps[-1]
+    if _has_ci_pending_signal(last_step):
+        return "waiting-ci"
+    if _has_ci_failing_signal(last_step):
+        return "failing-ci"
     if last_step.status == "failed" or stop_reason == "step command failed":
         return "failed-step"
     if last_step.status == "blocked" or stop_reason in {
@@ -653,6 +673,8 @@ def format_orchestrator_loop(result: OrchestratorLoop) -> str:
         lines.append("  none")
     if result.stop_reason:
         lines.extend(["", "Stop:", f"  {result.stop_reason}"])
+    if result.stop_category:
+        lines.extend(["", "Stop policy:", f"  category: {result.stop_category}"])
     lines.extend(["", "Status:", f"  {result.status}"])
     lines.extend(["", "Notes:"])
     lines.extend(f"  {note}" for note in result.notes)
@@ -677,6 +699,7 @@ def format_orchestrator_loop_summary(result: OrchestratorLoop) -> str:
         f"action: {action}",
         f"status: {result.status}",
         f"stop: {result.stop_reason or 'none'}",
+        f"stop_category: {result.stop_category or 'none'}",
         f"steps: {result.cycles_run}",
     ]
     return "\n".join(lines)
@@ -926,6 +949,9 @@ _FALLBACK_ELIGIBLE_DIAGNOSES = {
     "config-drift",
 }
 
+_CI_PENDING_SIGNAL = "pending — checks are still running"
+_CI_FAILING_SIGNAL = "blocked — checks are failing"
+
 
 def _plan_fallback_commands(
     *,
@@ -955,3 +981,38 @@ def _plan_fallback_commands(
         )
 
     return ()
+
+
+def _has_ci_pending_signal(step: OrchestratorStep) -> bool:
+    combined = "\n".join(
+        part for part in (step.stdout, step.stderr, step.stop_reason or "") if part
+    )
+    return _CI_PENDING_SIGNAL in combined.lower()
+
+
+def _has_ci_failing_signal(step: OrchestratorStep) -> bool:
+    combined = "\n".join(
+        part for part in (step.stdout, step.stderr, step.stop_reason or "") if part
+    )
+    return _CI_FAILING_SIGNAL in combined.lower()
+
+
+def _loop_stop_category(
+    steps: list[OrchestratorStep],
+    stop_reason: str | None,
+) -> str | None:
+    if not steps:
+        return None
+    last_step = steps[-1]
+    if _has_ci_pending_signal(last_step):
+        return "waiting-ci"
+    if _has_ci_failing_signal(last_step):
+        return "failing-ci"
+    if last_step.status == "failed" or stop_reason == "step command failed":
+        return "failed-step"
+    if last_step.status == "blocked" or stop_reason in {
+        "dry-run; rerun with --apply to execute this step",
+        "OpenClaw execution requires explicit --execute",
+    }:
+        return "blocked-lifecycle"
+    return None
