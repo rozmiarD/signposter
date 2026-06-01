@@ -4,9 +4,12 @@ from subprocess import TimeoutExpired
 from unittest.mock import patch
 
 from signposter.role_smoke import (
+    build_role_smoke_matrix,
     build_role_smoke_plan,
     classify_role_smoke_result,
     execute_role_smoke,
+    execute_role_smoke_matrix,
+    format_role_smoke_matrix,
     format_role_smoke_plan,
 )
 
@@ -72,3 +75,72 @@ def test_execute_role_smoke_timeout_writes_summary_and_diagnostics(tmp_path):
     assert "fallback drift" in tmp_path.joinpath("role-smoke-reviewer_core.summary.md").read_text(
         encoding="utf-8"
     )
+
+
+def test_build_role_smoke_matrix_defaults_to_all_roles():
+    with patch("signposter.role_smoke.gather_openclaw_runtime_diagnostics") as mock_diag:
+        mock_diag.return_value = type("diag", (), {"warnings": ("runtime drift",)})()
+
+        matrix = build_role_smoke_matrix()
+
+    assert matrix.mode == "plan"
+    assert len(matrix.entries) >= 1
+    assert matrix.diagnostics_warnings == ("runtime drift",)
+    assert all(entry.policy_status in ("pass", "fail") for entry in matrix.entries)
+
+
+def test_format_role_smoke_matrix_includes_result_paths():
+    matrix = type(
+        "Matrix",
+        (),
+        {
+            "mode": "execute",
+            "diagnostics_warnings": (),
+            "entries": (
+                type(
+                    "Entry",
+                    (),
+                    {
+                        "role_name": "WORKER_CORE",
+                        "agent": "worker",
+                        "model": "openai/gpt-5.4",
+                        "reasoning_effort": "medium",
+                        "policy_status": "pass",
+                        "policy_errors": (),
+                        "command_shape": "openclaw agent ...",
+                        "result_status": "timeout",
+                        "result_reason": "timed out",
+                        "raw_path": "artifacts/runs/raw.txt",
+                        "summary_path": "artifacts/runs/summary.md",
+                    },
+                )(),
+            ),
+        },
+    )()
+
+    output = format_role_smoke_matrix(matrix)
+
+    assert "result: timeout" in output
+    assert "summary: artifacts/runs/summary.md" in output
+
+
+def test_execute_role_smoke_matrix_passes_shared_diagnostics(tmp_path):
+    diagnostics = type("diag", (), {"warnings": ("drift",)})()
+    fake_diagnosis = type("diag_result", (), {"status": "timeout", "reason": "timed out"})()
+    with patch(
+        "signposter.role_smoke.gather_openclaw_runtime_diagnostics",
+        return_value=diagnostics,
+    ), patch("signposter.role_smoke.execute_role_smoke") as mock_execute:
+        mock_execute.return_value = {
+            "raw_path": str(tmp_path / "raw.txt"),
+            "summary_path": str(tmp_path / "summary.md"),
+            "diagnosis": fake_diagnosis,
+        }
+
+        matrix = execute_role_smoke_matrix(("WORKER_CORE",), runs_dir=tmp_path)
+
+    assert matrix.mode == "execute"
+    assert len(matrix.entries) == 1
+    assert matrix.entries[0].result_status == "timeout"
+    assert matrix.diagnostics_warnings == ("drift",)
+    assert mock_execute.call_args.kwargs["diagnostics"] is diagnostics

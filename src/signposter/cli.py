@@ -130,7 +130,14 @@ from signposter.review import (
     write_review_prompt_artifact,
 )
 from signposter.role_policy import format_role_policy_status, validate_role_registry
-from signposter.role_smoke import build_role_smoke_plan, execute_role_smoke, format_role_smoke_plan
+from signposter.role_smoke import (
+    build_role_smoke_matrix,
+    build_role_smoke_plan,
+    execute_role_smoke,
+    execute_role_smoke_matrix,
+    format_role_smoke_matrix,
+    format_role_smoke_plan,
+)
 from signposter.runner import cli_main as runner_cli_main
 from signposter.scan import cli_main as scan_cli_main
 from signposter.scheduler import (
@@ -362,6 +369,19 @@ def main() -> None:
     roles_smoke_parser.add_argument("--role", required=True)
     roles_smoke_parser.add_argument("--execute", action="store_true")
     roles_smoke_parser.set_defaults(func=run_roles_smoke)
+
+    roles_matrix_parser = roles_subparsers.add_parser(
+        "matrix",
+        help="Plan or run a local smoke matrix for all active or selected roles",
+    )
+    roles_matrix_parser.add_argument(
+        "--role",
+        action="append",
+        default=[],
+        help="Optional role filter; may be repeated. Defaults to all active roles.",
+    )
+    roles_matrix_parser.add_argument("--execute", action="store_true")
+    roles_matrix_parser.set_defaults(func=run_roles_matrix)
 
     # planner subcommand group — HARDENING-029A
     planner_parser = subparsers.add_parser(
@@ -1390,6 +1410,19 @@ def run_roles_smoke(args: argparse.Namespace) -> int:
     print("  No GitHub mutation was performed.")
     print("  Output remains local.")
     return 0 if result.get("success") else 1
+
+
+def run_roles_matrix(args: argparse.Namespace) -> int:
+    """Plan or execute a local smoke matrix for active or selected roles."""
+    selected_roles = tuple(getattr(args, "role", []) or []) or None
+    if not getattr(args, "execute", False):
+        print(format_role_smoke_matrix(build_role_smoke_matrix(selected_roles)))
+        return 0
+
+    matrix = execute_role_smoke_matrix(selected_roles)
+    print(format_role_smoke_matrix(matrix))
+    all_success = all(entry.result_status == "success" for entry in matrix.entries)
+    return 0 if all_success else 1
 
 
 def run_report(args: argparse.Namespace) -> int:
