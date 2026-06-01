@@ -801,11 +801,13 @@ def test_execute_review_preflight_blocks_before_openclaw_and_artifacts(tmp_path)
     mock_run.assert_not_called()
 
 
-def test_execute_review_timeout_writes_bounded_summary(tmp_path):
+def test_execute_review_timeout_writes_bounded_summary(tmp_path, monkeypatch):
     from subprocess import TimeoutExpired
 
+    from signposter.bug_ledger import load_bug_ledger
     from signposter.review import ReviewPlan, execute_pr_review
 
+    monkeypatch.chdir(tmp_path)
     fake_plan = ReviewPlan(
         pr_number=5,
         title="docs change",
@@ -852,6 +854,10 @@ def test_execute_review_timeout_writes_bounded_summary(tmp_path):
     summary = open(result["summary_path"], encoding="utf-8").read()
     assert "**Execution Status:** timeout" in summary
     assert "bounded subprocess timeout" in summary
+    assert "**Bug Ledger:** recorded BUG-0001" in summary
+    entries = load_bug_ledger(tmp_path / "artifacts/automation/bug-ledger.json")
+    assert entries[0].status == "runtime-blocker"
+    assert entries[0].current_pr == 5
 
 
 def test_execute_review_timeout_decodes_bytes_output(tmp_path):
