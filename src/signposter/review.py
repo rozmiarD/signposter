@@ -24,6 +24,7 @@ from signposter.openclaw_preflight import (
 from signposter.openclaw_runtime import (
     OpenClawExecutionDiagnosis,
     classify_openclaw_execution,
+    normalize_subprocess_output,
     openclaw_timeout_settings,
 )
 from signposter.role_routing import select_role_for_review
@@ -920,8 +921,8 @@ def execute_pr_review(
         }
 
     except subprocess.TimeoutExpired as e:
-        stdout = e.stdout or ""
-        stderr = e.stderr or ""
+        stdout = normalize_subprocess_output(e.stdout)
+        stderr = normalize_subprocess_output(e.stderr)
         combined = f"[TIMEOUT after {subprocess_timeout}s]\n"
         if stdout:
             combined += stdout

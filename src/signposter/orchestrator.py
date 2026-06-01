@@ -7,6 +7,7 @@ metadata that a future bounded loop can consume.
 
 from __future__ import annotations
 
+import re
 import shlex
 import subprocess
 import sys
@@ -65,6 +66,10 @@ class OrchestratorStep:
     stderr: str
     stop_reason: str | None
     notes: list[str]
+    diagnosis_status: str | None = None
+    diagnosis_reason: str | None = None
+    raw_artifact_path: str | None = None
+    summary_artifact_path: str | None = None
 
 
 @dataclass(frozen=True)
@@ -242,6 +247,9 @@ def run_orchestrator_step(
     )
     status = "applied" if proc.returncode == 0 else "failed"
     stop_reason = None if proc.returncode == 0 else "step command failed"
+    diagnosis_status, diagnosis_reason, raw_artifact_path, summary_artifact_path = (
+        _extract_execute_diagnosis(proc.stdout, proc.stderr)
+    )
     return OrchestratorStep(
         next=planned,
         status=status,
@@ -251,6 +259,10 @@ def run_orchestrator_step(
         stderr=proc.stderr,
         stop_reason=stop_reason,
         notes=notes,
+        diagnosis_status=diagnosis_status,
+        diagnosis_reason=diagnosis_reason,
+        raw_artifact_path=raw_artifact_path,
+        summary_artifact_path=summary_artifact_path,
     )
 
 
@@ -583,6 +595,15 @@ def format_orchestrator_step(result: OrchestratorStep) -> str:
         f"  applied: {'yes' if result.applied else 'no'}",
         f"  exit code: {result.exit_code if result.exit_code is not None else 'n/a'}",
     ]
+    if result.diagnosis_status or result.raw_artifact_path or result.summary_artifact_path:
+        lines.extend(["", "Diagnosis:"])
+        lines.append(f"  status: {result.diagnosis_status or 'unknown'}")
+        if result.diagnosis_reason:
+            lines.append(f"  reason: {result.diagnosis_reason}")
+        if result.raw_artifact_path:
+            lines.append(f"  raw artifact: {result.raw_artifact_path}")
+        if result.summary_artifact_path:
+            lines.append(f"  summary artifact: {result.summary_artifact_path}")
     if result.stop_reason:
         lines.extend(["", "Stop:", f"  {result.stop_reason}"])
     lines.extend(["", "Status:", f"  {result.status}"])
@@ -801,6 +822,15 @@ def write_orchestrator_run_next_loop_transcript(
                 f"{index}. selected={selected} action={step.next.action} "
                 f"status={step.status} stop={step.stop_reason or 'none'}"
             )
+            if step.diagnosis_status or step.raw_artifact_path or step.summary_artifact_path:
+                if step.diagnosis_status:
+                    lines.append(f"   diagnosis_status={step.diagnosis_status}")
+                if step.diagnosis_reason:
+                    lines.append(f"   diagnosis_reason={step.diagnosis_reason}")
+                if step.raw_artifact_path:
+                    lines.append(f"   raw_artifact={step.raw_artifact_path}")
+                if step.summary_artifact_path:
+                    lines.append(f"   summary_artifact={step.summary_artifact_path}")
     else:
         lines.append("none")
     lines.extend(
@@ -814,3 +844,47 @@ def write_orchestrator_run_next_loop_transcript(
 
     transcript_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return transcript_path
+
+
+_ARTIFACT_PATTERNS = (
+    re.compile(r"Raw output:\s*(?P<path>\S+)"),
+    re.compile(r"raw artifact:\s*(?P<path>\S+)"),
+    re.compile(r"Summary:\s*(?P<path>\S+)"),
+    re.compile(r"summary artifact:\s*(?P<path>\S+)"),
+)
+_DIAGNOSIS_STATUS_RE = re.compile(r"\*\*Execution Status:\*\*\s*(?P<value>[^\n]+)")
+_DIAGNOSIS_REASON_RE = re.compile(r"\*\*Execution Reason:\*\*\s*(?P<value>[^\n]+)")
+
+
+def _extract_execute_diagnosis(
+    stdout: str,
+    stderr: str,
+) -> tuple[str | None, str | None, str | None, str | None]:
+    combined = "\n".join(part for part in (stdout, stderr) if part)
+    raw_path: str | None = None
+    summary_path: str | None = None
+    for line in combined.splitlines():
+        for pattern in _ARTIFACT_PATTERNS:
+            match = pattern.search(line)
+            if not match:
+                continue
+            path = match.group("path")
+            if "summary" in pattern.pattern.lower():
+                summary_path = path
+            else:
+                raw_path = path
+
+    diagnosis_status: str | None = None
+    diagnosis_reason: str | None = None
+    if summary_path:
+        summary_file = Path(summary_path)
+        if summary_file.is_file():
+            text = summary_file.read_text(encoding="utf-8")
+            status_match = _DIAGNOSIS_STATUS_RE.search(text)
+            reason_match = _DIAGNOSIS_REASON_RE.search(text)
+            if status_match:
+                diagnosis_status = status_match.group("value").strip()
+            if reason_match:
+                diagnosis_reason = reason_match.group("value").strip()
+
+    return diagnosis_status, diagnosis_reason, raw_path, summary_path

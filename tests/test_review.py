@@ -698,6 +698,65 @@ def test_execute_review_timeout_writes_bounded_summary(tmp_path):
     assert "bounded subprocess timeout" in summary
 
 
+def test_execute_review_timeout_decodes_bytes_output(tmp_path):
+    from subprocess import TimeoutExpired
+
+    from signposter.review import ReviewPlan, execute_pr_review
+
+    fake_plan = ReviewPlan(
+        pr_number=15,
+        title="docs change",
+        state="OPEN",
+        base_branch="main",
+        head_branch="work/issue-15-xxx",
+        mergeable="MERGEABLE",
+        review_decision=None,
+        checks_status="pass",
+        successful_checks=1,
+        failing_checks=0,
+        pending_checks=0,
+        files_changed=1,
+        additions=8,
+        deletions=0,
+        risk_level="low",
+        size="small",
+        associated_issue=14,
+        branch_matches_convention=True,
+        status="ready",
+        notes=[],
+        reviewer_profile="reviewer",
+        prompt_artifact_path=str(tmp_path / "pr-15-review.md"),
+    )
+    (tmp_path / "pr-15-review.md").write_text("review prompt", encoding="utf-8")
+
+    with patch("signposter.review.plan_review_for_pr", return_value=fake_plan), \
+         patch("signposter.review.check_openclaw_preflight") as mock_preflight, \
+         patch("signposter.review.gather_openclaw_runtime_diagnostics") as mock_diag, \
+         patch("signposter.review.openclaw_timeout_settings") as mock_timeouts, \
+         patch(
+             "subprocess.run",
+             side_effect=TimeoutExpired(
+                 cmd=["openclaw"],
+                 timeout=25,
+                 output=b"partial bytes",
+                 stderr=b"stderr bytes",
+             ),
+         ):
+        mock_preflight.return_value = type("pf", (), {"ok": True})()
+        mock_diag.return_value = type("diag", (), {"warnings": ()})()
+        mock_timeouts.return_value = type(
+            "timeouts",
+            (),
+            {"execute_timeout": 20, "subprocess_timeout": 25, "warnings": ()},
+        )()
+        result = execute_pr_review("test/repo", 15, runs_dir=tmp_path / "runs")
+
+    assert result["diagnosis_status"] == "timeout"
+    raw = open(result["raw_path"], encoding="utf-8").read()
+    assert "partial bytes" in raw
+    assert "stderr bytes" in raw
+
+
 def test_execute_review_passes_model_and_thinking_flags(tmp_path):
     from signposter.review import ReviewPlan, execute_pr_review
 
