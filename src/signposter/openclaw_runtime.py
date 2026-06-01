@@ -108,6 +108,15 @@ def _auth_failure_lines(combined_output: str) -> tuple[str, ...]:
     return tuple(matches)
 
 
+def normalize_subprocess_output(value: str | bytes | None) -> str:
+    """Return subprocess output as text even when TimeoutExpired yields bytes."""
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
+
+
 def classify_openclaw_execution(
     *,
     exit_code: int | None,
