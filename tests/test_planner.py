@@ -20,6 +20,7 @@ from signposter.planner import (
     build_planner_seed_manifest,
     build_planner_seed_plan,
     build_planner_status,
+    build_planner_status_counts,
     build_planner_step_from_next,
     evaluate_worker_issue_body_size,
     format_gh_issue_create_command,
@@ -1642,6 +1643,33 @@ def test_build_planner_status_reports_seeded_active_manifest(tmp_path: Path) -> 
     assert status["tasks"][2]["state"] == "unknown"
 
 
+def test_build_planner_status_counts_groups_lifecycle_buckets() -> None:
+    counts = build_planner_status_counts(
+        [
+            {"state": "unseeded"},
+            {"state": "open"},
+            {"state": "ready"},
+            {"state": "active"},
+            {"state": "done"},
+            {"state": "merged"},
+            {"state": "closed"},
+            {"state": "blocked"},
+            {"state": "failed"},
+        ]
+    )
+
+    assert counts == {
+        "total": 9,
+        "pending": 1,
+        "ready": 2,
+        "active": 1,
+        "done": 1,
+        "merged": 1,
+        "blocked": 2,
+        "completed": 3,
+    }
+
+
 def test_format_planner_status_contains_safety_notes(tmp_path: Path) -> None:
     plan_path = tmp_path / "plan.json"
     body_dir = tmp_path / "issue-bodies"
@@ -2091,6 +2119,16 @@ def test_build_planner_run_plan_from_status_reports_next_open_task(
 
     assert result["status"] == "ready"
     assert result["planner_status"] == "active"
+    assert result["status_counts"] == {
+        "total": 5,
+        "pending": 0,
+        "ready": 5,
+        "active": 0,
+        "done": 0,
+        "merged": 0,
+        "blocked": 0,
+        "completed": 0,
+    }
     assert result["next"]["status"] == "ready"
     assert result["next"]["next"]["key"] == "WATCH-001"
     assert result["step"]["suggested_command"] == (
@@ -2183,8 +2221,14 @@ def test_format_planner_run_plan_contains_dashboard_sections(
     assert "Signposter Planner Run" in output
     assert "Status:\n  ready" in output
     assert "Planner status:\n  active" in output
+    assert "Task counts:" in output
+    assert "  total: 5" in output
+    assert "  ready: 1" in output
+    assert "  completed: 0" in output
     assert "Next task:" in output
     assert "WATCH-001 — issue: #10 — state: open" in output
+    assert "Reconcile hints:" in output
+    assert "4 task(s) waiting for dependencies" in output
     assert "Suggested step command:" in output
     assert "signposter run --repo ExatronOmega/signposter --issue 10 --dry-run" in output
     assert "Advance candidates:" in output
@@ -2846,8 +2890,11 @@ def test_cli_planner_run_dry_run_shows_dashboard(
     assert "Signposter Planner Run" in captured
     assert "Status:\n  ready" in captured
     assert "Planner status:\n  active" in captured
+    assert "Task counts:" in captured
+    assert "  total: 5" in captured
     assert "Next task:" in captured
     assert "WATCH-001 — issue: #10 — state: open" in captured
+    assert "Reconcile hints:" in captured
     assert "Suggested step command:" in captured
     assert "signposter run --repo ExatronOmega/signposter --issue 10 --dry-run" in captured
     assert "Advance candidates:" in captured
