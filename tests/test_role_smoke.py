@@ -6,6 +6,7 @@ from unittest.mock import patch
 from signposter.role_smoke import (
     build_role_smoke_matrix,
     build_role_smoke_plan,
+    build_role_smoke_session_key,
     classify_role_smoke_result,
     execute_role_smoke,
     execute_role_smoke_matrix,
@@ -19,8 +20,18 @@ def test_build_role_smoke_plan_uses_explicit_model_and_reasoning():
 
     assert plan.policy.model == "openai/gpt-5.4"
     assert plan.policy.reasoning_effort == "medium"
+    assert plan.session_key == "signposter-v2-smoke-reviewer_core"
     assert "--model openai/gpt-5.4" in plan.command_shape
     assert "--thinking medium" in plan.command_shape
+
+
+def test_build_role_smoke_session_key_uses_namespace_override():
+    session_key = build_role_smoke_session_key(
+        "WORKER_CODE",
+        env={"SIGNPOSTER_OPENCLAW_SESSION_NAMESPACE": "v9"},
+    )
+
+    assert session_key == "signposter-v9-smoke-worker_code"
 
 
 def test_format_role_smoke_plan_mentions_no_execution():
