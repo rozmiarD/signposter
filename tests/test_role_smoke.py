@@ -3,6 +3,7 @@ from __future__ import annotations
 from subprocess import TimeoutExpired
 from unittest.mock import patch
 
+from signposter.role_policy import OpenClawAgentProfile
 from signposter.role_smoke import (
     build_role_smoke_matrix,
     build_role_smoke_plan,
@@ -13,6 +14,46 @@ from signposter.role_smoke import (
     format_role_smoke_matrix,
     format_role_smoke_plan,
 )
+
+
+def _mock_profiles():
+    return {
+        "worker_light": OpenClawAgentProfile(
+            name="worker_light",
+            primary_model="xai/grok-build-0.1",
+            fallback_models=("openai/gpt-5.4-mini",),
+        ),
+        "worker_code": OpenClawAgentProfile(
+            name="worker_code",
+            primary_model="openai/gpt-5.3-codex",
+            fallback_models=("openai/gpt-5.4", "openai/gpt-5.2"),
+        ),
+        "worker_core": OpenClawAgentProfile(
+            name="worker_core",
+            primary_model="openai/gpt-5.4",
+            fallback_models=("openai/gpt-5.4-mini",),
+        ),
+        "reviewer_light": OpenClawAgentProfile(
+            name="reviewer_light",
+            primary_model="xai/grok-build-0.1",
+            fallback_models=("openai/gpt-5.4-mini",),
+        ),
+        "reviewer_core": OpenClawAgentProfile(
+            name="reviewer_core",
+            primary_model="openai/gpt-5.4",
+            fallback_models=("openai/gpt-5.4-mini",),
+        ),
+        "planner_main": OpenClawAgentProfile(
+            name="planner_main",
+            primary_model="openai/gpt-5.4",
+            fallback_models=("openai/gpt-5.4-mini",),
+        ),
+        "main": OpenClawAgentProfile(
+            name="main",
+            primary_model="openai/gpt-5.5",
+            fallback_models=("openai/gpt-5.4",),
+        ),
+    }
 
 
 def test_build_role_smoke_plan_uses_explicit_model_and_reasoning():
@@ -89,7 +130,10 @@ def test_execute_role_smoke_timeout_writes_summary_and_diagnostics(tmp_path):
 
 
 def test_build_role_smoke_matrix_defaults_to_all_roles():
-    with patch("signposter.role_smoke.gather_openclaw_runtime_diagnostics") as mock_diag:
+    with patch("signposter.role_smoke.gather_openclaw_runtime_diagnostics") as mock_diag, patch(
+        "signposter.role_smoke.load_openclaw_agent_profiles",
+        return_value=(_mock_profiles(), None),
+    ):
         mock_diag.return_value = type("diag", (), {"warnings": ("runtime drift",)})()
 
         matrix = build_role_smoke_matrix()
@@ -98,6 +142,8 @@ def test_build_role_smoke_matrix_defaults_to_all_roles():
     assert len(matrix.entries) >= 1
     assert matrix.diagnostics_warnings == ("runtime drift",)
     assert all(entry.policy_status in ("pass", "fail") for entry in matrix.entries)
+    assert all(entry.profile_status in ("pass", "fail") for entry in matrix.entries)
+    assert all(entry.invoke_status in ("pass", "fail") for entry in matrix.entries)
 
 
 def test_format_role_smoke_matrix_includes_result_paths():
@@ -118,6 +164,9 @@ def test_format_role_smoke_matrix_includes_result_paths():
                         "reasoning_effort": "medium",
                         "policy_status": "pass",
                         "policy_errors": (),
+                        "profile_status": "pass",
+                        "profile_errors": (),
+                        "invoke_status": "pass",
                         "command_shape": "openclaw agent ...",
                         "result_status": "timeout",
                         "result_reason": "timed out",
@@ -132,6 +181,8 @@ def test_format_role_smoke_matrix_includes_result_paths():
     output = format_role_smoke_matrix(matrix)
 
     assert "result: timeout" in output
+    assert "profile: pass" in output
+    assert "invoke: pass" in output
     assert "summary: artifacts/runs/summary.md" in output
 
 
@@ -141,6 +192,9 @@ def test_execute_role_smoke_matrix_passes_shared_diagnostics(tmp_path):
     with patch(
         "signposter.role_smoke.gather_openclaw_runtime_diagnostics",
         return_value=diagnostics,
+    ), patch(
+        "signposter.role_smoke.load_openclaw_agent_profiles",
+        return_value=(_mock_profiles(), None),
     ), patch("signposter.role_smoke.execute_role_smoke") as mock_execute:
         mock_execute.return_value = {
             "raw_path": str(tmp_path / "raw.txt"),
@@ -153,5 +207,43 @@ def test_execute_role_smoke_matrix_passes_shared_diagnostics(tmp_path):
     assert matrix.mode == "execute"
     assert len(matrix.entries) == 1
     assert matrix.entries[0].result_status == "timeout"
+    assert matrix.entries[0].profile_status == "pass"
     assert matrix.diagnostics_warnings == ("drift",)
     assert mock_execute.call_args.kwargs["diagnostics"] is diagnostics
+
+
+def test_build_role_smoke_matrix_marks_profile_failures():
+    with patch("signposter.role_smoke.gather_openclaw_runtime_diagnostics") as mock_diag, patch(
+        "signposter.role_smoke.load_openclaw_agent_profiles",
+        return_value=({}, None),
+    ):
+        mock_diag.return_value = type("diag", (), {"warnings": ()})()
+        matrix = build_role_smoke_matrix(("WORKER_CORE",))
+
+    assert len(matrix.entries) == 1
+    entry = matrix.entries[0]
+    assert entry.profile_status == "fail"
+    assert any("configured OpenClaw agent/profile" in error for error in entry.profile_errors)
+    assert entry.invoke_status == "fail"
+
+
+def test_execute_role_smoke_matrix_skips_execution_when_profile_validation_fails(tmp_path):
+    diagnostics = type("diag", (), {"warnings": ()})()
+    with patch(
+        "signposter.role_smoke.gather_openclaw_runtime_diagnostics",
+        return_value=diagnostics,
+    ), patch(
+        "signposter.role_smoke.load_openclaw_agent_profiles",
+        return_value=({}, None),
+    ), patch("signposter.role_smoke.execute_role_smoke") as mock_execute:
+        matrix = execute_role_smoke_matrix(("WORKER_CORE",), runs_dir=tmp_path)
+
+    assert len(matrix.entries) == 1
+    entry = matrix.entries[0]
+    assert entry.profile_status == "fail"
+    assert entry.invoke_status == "fail"
+    assert entry.result_status == "blocked"
+    assert "runtime profile validation errors" in entry.result_reason
+    assert entry.raw_path is None
+    assert entry.summary_path is None
+    mock_execute.assert_not_called()

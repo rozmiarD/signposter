@@ -18,8 +18,11 @@ from signposter.openclaw_preflight import (
 )
 from signposter.role_policy import (
     ACTIVE_ROLE_POLICIES,
+    OpenClawAgentProfile,
     RolePolicy,
     get_role_policy,
+    load_openclaw_agent_profiles,
+    validate_role_agent_profiles,
     validate_role_policy,
 )
 from signposter.runner import openclaw_session_namespace
@@ -50,6 +53,9 @@ class RoleSmokeMatrixEntry:
     reasoning_effort: str
     policy_status: str
     policy_errors: tuple[str, ...]
+    profile_status: str
+    profile_errors: tuple[str, ...]
+    invoke_status: str
     command_shape: str
     result_status: str | None = None
     result_reason: str | None = None
@@ -233,13 +239,30 @@ def _resolve_role_names(role_names: tuple[str, ...] | None = None) -> tuple[str,
     return tuple(role_names)
 
 
+def _profile_errors_for_role(
+    role_name: str,
+    profiles: dict[str, OpenClawAgentProfile],
+    runtime_error: str | None,
+) -> tuple[str, ...]:
+    policy = get_role_policy(role_name)
+    return tuple(
+        validate_role_agent_profiles(
+            {role_name: policy},
+            profiles=profiles,
+            runtime_error=runtime_error,
+        )
+    )
+
+
 def build_role_smoke_matrix(role_names: tuple[str, ...] | None = None) -> RoleSmokeMatrix:
     """Build a dry-run matrix for all active or selected role smoke plans."""
     entries: list[RoleSmokeMatrixEntry] = []
     diagnostics = gather_openclaw_runtime_diagnostics()
+    profiles, runtime_error = load_openclaw_agent_profiles()
     for role_name in _resolve_role_names(role_names):
         plan = build_role_smoke_plan(role_name)
         policy_errors = tuple(validate_role_policy(plan.policy))
+        profile_errors = _profile_errors_for_role(role_name, profiles, runtime_error)
         entries.append(
             RoleSmokeMatrixEntry(
                 role_name=role_name,
@@ -248,6 +271,9 @@ def build_role_smoke_matrix(role_names: tuple[str, ...] | None = None) -> RoleSm
                 reasoning_effort=plan.policy.reasoning_effort,
                 policy_status="pass" if not policy_errors else "fail",
                 policy_errors=policy_errors,
+                profile_status="pass" if not profile_errors else "fail",
+                profile_errors=profile_errors,
+                invoke_status="pass" if not policy_errors and not profile_errors else "fail",
                 command_shape=plan.command_shape,
             )
         )
@@ -279,6 +305,11 @@ def format_role_smoke_matrix(matrix: RoleSmokeMatrix) -> str:
         if entry.policy_errors:
             for error in entry.policy_errors:
                 lines.append(f"    error: {error}")
+        lines.append(f"  profile: {entry.profile_status}")
+        if entry.profile_errors:
+            for error in entry.profile_errors:
+                lines.append(f"    error: {error}")
+        lines.append(f"  invoke: {entry.invoke_status}")
         if matrix.mode == "plan":
             lines.append(f"  command: {entry.command_shape}")
         else:
@@ -423,13 +454,37 @@ def execute_role_smoke_matrix(
     """Execute local smoke turns for all active or selected roles."""
     selected_names = _resolve_role_names(role_names)
     diagnostics = gather_openclaw_runtime_diagnostics()
+    profiles, runtime_error = load_openclaw_agent_profiles()
     entries: list[RoleSmokeMatrixEntry] = []
 
     for role_name in selected_names:
         plan = build_role_smoke_plan(role_name)
         policy_errors = tuple(validate_role_policy(plan.policy))
-        result = execute_role_smoke(role_name, runs_dir=runs_dir, diagnostics=diagnostics)
-        diagnosis = result.get("diagnosis")
+        profile_errors = _profile_errors_for_role(role_name, profiles, runtime_error)
+        invoke_allowed = not policy_errors and not profile_errors
+        result_status: str
+        result_reason: str
+        raw_path: str | None = None
+        summary_path: str | None = None
+
+        if invoke_allowed:
+            result = execute_role_smoke(role_name, runs_dir=runs_dir, diagnostics=diagnostics)
+            diagnosis = result.get("diagnosis")
+            result_status = (
+                diagnosis.status if diagnosis is not None else result.get("error", "unknown")
+            )
+            result_reason = diagnosis.reason if diagnosis is not None else result.get("error")
+            raw_path = result.get("raw_path")
+            summary_path = result.get("summary_path")
+        else:
+            result_status = "blocked"
+            if policy_errors and profile_errors:
+                result_reason = "Role smoke execution blocked by policy and runtime profile errors."
+            elif policy_errors:
+                result_reason = "Role smoke execution blocked by role policy validation errors."
+            else:
+                result_reason = "Role smoke execution blocked by runtime profile validation errors."
+
         entries.append(
             RoleSmokeMatrixEntry(
                 role_name=role_name,
@@ -438,13 +493,14 @@ def execute_role_smoke_matrix(
                 reasoning_effort=plan.policy.reasoning_effort,
                 policy_status="pass" if not policy_errors else "fail",
                 policy_errors=policy_errors,
+                profile_status="pass" if not profile_errors else "fail",
+                profile_errors=profile_errors,
+                invoke_status="pass" if invoke_allowed else "fail",
                 command_shape=plan.command_shape,
-                result_status=(
-                    diagnosis.status if diagnosis is not None else result.get("error", "unknown")
-                ),
-                result_reason=diagnosis.reason if diagnosis is not None else result.get("error"),
-                raw_path=result.get("raw_path"),
-                summary_path=result.get("summary_path"),
+                result_status=result_status,
+                result_reason=result_reason,
+                raw_path=raw_path,
+                summary_path=summary_path,
             )
         )
 
