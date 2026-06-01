@@ -37,7 +37,8 @@ def _issue_updated(number: int, labels: list[str], updated_at: str) -> LabeledIt
     )
 
 
-def test_scheduler_selects_first_ready_issue_without_manifest() -> None:
+def test_scheduler_selects_first_ready_issue_without_manifest(monkeypatch, tmp_path) -> None:
+    monkeypatch.chdir(tmp_path)
     issues = [
         _issue(1, ["state:done"]),
         _issue(2, ["state:active"]),
