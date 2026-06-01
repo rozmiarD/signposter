@@ -7,6 +7,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from signposter.artifact_safety import find_stale_or_failover_signal
+from signposter.openclaw_diagnostics import gather_openclaw_runtime_diagnostics
 from signposter.openclaw_preflight import (
     check_openclaw_preflight,
     format_openclaw_preflight_block,
@@ -23,6 +25,18 @@ class RoleSmokePlan:
     command_shape: str
 
 
+@dataclass(frozen=True)
+class RoleSmokeDiagnosis:
+    status: str
+    reason: str
+    remediation: tuple[str, ...]
+    signal: str | None = None
+
+
+DEFAULT_ROLE_SMOKE_TIMEOUT_SECONDS = 20
+DEFAULT_ROLE_SMOKE_SUBPROCESS_TIMEOUT_SECONDS = 30
+
+
 def build_role_smoke_plan(role_name: str) -> RoleSmokePlan:
     """Build a deterministic local smoke plan for a role policy."""
     policy = get_role_policy(role_name)
@@ -33,7 +47,7 @@ def build_role_smoke_plan(role_name: str) -> RoleSmokePlan:
         f"--session-key {session_key} "
         f"--model {policy.model} "
         f"--thinking {policy.reasoning_effort} "
-        f'--message "{message}" --local --json --timeout 45'
+        f'--message "{message}" --local --json --timeout {DEFAULT_ROLE_SMOKE_TIMEOUT_SECONDS}'
     )
     return RoleSmokePlan(
         role_name=role_name,
@@ -51,10 +65,124 @@ def format_role_smoke_plan(plan: RoleSmokePlan) -> str:
     lines.append(f"Reasoning: {plan.policy.reasoning_effort}")
     lines.append(f"Session key: {plan.session_key}")
     lines.append(f"Command shape: {plan.command_shape}")
+    lines.append(f"Runtime timeout: {DEFAULT_ROLE_SMOKE_TIMEOUT_SECONDS}s")
     lines.append("")
     lines.append("Notes:")
     lines.append("  No GitHub mutation was performed.")
     lines.append("  No OpenClaw execution was performed.")
+    return "\n".join(lines)
+
+
+def classify_role_smoke_result(
+    *,
+    role_name: str,
+    exit_code: int | None,
+    combined_output: str,
+    timed_out: bool,
+    diagnostics_warnings: tuple[str, ...] = (),
+) -> RoleSmokeDiagnosis:
+    """Classify a smoke execution result into operator-facing categories."""
+    if timed_out:
+        remediation = [
+            "Inspect the local raw artifact for the exact stall point.",
+            "Run `openclaw models status` and remove stale fallback/auth drift before retry.",
+        ]
+        if diagnostics_warnings:
+            remediation.append("Resolve the reported OpenClaw runtime hygiene warnings first.")
+        return RoleSmokeDiagnosis(
+            status="timeout",
+            reason="OpenClaw role smoke timed out before a bounded response was returned.",
+            remediation=tuple(remediation),
+        )
+
+    if exit_code == 0 and f"{role_name}_SMOKE_OK" in combined_output:
+        return RoleSmokeDiagnosis(
+            status="success",
+            reason="OpenClaw returned the expected bounded smoke response.",
+            remediation=(),
+        )
+
+    lowered = combined_output.lower()
+    if "auth refresh request timed out" in lowered or "authentication failed" in lowered:
+        return RoleSmokeDiagnosis(
+            status="auth-runtime-failure",
+            reason="OpenClaw hit an authentication/runtime refresh problem.",
+            remediation=(
+                "Refresh provider auth for the active OpenClaw agent.",
+                "Re-run `openclaw doctor` and `openclaw models status` before retry.",
+            ),
+        )
+
+    stale_signal = find_stale_or_failover_signal(combined_output)
+    if stale_signal:
+        return RoleSmokeDiagnosis(
+            status="failover-or-stale-runtime",
+            reason=f"OpenClaw output reported a stale/failover provider signal: {stale_signal}.",
+            remediation=(
+                "Clear stale sessions or remove unhealthy fallback providers before retry.",
+                "Keep raw output local and regenerate only a bounded summary artifact.",
+            ),
+            signal=stale_signal,
+        )
+
+    if diagnostics_warnings:
+        return RoleSmokeDiagnosis(
+            status="config-drift",
+            reason="OpenClaw runtime/config drift was detected during smoke execution.",
+            remediation=(
+                "Align OpenClaw defaults, fallbacks, and aliases "
+                "with the active Signposter policy.",
+                "Re-run `signposter doctor --automation` after fixing runtime drift.",
+            ),
+        )
+
+    return RoleSmokeDiagnosis(
+        status="runtime-error",
+        reason=f"OpenClaw exited with code {exit_code} without a bounded success signal.",
+        remediation=(
+            "Inspect the local raw artifact and retry only after "
+            "identifying the concrete runtime failure.",
+        ),
+    )
+
+
+def _format_summary_artifact(
+    *,
+    plan: RoleSmokePlan,
+    diagnosis: RoleSmokeDiagnosis,
+    result: dict,
+    diagnostics_warnings: tuple[str, ...],
+) -> str:
+    lines = [
+        "# Signposter Role Smoke Summary",
+        "",
+        f"**Role:** {plan.role_name}",
+        f"**Agent:** {plan.policy.openclaw_agent}",
+        f"**Model:** {plan.policy.model}",
+        f"**Reasoning:** {plan.policy.reasoning_effort}",
+        f"**Status:** {diagnosis.status}",
+        f"**Reason:** {diagnosis.reason}",
+        f"**Exit Code:** {result.get('exit_code', 'timeout')}",
+        f"**Raw output:** {result.get('raw_path')}",
+    ]
+    if diagnostics_warnings:
+        lines.extend(["", "## Runtime hygiene warnings", ""])
+        for warning in diagnostics_warnings:
+            lines.append(f"- {warning}")
+    if diagnosis.remediation:
+        lines.extend(["", "## Remediation", ""])
+        for item in diagnosis.remediation:
+            lines.append(f"- {item}")
+    lines.extend(
+        [
+            "",
+            "## Safety",
+            "",
+            "- No GitHub mutation was performed.",
+            "- Raw OpenClaw output remains local.",
+            "- This artifact is bounded and operator-facing.",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -69,6 +197,8 @@ def execute_role_smoke(role_name: str, *, runs_dir: Path | str = "artifacts/runs
     runs_path = Path(runs_dir)
     runs_path.mkdir(parents=True, exist_ok=True)
     raw_path = runs_path / f"role-smoke-{role_name.lower()}.raw.txt"
+    summary_path = runs_path / f"role-smoke-{role_name.lower()}.summary.md"
+    diagnostics = gather_openclaw_runtime_diagnostics()
 
     exec_cmd = [
         "openclaw",
@@ -86,14 +216,46 @@ def execute_role_smoke(role_name: str, *, runs_dir: Path | str = "artifacts/runs
         "--local",
         "--json",
         "--timeout",
-        "45",
+        str(DEFAULT_ROLE_SMOKE_TIMEOUT_SECONDS),
     ]
 
     try:
-        proc = subprocess.run(exec_cmd, capture_output=True, text=True, timeout=60)
+        proc = subprocess.run(
+            exec_cmd,
+            capture_output=True,
+            text=True,
+            timeout=DEFAULT_ROLE_SMOKE_SUBPROCESS_TIMEOUT_SECONDS,
+        )
     except subprocess.TimeoutExpired as exc:
         raw_path.write_text(f"[TIMEOUT]\n{exc}", encoding="utf-8")
-        return {"success": False, "error": "timeout", "raw_path": str(raw_path)}
+        diagnosis = classify_role_smoke_result(
+            role_name=role_name,
+            exit_code=None,
+            combined_output=str(exc),
+            timed_out=True,
+            diagnostics_warnings=diagnostics.warnings,
+        )
+        result = {
+            "success": False,
+            "error": diagnosis.status,
+            "exit_code": None,
+            "raw_path": str(raw_path),
+            "summary_path": str(summary_path),
+            "diagnosis": diagnosis,
+            "started_utc": datetime.datetime.now(datetime.UTC).isoformat(),
+            "command_shape": plan.command_shape,
+            "diagnostics_warnings": diagnostics.warnings,
+        }
+        summary_path.write_text(
+            _format_summary_artifact(
+                plan=plan,
+                diagnosis=diagnosis,
+                result=result,
+                diagnostics_warnings=diagnostics.warnings,
+            ),
+            encoding="utf-8",
+        )
+        return result
 
     stdout = proc.stdout or ""
     stderr = proc.stderr or ""
@@ -102,11 +264,31 @@ def execute_role_smoke(role_name: str, *, runs_dir: Path | str = "artifacts/runs
         combined += "\n\n=== STDERR ===\n" + stderr
 
     raw_path.write_text(combined, encoding="utf-8")
-
-    return {
-        "success": proc.returncode == 0,
+    diagnosis = classify_role_smoke_result(
+        role_name=role_name,
+        exit_code=proc.returncode,
+        combined_output=combined,
+        timed_out=False,
+        diagnostics_warnings=diagnostics.warnings,
+    )
+    result = {
+        "success": diagnosis.status == "success",
         "exit_code": proc.returncode,
         "raw_path": str(raw_path),
+        "summary_path": str(summary_path),
         "started_utc": datetime.datetime.now(datetime.UTC).isoformat(),
         "command_shape": plan.command_shape,
+        "diagnosis": diagnosis,
+        "diagnostics_warnings": diagnostics.warnings,
     }
+    summary_path.write_text(
+        _format_summary_artifact(
+            plan=plan,
+            diagnosis=diagnosis,
+            result=result,
+            diagnostics_warnings=diagnostics.warnings,
+        ),
+        encoding="utf-8",
+    )
+
+    return result

@@ -10,6 +10,7 @@ from signposter.doctor import (
     CheckStatus,
     check_config_examples_exist,
     check_docs_exist,
+    check_openclaw_runtime_hygiene,
     check_pytest_tool,
     check_python_version,
     check_reviewer_token_present,
@@ -97,6 +98,7 @@ def test_run_automation_doctor_checks_has_expected_checks():
     assert "git-status" in names
     assert "gh-auth" in names
     assert "openclaw-available" in names
+    assert "openclaw-runtime-hygiene" in names
     assert "reviewer-token" in names
     assert "venv" in names
 
@@ -120,3 +122,25 @@ def test_format_automation_doctor_report_hides_secret():
     assert "Signposter Automation Doctor" in out
     assert "No secrets were printed." in out
     assert "secret-token" not in out
+
+
+def test_openclaw_runtime_hygiene_warns_on_policy_drift():
+    diagnostics = type(
+        "Diag",
+        (),
+        {
+            "available": True,
+            "command_ok": True,
+            "warnings": ("fallback drift",),
+            "default_model": "openai/gpt-5.4",
+            "error": None,
+        },
+    )()
+
+    from unittest.mock import patch
+
+    with patch("signposter.doctor.gather_openclaw_runtime_diagnostics", return_value=diagnostics):
+        result = check_openclaw_runtime_hygiene()
+
+    assert result.status == CheckStatus.WARN
+    assert "drift" in result.message.lower()
