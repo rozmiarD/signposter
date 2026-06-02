@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import sys
 from unittest.mock import patch
+
+import pytest
 
 from signposter.cleanup import (
     CleanupPlan,
@@ -68,10 +71,11 @@ def test_cleanup_plan_ready_when_all_conditions_met():
 
 
 def test_cleanup_plan_completed_noop_when_worktree_absent():
-    """completed/no-op plan when worktree is already absent (not failed)."""
+    """completed/no-op plan when worktree and local branch are already absent."""
     with patch("signposter.cleanup._run_gh_pr_view") as mock_pr, \
          patch("signposter.cleanup.fetch_issue_context") as mock_ctx, \
-         patch("signposter.cleanup._worktree_exists", return_value=False):
+         patch("signposter.cleanup._worktree_exists", return_value=False), \
+         patch("signposter.cleanup._local_branch_exists", return_value=False):
         mock_pr.return_value = {
             "state": "MERGED",
             "headRefName": "work/issue-4-test-task-isolated-worker-readme-note",
@@ -83,6 +87,28 @@ def test_cleanup_plan_completed_noop_when_worktree_absent():
 
         assert plan.status == "completed"
         assert "Worktree already absent" in plan.notes[0]
+        assert "Local branch already absent" in plan.notes[1]
+
+
+def test_cleanup_plan_ready_when_worktree_absent_but_branch_exists():
+    """branch-only cleanup remains ready until the local branch is deleted."""
+    with patch("signposter.cleanup._run_gh_pr_view") as mock_pr, \
+         patch("signposter.cleanup.fetch_issue_context") as mock_ctx, \
+         patch("signposter.cleanup._worktree_exists", return_value=False), \
+         patch("signposter.cleanup._local_branch_exists", return_value=True):
+        mock_pr.return_value = {
+            "state": "MERGED",
+            "headRefName": "work/issue-4-test-task-isolated-worker-readme-note",
+            "body": "",
+        }
+        mock_ctx.return_value = {"state": "CLOSED", "labels": [{"name": "state:merged"}]}
+
+        plan = plan_cleanup_for_pr("ExatronOmega/signposter", 5)
+
+        assert plan.status == "ready"
+        assert plan.worktree_exists is False
+        assert plan.local_branch_exists is True
+        assert "Local branch is still present" in plan.notes[1]
 
 
 def test_cleanup_plan_blocked_when_pr_not_merged():
@@ -155,6 +181,8 @@ def test_cleanup_apply_dry_run_does_not_call_subprocess():
         result = apply_cleanup("ExatronOmega/signposter", 5, apply=False)
     mock_run.assert_not_called()
     assert result["mode"] == "dry_run"
+    assert result["would_execute"] is True
+    assert result["already_completed"] is False
     assert "DRY RUN" in format_cleanup_apply_dry_run(plan)
 
 
@@ -244,6 +272,63 @@ def test_cleanup_apply_deletes_branch_only_if_present():
 
         assert result["success"] is True
         assert any("deleted local branch" in r for r in result.get("results", []))
+
+
+def test_cleanup_apply_deletes_branch_when_worktree_already_absent():
+    """apply handles branch-only cleanup idempotently."""
+    plan = _make_plan(status="ready", worktree_exists=False, local_branch_exists=True)
+    calls: list[list[str]] = []
+
+    class Proc:
+        returncode = 0
+        stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return Proc()
+
+    with patch("signposter.cleanup.plan_cleanup_for_pr", return_value=plan), \
+         patch("signposter.cleanup._local_branch_exists", return_value=True), \
+         patch("signposter.cleanup.subprocess.run", side_effect=fake_run):
+
+        result = apply_cleanup("ExatronOmega/signposter", 5, apply=True)
+
+    assert result["success"] is True
+    assert result["branch_deleted"] is True
+    assert any("worktree already absent" in r for r in result.get("results", []))
+    assert calls == [["git", "branch", "-D", plan.local_branch]]
+
+
+def test_cli_cleanup_apply_dry_run_returns_blocked_exit_for_blocked_plan(
+    monkeypatch, capsys
+):
+    from signposter.cli import main
+
+    plan = _make_plan(status="blocked — PR is not merged")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "cleanup",
+            "apply",
+            "--repo",
+            "test/repo",
+            "--pr",
+            "5",
+        ],
+    )
+
+    with patch(
+        "signposter.cli.apply_cleanup",
+        return_value={"mode": "dry_run", "plan": plan, "would_execute": False},
+    ), pytest.raises(SystemExit) as exc:
+        main()
+
+    out = capsys.readouterr().out
+    assert exc.value.code == 1
+    assert "blocked — PR is not merged" in out
+    assert "DRY RUN: no local worktree was removed." in out
 
 
 def test_cleanup_apply_stops_before_branch_deletion_on_worktree_failure():
