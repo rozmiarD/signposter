@@ -6,8 +6,11 @@ External command checks are isolated and can be tested via the result structure.
 
 from __future__ import annotations
 
+import argparse
+
 from signposter.doctor import (
     CheckStatus,
+    build_validation_command_plan,
     check_config_examples_exist,
     check_docs_exist,
     check_openclaw_runtime_hygiene,
@@ -17,6 +20,7 @@ from signposter.doctor import (
     check_ruff_tool,
     check_virtualenv_active,
     format_automation_doctor_report,
+    format_validation_command_plan,
     run_automation_doctor_checks,
     run_doctor_checks,
 )
@@ -72,6 +76,45 @@ def test_ruff_tool_check_detects_venv_install():
     result = check_ruff_tool()
     assert result.status == CheckStatus.OK
     assert "ruff" in result.message.lower()
+
+
+def test_validation_command_plan_uses_changed_files_for_targeted_commands():
+    plan = build_validation_command_plan(
+        ["src/signposter/gate.py", "tests/test_gate.py", "tests/test_gate.py"]
+    )
+    out = format_validation_command_plan(plan)
+
+    assert plan.changed_files == ("src/signposter/gate.py", "tests/test_gate.py")
+    assert plan.targeted_ruff == "ruff check src/signposter/gate.py tests/test_gate.py"
+    assert plan.targeted_pytest == "python -m pytest tests/test_gate.py -q"
+    assert plan.full_ruff == "ruff check ."
+    assert plan.full_pytest == "python -m pytest tests/ -q"
+    assert "No validation command was executed." in out
+
+
+def test_validation_command_plan_defaults_without_changed_files():
+    plan = build_validation_command_plan()
+
+    assert plan.targeted_ruff == "ruff check ."
+    assert plan.targeted_pytest == "python -m pytest tests/ -q"
+
+
+def test_doctor_validation_cli_outputs_read_only_commands(capsys):
+    from signposter.cli import run_doctor
+
+    args = argparse.Namespace(
+        automation=False,
+        topic="validation",
+        changed_file=["tests/test_integration.py"],
+    )
+
+    exit_code = run_doctor(args)
+    out = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "Signposter Validation Commands" in out
+    assert "ruff check tests/test_integration.py" in out
+    assert "python -m pytest tests/test_integration.py -q" in out
 
 
 def test_reviewer_token_check_does_not_print_secret(monkeypatch):
