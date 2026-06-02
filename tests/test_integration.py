@@ -79,6 +79,25 @@ def test_integration_plan_blocks_when_issue_missing():
         assert "blocked — associated issue could not be detected" in plan.status
 
 
+def test_integration_plan_blocks_ambiguous_issue_linkage():
+    with patch("signposter.integration._fetch_pr_merge_details") as mock_pr, \
+         patch("signposter.integration._fetch_main_ci_status", return_value="pass"):
+        mock_pr.return_value = {
+            "number": 99,
+            "title": "ambiguous issue",
+            "state": "MERGED",
+            "baseRefName": "main",
+            "headRefName": "work/issue-4-xxx",
+            "mergeCommit": {"oid": "abc123"},
+            "body": "Related issue: #5",
+        }
+
+        plan = plan_integration_for_pr("test/repo", 99)
+
+    assert "blocked — associated issue link is ambiguous" in plan.status
+    assert plan.associated_issue is None
+
+
 def test_format_integration_plan_contains_key_sections():
     plan = IntegrationPlan(
         pr_number=5,

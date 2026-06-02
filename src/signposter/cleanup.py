@@ -6,12 +6,12 @@ Plan is always read-only. Apply is guarded by explicit --apply.
 
 from __future__ import annotations
 
-import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from signposter.pr_linkage import detect_pr_issue_linkage
 from signposter.review import _run_gh_pr_view
 from signposter.scan import fetch_issue_context
 
@@ -40,18 +40,7 @@ class CleanupPlan:
 
 def _extract_issue_number(head_branch: str, body: str | None) -> int | None:
     """Detect associated issue from branch convention (primary) or body (secondary)."""
-    m = re.search(r"work/issue-(\d+)", head_branch or "")
-    if m:
-        return int(m.group(1))
-
-    if body:
-        m = re.search(r"(?i)related\s+issue:\s*#?(\d+)", body)
-        if m:
-            return int(m.group(1))
-        m = re.search(r"(?i)issue\s*#?(\d+)", body)
-        if m:
-            return int(m.group(1))
-    return None
+    return detect_pr_issue_linkage(head_branch, body).associated_issue
 
 
 def _compute_expected_worktree(issue_number: int) -> str:
@@ -118,7 +107,8 @@ def plan_cleanup_for_pr(repo: str, pr_number: int) -> CleanupPlan:
     head = pr_data.get("headRefName", "") or ""
     body = pr_data.get("body") or ""
 
-    associated_issue = _extract_issue_number(head, body)
+    linkage = detect_pr_issue_linkage(head, body)
+    associated_issue = linkage.associated_issue
 
     issue_state: str | None = None
     has_state_merged_label = False
@@ -153,6 +143,8 @@ def plan_cleanup_for_pr(repo: str, pr_number: int) -> CleanupPlan:
     status = "ready"
     if pr_state != "MERGED":
         status = f"blocked — PR is not merged (state: {pr_state})"
+    elif linkage.ambiguous:
+        status = f"blocked — {linkage.reason}"
     elif associated_issue is None:
         status = "blocked — associated issue could not be detected from head branch"
     elif issue_state is None or issue_state.upper() != "CLOSED":

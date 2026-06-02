@@ -95,6 +95,20 @@ def test_cleanup_plan_blocked_when_pr_not_merged():
         assert "blocked — PR is not merged" in plan.status
 
 
+def test_cleanup_plan_blocks_ambiguous_issue_linkage():
+    with patch("signposter.cleanup._run_gh_pr_view") as mock_pr:
+        mock_pr.return_value = {
+            "state": "MERGED",
+            "headRefName": "work/issue-4-foo",
+            "body": "Related issue: #5",
+        }
+
+        plan = plan_cleanup_for_pr("ExatronOmega/signposter", 5)
+
+    assert "blocked — associated issue link is ambiguous" in plan.status
+    assert plan.associated_issue is None
+
+
 def test_cleanup_plan_blocked_when_issue_not_closed():
     """blocked when issue is not closed."""
     with patch("signposter.cleanup._run_gh_pr_view") as mock_pr, \

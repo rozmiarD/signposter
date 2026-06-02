@@ -7,7 +7,6 @@ No GitHub mutations of any kind.
 from __future__ import annotations
 
 import json
-import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,6 +15,7 @@ from typing import Any
 from signposter.comments import ensure_github_comment_body
 from signposter.gate import evaluate_ci_gate
 from signposter.labels import check_labels
+from signposter.pr_linkage import detect_pr_issue_linkage
 from signposter.review import _run_gh_pr_view
 from signposter.scan import fetch_issue_by_number, fetch_issue_context
 
@@ -45,20 +45,7 @@ class IntegrationPlan:
 
 def _extract_issue_number(head_branch: str, body: str | None) -> int | None:
     """Detect associated issue from branch convention or body."""
-    # Primary: work/issue-N-...
-    m = re.search(r"work/issue-(\d+)", head_branch or "")
-    if m:
-        return int(m.group(1))
-
-    # Secondary
-    if body:
-        m = re.search(r"(?i)related\s+issue:\s*#?(\d+)", body)
-        if m:
-            return int(m.group(1))
-        m = re.search(r"(?i)issue\s*#?(\d+)", body)
-        if m:
-            return int(m.group(1))
-    return None
+    return detect_pr_issue_linkage(head_branch, body).associated_issue
 
 
 def _get_workflow_state_from_labels(labels: list[str]) -> str | None:
@@ -230,7 +217,8 @@ def plan_integration_for_pr(repo: str, pr_number: int) -> IntegrationPlan:
     body = pr_data.get("body", "") or ""
     title = pr_data.get("title", "")
 
-    associated_issue = _extract_issue_number(head, body)
+    linkage = detect_pr_issue_linkage(head, body)
+    associated_issue = linkage.associated_issue
 
     # Default plan values
     issue_state = None
@@ -259,6 +247,8 @@ def plan_integration_for_pr(repo: str, pr_number: int) -> IntegrationPlan:
         status = f"blocked — PR is not merged (state: {pr_state})"
     elif not merge_commit:
         status = "blocked — merge commit missing"
+    elif linkage.ambiguous:
+        status = f"blocked — {linkage.reason}"
     elif associated_issue is None:
         status = "blocked — associated issue could not be detected"
     elif _is_already_integrated_plan(
