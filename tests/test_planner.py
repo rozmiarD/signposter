@@ -2896,6 +2896,52 @@ def test_build_planner_impact_from_status_reports_already_advanced_downstream() 
     assert "downstream tasks are already ready, active, or completed" in result["reasons"]
 
 
+def test_build_planner_impact_from_status_allows_optional_llm_for_reconcile() -> None:
+    downstream = [
+        {
+            "key": f"NEXT-00{index}",
+            "state": "open",
+            "github_issue": 20 + index,
+            "depends_on": ["MAIN-001"],
+            "side_task": False,
+        }
+        for index in range(1, 5)
+    ]
+    status = {
+        "tasks": [
+            {
+                "key": "MAIN-001",
+                "state": "merged",
+                "github_issue": 10,
+                "depends_on": [],
+                "side_task": False,
+            },
+            *downstream,
+        ]
+    }
+
+    result = build_planner_impact_from_status(
+        status,
+        issue=10,
+        manifest_path="/tmp/manifest.json",
+    )
+
+    assert result["status"] == "ready"
+    assert result["impact"]["score"] == 40
+    assert result["impact"]["decision"] == "requires_reconcile"
+    assert result["requires_llm_analysis"] is True
+    assert result["llm_reconcile"] == {
+        "allowed": True,
+        "default": "disabled",
+        "boundary": (
+            "optional only for requires_reconcile impact decisions after "
+            "deterministic graph evidence is shown"
+        ),
+        "reason": "impact is ambiguous enough for optional reconcile",
+    }
+    assert result["suggested_command"] is None
+
+
 def test_build_planner_impact_from_status_blocks_failed_downstream() -> None:
     status = {
         "tasks": [
@@ -2974,6 +3020,10 @@ def test_format_planner_impact_contains_score_decision_and_safety_notes(
     assert "advanceable downstream: WATCH-002" in output
     assert "side-task downstream: none" in output
     assert "blocked downstream: none" in output
+    assert "LLM reconcile:" in output
+    assert "allowed: false" in output
+    assert "default: disabled" in output
+    assert "deterministic decision is available" in output
     assert f"signposter planner advance --manifest {manifest_path} --issue 10 --dry-run" in output
     assert "No GitHub mutation was performed." in output
     assert "No manifest mutation was performed." in output
