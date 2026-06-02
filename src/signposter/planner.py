@@ -867,6 +867,13 @@ def apply_planner_seed_manifest(
     )
     repo = manifest.get("repo", "")
     issues = manifest.get("issues", [])
+    idempotence_errors = _validate_seed_manifest_idempotence(manifest)
+    if idempotence_errors:
+        return {
+            "status": "blocked",
+            "created": [],
+            "errors": idempotence_errors,
+        }
 
     missing_body_files = [
         issue["body_file"]
@@ -1051,6 +1058,7 @@ def prepare_planner_seed_manifest(
         existing=existing,
         expected=new_manifest,
     )
+    errors.extend(_validate_seed_manifest_idempotence(existing))
     if errors:
         return {
             "status": "blocked",
@@ -1093,6 +1101,42 @@ def _validate_seed_manifest_compatibility(
     expected_keys = [issue.get("key") for issue in expected.get("issues", [])]
     if existing_keys != expected_keys:
         errors.append("manifest issue key mismatch")
+
+    return errors
+
+
+def _validate_seed_manifest_idempotence(manifest: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    keys_seen: set[str] = set()
+    issues_by_number: dict[int, str] = {}
+
+    for issue in manifest.get("issues", []):
+        key = str(issue.get("key", "")).strip()
+        if not key:
+            errors.append("seed manifest contains an issue without a task key")
+            continue
+
+        if key in keys_seen:
+            errors.append(f"duplicate task key in seed manifest: {key}")
+        keys_seen.add(key)
+
+        github_issue = issue.get("github_issue")
+        if github_issue is None:
+            continue
+
+        try:
+            github_issue_number = int(github_issue)
+        except (TypeError, ValueError):
+            errors.append(f"{key}: github_issue must be an integer")
+            continue
+
+        previous_key = issues_by_number.get(github_issue_number)
+        if previous_key is not None and previous_key != key:
+            errors.append(
+                f"duplicate GitHub issue mapping: #{github_issue_number} "
+                f"is assigned to {previous_key} and {key}"
+            )
+        issues_by_number[github_issue_number] = key
 
     return errors
 

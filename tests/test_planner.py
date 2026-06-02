@@ -971,6 +971,63 @@ def test_apply_planner_seed_manifest_blocks_missing_body_files(tmp_path: Path) -
     assert runner.calls == []
 
 
+def test_apply_planner_seed_manifest_blocks_duplicate_task_key_before_create(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    write_planner_seed_issue_bodies(seed_plan, body_dir)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["issues"].append(dict(manifest["issues"][0]))
+    write_planner_seed_manifest(manifest, manifest_path)
+    runner = _FakeGhIssueCreateRunner()
+
+    result = apply_planner_seed_manifest(manifest_path, runner)
+
+    assert result["status"] == "blocked"
+    assert result["created"] == []
+    assert result["errors"] == ["duplicate task key in seed manifest: WATCH-001"]
+    assert runner.calls == []
+
+
+def test_apply_planner_seed_manifest_blocks_duplicate_github_issue_mapping(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    write_planner_seed_issue_bodies(seed_plan, body_dir)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["issues"][0]["github_issue"] = 101
+    manifest["issues"][1]["github_issue"] = 101
+    write_planner_seed_manifest(manifest, manifest_path)
+    runner = _FakeGhIssueCreateRunner()
+
+    result = apply_planner_seed_manifest(manifest_path, runner)
+
+    assert result["status"] == "blocked"
+    assert result["created"] == []
+    assert result["errors"] == [
+        "duplicate GitHub issue mapping: #101 is assigned to WATCH-001 and WATCH-002"
+    ]
+    assert runner.calls == []
+
+
 def test_apply_planner_seed_manifest_stops_on_runner_failure(tmp_path: Path) -> None:
     plan_path = tmp_path / "plan.json"
     body_dir = tmp_path / "issue-bodies"
@@ -1236,6 +1293,36 @@ def test_prepare_planner_seed_manifest_blocks_incompatible_manifest(
 
     assert result["status"] == "blocked"
     assert result["errors"] == ["manifest repo mismatch"]
+    assert result["reused_existing"] is True
+
+
+def test_prepare_planner_seed_manifest_blocks_duplicate_existing_task_key(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["issues"].append(dict(manifest["issues"][0]))
+    write_planner_seed_manifest(manifest, manifest_path)
+
+    result = prepare_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+        manifest_path=manifest_path,
+    )
+
+    assert result["status"] == "blocked"
+    assert "duplicate task key in seed manifest: WATCH-001" in result["errors"]
     assert result["reused_existing"] is True
 
 
