@@ -35,6 +35,8 @@ class BackendStatusReport:
     default_backend: str
     backends: tuple[BackendHealth, ...]
     fallback_order: tuple[str, ...]
+    source_modules: tuple[str, ...]
+    command_surfaces: tuple[str, ...]
     notes: tuple[str, ...]
 
 
@@ -52,6 +54,20 @@ def build_backend_status_report(
         default_backend=selected or DEFAULT_EXECUTION_BACKEND,
         backends=(openclaw, codex),
         fallback_order=("openclaw", "codex-cli"),
+        source_modules=(
+            "signposter.execution_backend: backend resolution and command shape",
+            "signposter.codex_cli_backend: Codex CLI execution adapter",
+            "signposter.openclaw_runtime: legacy OpenClaw execution adapter",
+            "signposter.role_policy: role/model/reasoning registry",
+            "signposter.role_routing: deterministic stage-to-role routing",
+        ),
+        command_surfaces=(
+            "signposter run --backend {openclaw,codex-cli}",
+            "signposter review execute --backend {openclaw,codex-cli}",
+            "signposter roles status",
+            "signposter roles validate",
+            "signposter backend status",
+        ),
         notes=(
             "Read-only backend status only.",
             "No prompt was executed.",
@@ -135,6 +151,25 @@ def format_backend_status_report(report: BackendStatusReport) -> str:
     lines.extend(
         [
             "",
+            "Audit:",
+            f"  current default backend: {report.default_backend}",
+            "  codex cli support: "
+            + _backend_status_by_name(report.backends, "codex-cli"),
+            "",
+            "Source modules:",
+        ]
+    )
+    lines.extend(f"  {module}" for module in report.source_modules)
+    lines.extend(
+        [
+            "",
+            "Command surfaces:",
+        ]
+    )
+    lines.extend(f"  {surface}" for surface in report.command_surfaces)
+    lines.extend(
+        [
+            "",
             "Fallback reporting:",
             "  signposter artifact record-bug --summary \"backend failure\" --status open --apply",
             "",
@@ -143,3 +178,10 @@ def format_backend_status_report(report: BackendStatusReport) -> str:
     )
     lines.extend(f"  {note}" for note in report.notes)
     return "\n".join(lines)
+
+
+def _backend_status_by_name(backends: tuple[BackendHealth, ...], name: str) -> str:
+    for backend in backends:
+        if backend.name == name:
+            return backend.status
+    return "unknown"
