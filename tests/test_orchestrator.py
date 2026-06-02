@@ -72,7 +72,7 @@ def test_orchestrator_next_blocks_execute_without_flag() -> None:
     assert result.status == "blocked"
     assert result.would_execute is True
     assert result.would_mutate is False
-    assert result.stop_reason == "OpenClaw execution requires explicit --execute"
+    assert result.stop_reason == "Execution backend requires explicit --execute"
 
 
 def test_orchestrator_next_allows_execute_planning_with_flag() -> None:
@@ -209,7 +209,7 @@ def test_cli_orchestrator_next_uses_read_only_surface(
     captured = capsys.readouterr()
     assert exc_info.value.code == 1
     assert "Signposter Orchestrator Next — Issue #46" in captured.out
-    assert "OpenClaw execution requires explicit --execute" in captured.out
+    assert "Execution backend requires explicit --execute" in captured.out
     assert "No GitHub mutation was performed." in captured.out
 
 
@@ -433,7 +433,7 @@ def test_orchestrator_step_blocks_execute_without_flag() -> None:
         )
 
     assert result.status == "blocked"
-    assert result.stop_reason == "OpenClaw execution requires explicit --execute"
+    assert result.stop_reason == "Execution backend requires explicit --execute"
 
 
 def test_orchestrator_loop_stops_after_dry_run_step() -> None:
@@ -763,7 +763,7 @@ def test_format_orchestrator_run_next_summary_is_concise() -> None:
         "selected: #55",
         "action: execute-worker",
         "status: blocked",
-        "stop: OpenClaw execution requires explicit --execute",
+        "stop: Execution backend requires explicit --execute",
     ]
     assert "command:" not in out
     assert "Notes:" not in out
@@ -833,7 +833,7 @@ def test_orchestrator_run_next_apply_blocks_execute_without_flag() -> None:
     assert result.step is not None
     assert result.step.status == "blocked"
     assert result.status == "blocked"
-    assert result.step.stop_reason == "OpenClaw execution requires explicit --execute"
+    assert result.step.stop_reason == "Execution backend requires explicit --execute"
 
 
 def test_orchestrator_run_next_loop_continues_selected_issue_after_claim() -> None:
@@ -886,7 +886,7 @@ def test_orchestrator_run_next_loop_continues_selected_issue_after_claim() -> No
         "execute-worker",
     ]
     assert result.status == "stopped"
-    assert result.stop_reason == "OpenClaw execution requires explicit --execute"
+    assert result.stop_reason == "Execution backend requires explicit --execute"
 
 
 def test_orchestrator_run_next_loop_resumes_single_active_issue() -> None:
@@ -1376,7 +1376,7 @@ def test_format_orchestrator_run_next_loop_summary_is_concise() -> None:
         "selected: #57",
         "action: execute-worker",
         "status: stopped",
-        "stop: OpenClaw execution requires explicit --execute",
+        "stop: Execution backend requires explicit --execute",
         "stop_category: blocked-lifecycle",
         "stop_tolerated: no",
         "steps: 1",
@@ -1423,7 +1423,7 @@ def test_write_orchestrator_run_next_loop_transcript_is_local_and_bounded(tmp_pa
     assert "selected: #57" in out
     assert "action: execute-worker" in out
     assert "status: stopped" in out
-    assert "stop: OpenClaw execution requires explicit --execute" in out
+    assert "stop: Execution backend requires explicit --execute" in out
     assert "1. selected=#57 action=execute-worker status=blocked" in out
     assert "local artifact only" in out
     assert "no GitHub mutation was performed by transcript writing" in out
@@ -1442,7 +1442,7 @@ def test_orchestrator_step_extracts_execute_diagnosis_from_summary_artifact(tmp_
                 "# Signposter Execution Summary",
                 "**Execution Status:** runtime-stall",
                 (
-                    "**Execution Reason:** OpenClaw runtime stalled without producing "
+                    "**Execution Reason:** Codex CLI runtime stalled without producing "
                     "a usable bounded result."
                 ),
             ]
@@ -1499,7 +1499,7 @@ def test_orchestrator_step_plans_worker_fallback_for_unsupported_model(tmp_path)
             [
                 "# Signposter Execution Summary",
                 "**Execution Status:** unsupported-model",
-                "**Execution Reason:** Selected model is not available in OpenClaw runtime.",
+                "**Execution Reason:** Selected model is not available in Codex CLI runtime.",
             ]
         )
         + "\n",
@@ -1531,9 +1531,65 @@ def test_orchestrator_step_plans_worker_fallback_for_unsupported_model(tmp_path)
     out = format_orchestrator_step(result)
 
     assert result.diagnosis_status == "unsupported-model"
+    assert "Takeover guidance:" in out
+    assert "inspect raw and summary artifacts" in out
+    assert "resume the existing worktree" in out
     assert "Fallback next commands:" in out
     assert "signposter artifact write-worker-summary --repo example/repo --issue 58 --apply" in out
     assert "signposter gate --repo example/repo --issue 58" in out
+
+
+def test_orchestrator_step_extracts_codex_cli_summary_status_format(tmp_path) -> None:
+    lifecycle_next = _next(
+        issue_number=59,
+        action="execute-worker",
+        command="signposter run --repo example/repo --issue 59 --execute --worktree",
+    )
+    summary = tmp_path / "issue-59-worker.summary.md"
+    summary.write_text(
+        "\n".join(
+            [
+                "# Signposter Codex CLI Execution Summary",
+                "**Backend:** codex-cli",
+                "**Status:** unsupported-model",
+                "**Reason:** Codex CLI exited with code 1; classified as unsupported-model.",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    proc = type(
+        "Proc",
+        (),
+        {
+            "returncode": 1,
+            "stdout": (
+                "Execution completed for issue #59\n"
+                "  Exit code: 1\n"
+                "  Raw output: artifacts/runs/issue-59-worker.raw.txt\n"
+                f"  Summary:   {summary}\n"
+            ),
+            "stderr": "",
+        },
+    )()
+
+    with patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next):
+        result = run_orchestrator_step(
+            "example/repo",
+            issue=59,
+            apply=True,
+            execute=True,
+            run_command=Mock(return_value=proc),
+        )
+
+    out = format_orchestrator_step(result)
+
+    assert result.diagnosis_status == "unsupported-model"
+    assert "classified as unsupported-model" in (result.diagnosis_reason or "")
+    assert "raw artifact: artifacts/runs/issue-59-worker.raw.txt" in out
+    assert "summary artifact:" in out
+    assert "Takeover guidance:" in out
+    assert "signposter artifact write-worker-summary --repo example/repo --issue 59 --apply" in out
 
 
 def test_orchestrator_step_plans_review_fallback_for_runtime_stall(tmp_path) -> None:
@@ -1552,7 +1608,7 @@ def test_orchestrator_step_plans_review_fallback_for_runtime_stall(tmp_path) -> 
                 "# Signposter Reviewer Summary",
                 "**Execution Status:** runtime-stall",
                 (
-                    "**Execution Reason:** OpenClaw runtime stalled without producing "
+                    "**Execution Reason:** Codex CLI runtime stalled without producing "
                     "a usable bounded result."
                 ),
             ]
@@ -1602,7 +1658,9 @@ def test_write_orchestrator_transcript_includes_execute_diagnosis(tmp_path) -> N
             "status": "failed",
             "stop_reason": "step command failed",
             "diagnosis_status": "timeout",
-            "diagnosis_reason": "OpenClaw execution exceeded the bounded subprocess timeout (25s).",
+            "diagnosis_reason": (
+                "Codex CLI execution exceeded the bounded subprocess timeout (25s)."
+            ),
             "raw_artifact_path": "artifacts/runs/issue-57-worker.raw.txt",
             "summary_artifact_path": "artifacts/runs/issue-57-worker.summary.md",
             "fallback_commands": (
@@ -1630,7 +1688,7 @@ def test_write_orchestrator_transcript_includes_execute_diagnosis(tmp_path) -> N
 
     assert "diagnosis_status=timeout" in out
     assert (
-        "diagnosis_reason=OpenClaw execution exceeded the bounded subprocess timeout (25s)."
+        "diagnosis_reason=Codex CLI execution exceeded the bounded subprocess timeout (25s)."
         in out
     )
     assert "raw_artifact=artifacts/runs/issue-57-worker.raw.txt" in out
@@ -1818,7 +1876,7 @@ def test_run_orchestrator_autonomy_smoke_writes_summary_and_transcript(tmp_path)
     assert "Signposter Autonomy Smoke" in text
     assert "selected: AUTO-001 -> #55" in text
     assert "No GitHub mutation was performed." in text
-    assert "No OpenClaw execution was performed." in text
+    assert "No execution backend was started." in text
 
 
 def test_autonomy_smoke_cli_writes_artifact(

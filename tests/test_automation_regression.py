@@ -63,7 +63,7 @@ def test_regression_run_next_loop_preserves_execute_guard() -> None:
     out = format_orchestrator_run_next_loop_summary(result)
     assert result.status == "stopped"
     assert result.stop_category == "blocked-lifecycle"
-    assert "OpenClaw execution requires explicit --execute" in out
+    assert "Execution backend requires explicit --execute" in out
 
 
 def test_regression_pr_tail_dry_run_does_not_execute_command() -> None:
