@@ -1,6 +1,6 @@
 """Reviewer-agent PR review planning (planning / dry-run only).
 
-HARDENING-014: Provide a safe planning surface for OpenClaw reviewer
+HARDENING-014: Provide a safe planning surface for reviewer
 to inspect pull requests created from Signposter worker branches.
 """
 
@@ -674,7 +674,7 @@ def build_review_prompt(
 - role identity: {plan.selected_role_name}
 - selected model: {plan.selected_model}
 - selected reasoning effort: {plan.selected_reasoning_effort}
-- OpenClaw agent/profile: {plan.reviewer_profile}
+- Execution agent/profile: {plan.reviewer_profile}
 - role selection reason: {plan.role_selection_reason}
 
 ## Changed Files Excerpt (from GitHub metadata, bounded)

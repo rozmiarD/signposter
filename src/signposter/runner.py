@@ -1,6 +1,6 @@
 """Signposter runner planner (dry-run only).
 
-Determines how a selected claimable item would be executed via OpenClaw.
+Determines how a selected claimable item would be executed via a backend.
 """
 
 from __future__ import annotations
@@ -959,7 +959,7 @@ def render_prompt(
 - role identity: {plan.selected_role_name}
 - selected model: {plan.selected_model}
 - selected reasoning effort: {plan.selected_reasoning_effort}
-- OpenClaw agent/profile: {plan.selected_openclaw_agent}
+- Execution agent/profile: {plan.selected_openclaw_agent}
 - role selection reason: {plan.role_selection_reason}
 
 ## Private Repository Rule
@@ -1044,7 +1044,7 @@ def _render_compact_worker_prompt(
 - role identity: {plan.selected_role_name}
 - selected model: {plan.selected_model}
 - selected reasoning effort: {plan.selected_reasoning_effort}
-- OpenClaw agent/profile: {plan.selected_openclaw_agent}
+- Execution agent/profile: {plan.selected_openclaw_agent}
 - role selection reason: {plan.role_selection_reason}
 
 ## Issue Body
@@ -1058,7 +1058,7 @@ def _render_compact_worker_prompt(
 - Implement only this scoped issue.
 - Do not mutate GitHub unless a later command explicitly asks.
 - Do not commit unless explicitly instructed.
-- Keep raw OpenClaw output local under artifacts/runs/.
+- Keep raw backend output local under artifacts/runs/.
 - Report changed files, validation, safety notes, and remaining risks.
 - If uncertain, state the uncertainty explicitly instead of guessing.
 
@@ -1068,7 +1068,7 @@ def _render_compact_worker_prompt(
 ## Validation
 - Run targeted validation for changed files.
 - Run full validation when risk or shared behavior warrants it.
-- If OpenClaw/provider execution is unavailable, use the manual artifact fallback.
+- If the selected backend/provider execution is unavailable, use the manual artifact fallback.
 """
 
 
@@ -1106,7 +1106,7 @@ def _render_compact_planner_prompt(
 - role identity: {plan.selected_role_name}
 - selected model: {plan.selected_model}
 - selected reasoning effort: {plan.selected_reasoning_effort}
-- OpenClaw agent/profile: {plan.selected_openclaw_agent}
+- Execution agent/profile: {plan.selected_openclaw_agent}
 - role selection reason: {plan.role_selection_reason}
 
 ## Issue Body
@@ -1498,7 +1498,7 @@ def execute_plan(
     allow_dirty: bool = False,
     worktree_cwd: str | None = None,
 ) -> dict:
-    """Execute the runner plan using OpenClaw (local only).
+    """Execute the runner plan using the selected backend (local only).
 
     Safety: This function assumes the item is already in an executable state
     (e.g. state:active). It does not perform claims.
