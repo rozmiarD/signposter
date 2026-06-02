@@ -517,6 +517,88 @@ PASS — scoped no-op worker task completed with validation evidence.
     assert decision.proposed_transition == "state:active → state:done"
 
 
+def test_ci_gate_passes_validated_noop_with_structured_unchanged_tree_evidence():
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+# Signposter Execution Summary
+
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+## Scoped completion evidence
+
+Validated no-op completion: requested behavior already exists.
+The existing implementation provides deterministic terminal-friendly output.
+Existing ready output is deterministic and terminal-friendly.
+Existing blocked output is deterministic and terminal-friendly.
+
+Changed files: none
+
+## Validation evidence
+
+Targeted validation passed:
+- ruff check src/signposter/cli.py tests/test_lifecycle.py
+- pytest tests/test_lifecycle.py -q
+
+Full validation passed:
+- ruff check .
+- pytest tests/ -q
+
+Manual CLI smoke passed.
+
+## Safety
+
+No GitHub mutation was performed by the implemented command.
+No OpenClaw execution was performed by the implemented command.
+No manifest mutation was performed.
+No unrelated files were changed.
+"""
+
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "pass"
+    assert "worktree had no file changes" in decision.reason
+
+
+def test_ci_gate_blocks_noop_without_unchanged_tree_evidence():
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+Validated no-op completion: requested behavior already exists.
+The existing implementation provides deterministic terminal-friendly output.
+Existing ready output is deterministic and terminal-friendly.
+Existing blocked output is deterministic and terminal-friendly.
+
+Targeted validation passed:
+- ruff check src/signposter/cli.py tests/test_lifecycle.py
+- pytest tests/test_lifecycle.py -q
+
+Full validation passed:
+- ruff check .
+- pytest tests/ -q
+
+Manual CLI smoke passed.
+
+No GitHub mutation was performed by the implemented command.
+No OpenClaw execution was performed by the implemented command.
+No manifest mutation was performed.
+No unrelated files were changed.
+"""
+
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "needs-work"
+    assert "validated no-op completion" not in decision.reason
+
+
 def test_ci_gate_blocks_noop_without_validation():
     """No-op claims without validation/smoke evidence must remain blocked."""
     from signposter.gate import evaluate_ci_gate
