@@ -1274,6 +1274,31 @@ def _planner_run_reconcile_hints(next_plan: dict[str, Any]) -> list[str]:
     return hints
 
 
+def _planner_run_reconcile_policy(
+    next_plan: dict[str, Any],
+    advance_candidates: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Return token-efficient reconcile boundaries for planner run output."""
+    blocked = next_plan.get("status") == "blocked"
+    has_advance = bool(advance_candidates)
+    escalation = "not required"
+    if blocked:
+        escalation = "blocked — deterministic stop before mutation"
+    elif has_advance:
+        escalation = "deterministic advance available"
+
+    return {
+        "mode": "deterministic-first",
+        "default_llm_analysis": False,
+        "escalation": escalation,
+        "boundary": (
+            "LLM/human reconcile only for requires_reconcile impact decisions "
+            "or ambiguous DAG edits"
+        ),
+        "token_policy": "planner run/advance/impact use zero LLM tokens by default",
+    }
+
+
 def _planner_impact_level(score: int) -> str:
     """Map deterministic impact score to a compact level."""
     if score >= 60:
@@ -1460,6 +1485,7 @@ def build_planner_run_plan_from_status(
         "next": next_plan,
         "step": step_plan,
         "advance_candidates": advance_candidates,
+        "reconcile_policy": _planner_run_reconcile_policy(next_plan, advance_candidates),
         "requires_llm_analysis": any(
             candidate.get("requires_llm_analysis", False)
             for candidate in advance_candidates
@@ -1557,6 +1583,20 @@ def format_planner_run_plan(result: dict[str, Any]) -> str:
             )
     else:
         lines.append("  none")
+
+    policy = result.get("reconcile_policy", {})
+    lines.extend(
+        [
+            "",
+            "Reconcile policy:",
+            f"  mode: {policy.get('mode', 'deterministic-first')}",
+            "  default LLM analysis: "
+            f"{str(policy.get('default_llm_analysis', False)).lower()}",
+            f"  escalation: {policy.get('escalation', 'not required')}",
+            f"  boundary: {policy.get('boundary', 'not specified')}",
+            f"  token policy: {policy.get('token_policy', 'zero LLM tokens by default')}",
+        ]
+    )
 
     lines.extend(
         [
