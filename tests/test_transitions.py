@@ -78,7 +78,7 @@ def test_perform_transition_mutation_returns_commands():
     assert "--remove-label state:active,gate:ci" in commands[0]
     assert "--add-label state:ready" in commands[0]
     assert "gh issue comment 42" in commands[1]
-    assert "**Signposter:** released task back to queue." in commands[1]
+    assert "**Signposter:** released task." in commands[1]
     assert "`state:active → state:ready`" in commands[1]
 
 
@@ -121,6 +121,6 @@ def test_perform_transition_mutation_fail_comment_includes_removed_gate():
 
     assert len(commands) == 2
     assert "gh issue comment 99" in commands[1]
-    assert "**Signposter:** marked task as failed." in commands[1]
+    assert "**Signposter:** marked task failed." in commands[1]
     assert "`state:active → state:failed`" in commands[1]
     assert "removed gate:*" in commands[1]
