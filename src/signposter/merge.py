@@ -531,7 +531,8 @@ def apply_merge(
         return {
             "mode": "dry_run",
             "plan": plan,
-            "command": plan.command_preview,
+            "command": plan.command_preview if plan.status == "ready" else "",
+            "would_execute": plan.status == "ready",
         }
 
     # Mutation path - extremely guarded
