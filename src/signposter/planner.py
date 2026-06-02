@@ -1343,11 +1343,20 @@ def apply_planner_advance_plan(
 
 def format_planner_advance_apply_result(result: dict[str, Any]) -> str:
     """Format guarded planner advance apply result."""
+    status = str(result.get("status", "unknown"))
     lines = [
         "Signposter Planner Advance Apply",
         "",
         "Status:",
-        f"  {result['status']}",
+        f"  {status}",
+        "",
+        "Status detail:",
+        (
+            "  applied — GitHub label mutations listed below were executed because "
+            "--apply was provided."
+            if status == "applied"
+            else "  blocked — no GitHub label mutation was executed."
+        ),
     ]
 
     if result.get("promoted"):
@@ -1371,6 +1380,7 @@ def format_planner_advance_apply_result(result: dict[str, Any]) -> str:
         [
             "",
             "Notes:",
+            "  Issue closure was not performed.",
             "  No manifest mutation was performed.",
             "  No OpenClaw execution was performed.",
             "  No LLM analysis was performed.",
@@ -1670,11 +1680,20 @@ def build_planner_advance_plan_from_status(
 def format_planner_advance_plan(result: dict[str, Any]) -> str:
     """Format a dry-run planner advance plan."""
     issue = result["issue"]
+    status = str(result.get("status", "unknown"))
+    status_detail = (
+        "ready — dry-run only; use planner advance --apply to add listed labels"
+        if status == "ready"
+        else "blocked — dry-run only; do not run apply until reasons are resolved"
+    )
     lines = [
         f"Signposter Planner Advance — Issue #{issue}",
         "",
         "Status:",
-        f"  {result['status']}",
+        f"  {status}",
+        "",
+        "Status detail:",
+        f"  {status_detail}",
     ]
 
     source_task = result.get("source_task")
@@ -1701,6 +1720,7 @@ def format_planner_advance_plan(result: dict[str, Any]) -> str:
     lines.extend(["", "Planned GitHub mutations:"])
     mutations = result.get("planned_github_mutations", [])
     if mutations:
+        lines.append("  Preview only; these commands were not executed.")
         lines.extend(f"  {mutation}" for mutation in mutations)
     else:
         lines.append("  none")
@@ -1720,8 +1740,9 @@ def format_planner_advance_plan(result: dict[str, Any]) -> str:
         [
             "",
             "Notes:",
-            "  Dry-run only.",
+            "  Dry-run only; command previews were not executed.",
             "  No GitHub mutation was performed.",
+            "  No issue was closed.",
             "  No manifest mutation was performed.",
             "  No OpenClaw execution was performed.",
             "  No LLM analysis was performed.",
