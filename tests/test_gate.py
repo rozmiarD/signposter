@@ -12,6 +12,7 @@ import pytest
 from signposter.gate import (
     _is_already_integrated_issue,
     evaluate_gate,
+    evaluate_gate_for_complete,
     format_gate_report,
     run_gate_dry_run,
 )
@@ -133,6 +134,51 @@ def test_run_gate_dry_run_returns_not_applicable_for_integrated_issue():
     assert result["status"] == "completed"
     assert "No gate action is required." in result["notes"]
     assert "No GitHub mutation was performed." in result["notes"]
+
+
+def test_run_gate_dry_run_blocks_malformed_worker_artifact(tmp_path):
+    summary = tmp_path / "issue-72-worker.summary.md"
+    summary.write_text("short summary\n**Exit Code:** 0\n", encoding="utf-8")
+    fake_issue = {
+        "number": 72,
+        "title": "Worker artifact check",
+        "state": "OPEN",
+        "labels": ["state:active", "gate:ci", "phase:build"],
+    }
+
+    with patch("signposter.gate.fetch_issue_state", return_value=fake_issue):
+        result = run_gate_dry_run("test/repo", 72, summary_path=summary)
+
+    output = format_gate_report(result)
+
+    assert result["decision"] == "needs-work"
+    assert "Worker artifact preflight blocked" in result["reason"]
+    assert result["valid_for_gate"] is False
+    assert "Worker artifact preflight:" in output
+    assert "summary artifact is missing required fields" in output
+    assert "guidance:" in output
+
+
+def test_complete_gate_blocks_malformed_worker_artifact(tmp_path):
+    summary = tmp_path / "issue-72-worker.summary.md"
+    summary.write_text("short summary\n**Exit Code:** 0\n", encoding="utf-8")
+    fake_issue = {
+        "number": 72,
+        "title": "Worker artifact check",
+        "state": "OPEN",
+        "labels": ["state:active", "gate:ci", "phase:build"],
+    }
+
+    with (
+        patch("signposter.gate.fetch_issue_state", return_value=fake_issue),
+        patch("signposter.cli._find_latest_summary_for_issue", return_value=str(summary)),
+    ):
+        passes, decision, reason, gate_type = evaluate_gate_for_complete("test/repo", 72)
+
+    assert passes is False
+    assert decision == "needs-work"
+    assert gate_type == "ci"
+    assert "Worker artifact preflight blocked" in reason
 
 
 def test_format_gate_report_for_already_integrated_issue():

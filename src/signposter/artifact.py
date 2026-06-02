@@ -38,6 +38,10 @@ class WorkerArtifactValidation:
     missing: list[str]
     stale_signal: str | None
     notes: list[str]
+    raw_path: str | None = None
+    raw_exists: bool = False
+    raw_stale_signal: str | None = None
+    guidance: list[str] | None = None
 
 
 def build_worker_summary(
@@ -318,12 +322,30 @@ def validate_worker_summary_artifact(
                 "No GitHub mutation was performed.",
                 "No OpenClaw execution was performed.",
             ],
+            raw_path=str(_worker_raw_path_for_summary(path)),
+            raw_exists=False,
+            raw_stale_signal=None,
+            guidance=[
+                "write a parser-compatible worker summary before gate or complete",
+                "keep raw backend output local when backend execution produced one",
+            ],
         )
 
     text = path.read_text(encoding="utf-8")
     stale_signal = find_stale_or_failover_signal(text)
     missing = _missing_worker_summary_fields(text)
-    status = "pass" if not missing and stale_signal is None else "blocked"
+    raw_path = _worker_raw_path_for_summary(path)
+    raw_exists = raw_path.exists()
+    raw_stale_signal = (
+        find_stale_or_failover_signal(raw_path.read_text(encoding="utf-8"))
+        if raw_exists
+        else None
+    )
+    status = (
+        "pass"
+        if not missing and stale_signal is None and raw_stale_signal is None
+        else "blocked"
+    )
 
     return WorkerArtifactValidation(
         issue=issue,
@@ -337,7 +359,44 @@ def validate_worker_summary_artifact(
             "No GitHub mutation was performed.",
             "No OpenClaw execution was performed.",
         ],
+        raw_path=str(raw_path),
+        raw_exists=raw_exists,
+        raw_stale_signal=raw_stale_signal,
+        guidance=_worker_artifact_guidance(
+            missing=missing,
+            summary_signal=stale_signal,
+            raw_signal=raw_stale_signal,
+            raw_exists=raw_exists,
+        ),
     )
+
+
+def _worker_raw_path_for_summary(summary_path: Path) -> Path:
+    name = summary_path.name
+    if name.endswith(".summary.md"):
+        return summary_path.with_name(name.removesuffix(".summary.md") + ".raw.txt")
+    return summary_path.with_name(f"issue-{summary_path.stem}-worker.raw.txt")
+
+
+def _worker_artifact_guidance(
+    *,
+    missing: list[str],
+    summary_signal: str | None,
+    raw_signal: str | None,
+    raw_exists: bool,
+) -> list[str]:
+    guidance: list[str] = []
+    if missing:
+        guidance.append("repair worker summary fields before gate or complete")
+    if summary_signal or raw_signal:
+        guidance.append(
+            "preserve unsafe backend output separately and provide clean manual evidence"
+        )
+    if not raw_exists:
+        guidance.append("raw output artifact not found; keep raw local for backend runs")
+    if not guidance:
+        guidance.append("worker artifact contract is ready for gate and complete")
+    return guidance
 
 
 def _missing_worker_summary_fields(text: str) -> list[str]:
@@ -369,12 +428,27 @@ def format_worker_artifact_validation(result: WorkerArtifactValidation) -> str:
         f"  {result.status}",
     ]
     if result.stale_signal:
-        lines.extend(["", "Unsafe marker:", f"  {result.stale_signal}"])
+        lines.extend(["", "Summary unsafe marker:", f"  {result.stale_signal}"])
+    if result.raw_path:
+        lines.extend(
+            [
+                "",
+                "Raw artifact:",
+                f"  path: {result.raw_path}",
+                f"  exists: {'yes' if result.raw_exists else 'no'}",
+            ]
+        )
+    if result.raw_stale_signal:
+        lines.extend(["", "Raw unsafe marker:", f"  {result.raw_stale_signal}"])
     lines.extend(["", "Missing:"])
     if result.missing:
         lines.extend(f"  - {item}" for item in result.missing)
     else:
         lines.append("  none")
+    guidance = result.guidance or []
+    if guidance:
+        lines.extend(["", "Guidance:"])
+        lines.extend(f"  - {item}" for item in guidance)
     lines.extend(["", "Notes:"])
     lines.extend(f"  {note}" for note in result.notes)
     return "\n".join(lines)
