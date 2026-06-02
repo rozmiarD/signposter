@@ -76,7 +76,7 @@ class RunnerPlan:
     proposed_prompt_path: str
     proposed_command_shape: str
     reason: str
-    backend_reason: str = "default Signposter execution backend"
+    backend_reason: str = "default Codex CLI execution backend"
     backend_execution_supported: bool = True
     backend_notes: tuple[str, ...] = ()
     selected_role_name: str = "WORKER_CODE"
@@ -519,7 +519,10 @@ def main() -> int:
     parser.add_argument(
         "--execute",
         action="store_true",
-        help="Run the OpenClaw agent locally for the selected item (explicit, read-only on GitHub)",
+        help=(
+            "Run the selected backend locally for the selected item "
+            "(explicit, read-only on GitHub)"
+        ),
     )
     parser.add_argument(
         "--limit",
@@ -535,7 +538,7 @@ def main() -> int:
     parser.add_argument(
         "--backend",
         choices=["openclaw", "codex-cli"],
-        help="Execution backend to plan for; default is openclaw or SIGNPOSTER_EXECUTION_BACKEND",
+        help="Execution backend to plan for; default is codex-cli or SIGNPOSTER_EXECUTION_BACKEND",
     )
     args = parser.parse_args()
 
