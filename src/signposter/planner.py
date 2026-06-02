@@ -2292,6 +2292,9 @@ def build_planner_status(
         state = "unseeded"
         github_state: str | None = None
         workflow_state: str | None = None
+        manifest_workflow_state = _workflow_state_from_manifest_labels(
+            issue.get("labels", [])
+        )
         if github_issue is not None:
             snapshot = issue_states.get(int(github_issue), "unknown")
             if isinstance(snapshot, dict):
@@ -2300,6 +2303,15 @@ def build_planner_status(
                 state = str(snapshot.get("state", "")).lower() or "unknown"
             else:
                 state = str(snapshot).lower()
+                if state == "open":
+                    github_state = "open"
+                    if manifest_workflow_state:
+                        workflow_state = manifest_workflow_state
+                elif state == "closed":
+                    github_state = "closed"
+                elif state in ALLOWED_TASK_STATUSES:
+                    workflow_state = state
+                    github_state = "closed" if state == "merged" else "open"
 
         tasks.append(
             {
@@ -2345,6 +2357,17 @@ def build_planner_status(
             "No task execution was performed.",
         ],
     }
+
+
+def _workflow_state_from_manifest_labels(labels: list[Any]) -> str | None:
+    for label in labels:
+        name = str(label).strip().lower()
+        if not name.startswith("state:"):
+            continue
+        workflow_state = name.split(":", 1)[1].strip()
+        if workflow_state:
+            return workflow_state
+    return None
 
 
 def format_planner_status(status: dict[str, Any]) -> str:
