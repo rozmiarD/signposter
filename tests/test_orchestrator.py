@@ -236,6 +236,34 @@ def test_orchestrator_next_plans_resume_existing_worktree_for_stale_active_issue
     assert "existing worktree" in (result.takeover_reason or "")
 
 
+def test_format_orchestrator_next_includes_resume_takeover_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    issue = LabeledItem(
+        number=46,
+        title="Issue 46",
+        html_url="https://github.com/example/repo/issues/46",
+        labels=["state:active"],
+        item_type="issue",
+        updated_at="2026-05-20T00:00:00Z",
+    )
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=issue),
+    ):
+        result = plan_orchestrator_next("ExatronOmega/signposter", issue=46)
+
+    output = format_orchestrator_next(result)
+
+    assert "Takeover plan:" in output
+    assert "preserve evidence: keep existing raw, summary, prompt, branch" in output
+    assert "resume path: resume existing worktree and prompt" in output
+    assert "manual fallback: write a manual worker summary" in output
+    assert "mutation policy: this plan is read-only" in output
+
+
 def test_orchestrator_next_plans_regenerate_prompt_for_stale_active_issue(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
@@ -280,6 +308,36 @@ def test_orchestrator_next_plans_manual_fallback_for_stale_prompt_without_worktr
         result = plan_orchestrator_next("ExatronOmega/signposter", issue=46)
 
     assert result.takeover_category == "manual-worker-fallback"
+
+
+def test_format_orchestrator_next_includes_manual_fallback_takeover_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    lifecycle_next = _next(prompt_exists=True, worktree_exists=False, local_branch_exists=False)
+    issue = LabeledItem(
+        number=46,
+        title="Issue 46",
+        html_url="https://github.com/example/repo/issues/46",
+        labels=["state:active"],
+        item_type="issue",
+        updated_at="2026-05-20T00:00:00Z",
+    )
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=issue),
+    ):
+        result = plan_orchestrator_next("ExatronOmega/signposter", issue=46)
+
+    output = format_orchestrator_next(result)
+
+    assert "Takeover plan:" in output
+    assert "resume path: repair or recreate worktree before continuing implementation" in output
+    assert (
+        "manual fallback: use the existing prompt to write a bounded manual worker summary"
+        in output
+    )
 
 
 def test_orchestrator_next_plans_inspect_blocker_for_stale_active_issue(
