@@ -599,15 +599,26 @@ def _worker_artifact_guidance(
 def _missing_worker_summary_fields(text: str) -> list[str]:
     lowered = text.lower()
     required = {
+        "repository": "**repository:**",
+        "issue": "**issue:** #",
+        "agent": "**agent:**",
         "exit code": "**exit code:** 0",
+        "dirty guard": "**dirty guard:** clean",
+        "task execution complete": "**task execution complete:** yes",
         "acceptance": "**acceptance:** pass",
         "scoped completion evidence": "scoped completion evidence",
+        "files changed": "## files changed",
+        "implemented behavior": "## implemented behavior",
         "validation evidence": "validation evidence",
         "targeted validation": "targeted validation passed",
         "full validation": "full validation passed",
         "safety section": "## safety",
         "no github mutation safety note": "no github mutation was performed",
+        "no openclaw execution safety note": "no openclaw execution was performed",
+        "no issue close safety note": "no issue was closed",
+        "no merge safety note": "no merge was performed",
         "no unrelated files safety note": "no unrelated files were changed",
+        "gate recommendation": "## gate recommendation",
     }
     return [name for name, needle in required.items() if needle not in lowered]
 
