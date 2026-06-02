@@ -1297,6 +1297,41 @@ def test_validate_review_artifact_blocks_unsafe_marker(tmp_path):
     assert "unsafe execution marker" in result.errors[0]
 
 
+def test_validate_review_artifact_blocks_unsafe_raw_marker(tmp_path):
+    from signposter.artifact import plan_review_summary, write_manual_artifact
+    from signposter.review import format_review_artifact_validation, validate_review_artifact
+
+    plan = plan_review_summary(pr=73, risk="medium", runs_dir=tmp_path)
+    write_manual_artifact(plan, apply=True)
+    raw = tmp_path / "pr-73-reviewer.raw.txt"
+    raw.write_text("The model is not supported for this account.\n", encoding="utf-8")
+
+    result = validate_review_artifact(73, summary_path=plan.path)
+    out = format_review_artifact_validation(result)
+
+    assert result.status == "blocked"
+    assert result.raw_exists is True
+    assert result.raw_stale_signal == "model is not supported"
+    assert "Raw unsafe marker:" in out
+    assert "preserve unsafe backend output separately" in out
+
+
+def test_review_gate_blocks_unsafe_raw_marker(tmp_path):
+    from signposter.artifact import plan_review_summary, write_manual_artifact
+    from signposter.review import evaluate_review_gate
+
+    plan = plan_review_summary(pr=73, risk="low", runs_dir=tmp_path)
+    write_manual_artifact(plan, apply=True)
+    raw = tmp_path / "pr-73-reviewer.raw.txt"
+    raw.write_text("The model is not supported for this account.\n", encoding="utf-8")
+
+    result = evaluate_review_gate("test/repo", 73, summary_path=plan.path)
+
+    assert result.gate_pass is False
+    assert "reviewer artifact preflight" in result.status
+    assert "reviewer raw artifact contains stale/failover signal" in result.reason
+
+
 def test_format_review_artifact_validation_summary_is_concise(tmp_path):
     from signposter.review import (
         format_review_artifact_validation_summary,
@@ -1812,6 +1847,7 @@ def test_validate_review_artifact_ready(tmp_path):
     assert result.status == "ready"
     assert result.errors == []
     assert result.opinion.verdict == "APPROVE"
+    assert result.raw_exists is False
 
 
 def test_validate_review_artifact_blocks_missing_summary(tmp_path):
@@ -1849,3 +1885,5 @@ def test_format_review_artifact_validation_contains_status(tmp_path):
 
     assert "Signposter Review Artifact Validation — PR #38" in output
     assert "ready" in output
+    assert "Raw artifact:" in output
+    assert "raw reviewer artifact not found" in output
