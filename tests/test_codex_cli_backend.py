@@ -122,9 +122,18 @@ def test_execute_codex_cli_invocation_captures_success_artifacts(tmp_path) -> No
     assert "[STDOUT]\ndone" in result.raw_path.read_text(encoding="utf-8")
     assert "[PROMPT]" in result.raw_path.read_text(encoding="utf-8")
     summary = result.summary_path.read_text(encoding="utf-8")
+    assert "**Backend:** codex-cli" in summary
+    assert "**Agent:** worker_core" in summary
+    assert "**Model:** openai/gpt-5.4" in summary
+    assert "**Reasoning:** medium" in summary
+    assert "**Exit Code:** 0" in summary
+    assert "**Status:** success" in summary
+    assert "**Task execution complete:** yes" in summary
+    assert "**Acceptance:** pass" in summary
     assert "Status: success" in summary
     assert "Prompt Transport: stdin" in summary
     assert "Reasoning Transport: Signposter metadata only" in summary
+    assert "Raw output: local only" in summary
     assert "Raw output remains local." in summary
 
 
@@ -148,6 +157,11 @@ def test_execute_codex_cli_invocation_writes_preflight_artifacts(tmp_path) -> No
     assert result.success is False
     assert result.status == "missing-binary"
     assert "[PREFLIGHT missing-binary]" in result.raw_path.read_text(encoding="utf-8")
+    summary = result.summary_path.read_text(encoding="utf-8")
+    assert "**Exit Code:** 1" in summary
+    assert "**Status:** missing-binary" in summary
+    assert "**Task execution complete:** no" in summary
+    assert "**Acceptance:** needs-work" in summary
 
 
 def test_execute_codex_cli_invocation_captures_timeout(tmp_path) -> None:
@@ -177,3 +191,8 @@ def test_execute_codex_cli_invocation_captures_timeout(tmp_path) -> None:
     assert result.exit_code == -1
     assert result.status == "timeout"
     assert "partial" in result.raw_path.read_text(encoding="utf-8")
+    summary = result.summary_path.read_text(encoding="utf-8")
+    assert "**Exit Code:** -1" in summary
+    assert "**Status:** timeout" in summary
+    assert "**Task execution complete:** no" in summary
+    assert "**Acceptance:** needs-work" in summary

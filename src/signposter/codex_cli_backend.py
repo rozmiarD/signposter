@@ -280,9 +280,19 @@ def _format_codex_cli_summary(
 ) -> str:
     output = "\n".join(part for part in (stdout, stderr) if part)
     excerpt = _bounded_excerpt(output)
+    complete = exit_code == 0 and status == "success"
     return "\n".join(
         [
             "# Signposter Codex CLI Execution Summary",
+            "",
+            "**Backend:** codex-cli",
+            f"**Agent:** {invocation.agent}",
+            f"**Model:** {invocation.model}",
+            f"**Reasoning:** {invocation.reasoning_effort}",
+            f"**Exit Code:** {exit_code}",
+            f"**Status:** {status}",
+            f"**Task execution complete:** {'yes' if complete else 'no'}",
+            f"**Acceptance:** {'pass' if complete else 'needs-work'}",
             "",
             "Backend: codex-cli",
             f"Agent: {invocation.agent}",
@@ -295,10 +305,15 @@ def _format_codex_cli_summary(
             f"Working Directory: {invocation.working_dir or '(current process cwd)'}",
             f"Last Message Artifact: {invocation.output_last_message_path or '(not requested)'}",
             f"Started (UTC): {started_at.isoformat()}",
-            f"Exit Code: {exit_code}",
             f"Status: {status}",
             f"Reason: {reason}",
             f"Raw Output: {raw_path}",
+            "",
+            "## Gate evidence",
+            "",
+            "Files changed: not reported by Codex CLI execution summary",
+            "Validation notes: not reported by Codex CLI execution summary",
+            "Raw output: local only",
             "",
             "## First output lines",
             "",
