@@ -17,6 +17,7 @@ from signposter.git_utils import (
     branch_exists,
     get_current_branch,
     has_blocking_dirty_changes,
+    remote_branch_exists,
     worktree_path_exists,
 )
 from signposter.scan import LabeledItem, fetch_issue_by_number, fetch_issue_context
@@ -44,6 +45,8 @@ class WorktreePlan:
 
     status: str  # "ready" | "blocked — <reason>"
     notes: list[str]
+    remote_branch_exists: bool = False
+    branch_collision_reason: str | None = None
 
 
 def _slugify_title(title: str, max_len: int = 50) -> str:
@@ -109,6 +112,7 @@ def plan_worktree_for_issue(repo: str, issue_number: int) -> WorktreePlan:
 
     tree_clean = not has_blocking_dirty_changes()
     branch_exists_flag = branch_exists(proposed_branch)
+    remote_branch_exists_flag = remote_branch_exists(proposed_branch)
     worktree_exists_flag = worktree_path_exists(proposed_worktree)
 
     # Dependency check
@@ -119,6 +123,7 @@ def plan_worktree_for_issue(repo: str, issue_number: int) -> WorktreePlan:
     # Determine status
     notes: list[str] = ["No branches or worktrees were created."]
     status = "ready"
+    branch_collision_reason: str | None = None
 
     supports_worker_route = route == "worker"
     supports_reviewer_worker_route = (
@@ -144,8 +149,13 @@ def plan_worktree_for_issue(repo: str, issue_number: int) -> WorktreePlan:
         status = "blocked — working tree has uncommitted changes"
     elif branch_exists_flag:
         status = f"blocked — proposed branch already exists: {proposed_branch}"
+        branch_collision_reason = "local branch already exists"
+    elif remote_branch_exists_flag:
+        status = f"blocked — proposed remote branch already exists: origin/{proposed_branch}"
+        branch_collision_reason = "remote-tracking branch already exists"
     elif worktree_exists_flag:
         status = f"blocked — proposed worktree path already exists: {proposed_worktree}"
+        branch_collision_reason = "worktree path already exists"
     elif not supported_route:
         status = (
             f"blocked — route is '{route}' "
@@ -173,6 +183,8 @@ def plan_worktree_for_issue(repo: str, issue_number: int) -> WorktreePlan:
         dependency_block_reason=dep_reason if blocked_by_deps else None,
         status=status,
         notes=notes,
+        remote_branch_exists=remote_branch_exists_flag,
+        branch_collision_reason=branch_collision_reason,
     )
 
 
@@ -192,6 +204,13 @@ def format_worktree_plan(plan: WorktreePlan) -> str:
     lines.append(f"  proposed branch: {plan.proposed_branch}")
     lines.append(f"  proposed worktree: {plan.proposed_worktree}")
     lines.append(f"  working tree: {'clean' if plan.working_tree_clean else 'dirty'}")
+    lines.append(f"  local branch exists: {'yes' if plan.branch_exists else 'no'}")
+    lines.append(
+        f"  remote branch exists: {'yes' if plan.remote_branch_exists else 'no'}"
+    )
+    lines.append(f"  worktree path exists: {'yes' if plan.worktree_exists else 'no'}")
+    if plan.branch_collision_reason:
+        lines.append(f"  collision reason: {plan.branch_collision_reason}")
 
     lines.append("\nStatus:")
     lines.append(f"  {plan.status}")

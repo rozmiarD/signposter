@@ -18,6 +18,7 @@ def _patch_plan_inputs(
     phase: str = "build",
     dirty: bool = False,
     branch_exists: bool = False,
+    remote_branch_exists: bool = False,
     worktree_exists: bool = False,
     dependency_blocked: bool = False,
 ):
@@ -51,6 +52,10 @@ def _patch_plan_inputs(
     monkeypatch.setattr("signposter.worktree.get_current_branch", lambda: "main")
     monkeypatch.setattr("signposter.worktree.has_blocking_dirty_changes", lambda: dirty)
     monkeypatch.setattr("signposter.worktree.branch_exists", lambda b: branch_exists)
+    monkeypatch.setattr(
+        "signposter.worktree.remote_branch_exists",
+        lambda b: remote_branch_exists,
+    )
     monkeypatch.setattr("signposter.worktree.worktree_path_exists", lambda p: worktree_exists)
     monkeypatch.setattr(
         "signposter.worktree.is_dependency_blocked",
@@ -133,6 +138,7 @@ def test_worktree_plan_blocked_for_done_issue(monkeypatch):
     monkeypatch.setattr("signposter.worktree.get_current_branch", lambda: "main")
     monkeypatch.setattr("signposter.worktree.has_blocking_dirty_changes", lambda: False)
     monkeypatch.setattr("signposter.worktree.branch_exists", lambda b: False)
+    monkeypatch.setattr("signposter.worktree.remote_branch_exists", lambda b: False)
     monkeypatch.setattr("signposter.worktree.worktree_path_exists", lambda p: False)
     monkeypatch.setattr("signposter.scan.fetch_issue_context", lambda r, n: {"body": ""})
     monkeypatch.setattr("signposter.worktree.is_dependency_blocked", lambda r, b: (False, ""))
@@ -165,6 +171,7 @@ def test_worktree_plan_ready_for_active_worker(monkeypatch):
     monkeypatch.setattr("signposter.worktree.get_current_branch", lambda: "main")
     monkeypatch.setattr("signposter.worktree.has_blocking_dirty_changes", lambda: False)
     monkeypatch.setattr("signposter.worktree.branch_exists", lambda b: False)
+    monkeypatch.setattr("signposter.worktree.remote_branch_exists", lambda b: False)
     monkeypatch.setattr("signposter.worktree.worktree_path_exists", lambda p: False)
     monkeypatch.setattr("signposter.scan.fetch_issue_context", lambda r, n: {"body": ""})
     monkeypatch.setattr("signposter.worktree.is_dependency_blocked", lambda r, b: (False, ""))
@@ -222,6 +229,23 @@ def test_worktree_plan_blocks_existing_branch(monkeypatch):
 
     assert plan.status.startswith("blocked — proposed branch already exists:")
     assert plan.branch_exists is True
+    assert plan.branch_collision_reason == "local branch already exists"
+
+
+def test_worktree_plan_blocks_existing_remote_branch(monkeypatch):
+    from signposter.worktree import format_worktree_plan, plan_worktree_for_issue
+
+    _patch_plan_inputs(monkeypatch, remote_branch_exists=True)
+
+    plan = plan_worktree_for_issue("test/repo", 77)
+    output = format_worktree_plan(plan)
+
+    assert plan.status.startswith("blocked — proposed remote branch already exists:")
+    assert plan.branch_exists is False
+    assert plan.remote_branch_exists is True
+    assert plan.branch_collision_reason == "remote-tracking branch already exists"
+    assert "remote branch exists: yes" in output
+    assert "collision reason: remote-tracking branch already exists" in output
 
 
 def test_worktree_plan_blocks_existing_worktree_path(monkeypatch):
@@ -233,6 +257,7 @@ def test_worktree_plan_blocks_existing_worktree_path(monkeypatch):
 
     assert plan.status.startswith("blocked — proposed worktree path already exists:")
     assert plan.worktree_exists is True
+    assert plan.branch_collision_reason == "worktree path already exists"
 
 
 # --- HARDENING-008: guarded worktree apply tests ---
@@ -435,6 +460,7 @@ def test_worktree_plan_ready_for_reviewer_route_worker_build_human_gate(monkeypa
     monkeypatch.setattr("signposter.worktree.get_current_branch", lambda: "main")
     monkeypatch.setattr("signposter.worktree.has_blocking_dirty_changes", lambda: False)
     monkeypatch.setattr("signposter.worktree.branch_exists", lambda b: False)
+    monkeypatch.setattr("signposter.worktree.remote_branch_exists", lambda b: False)
     monkeypatch.setattr("signposter.worktree.worktree_path_exists", lambda p: False)
     monkeypatch.setattr("signposter.worktree.is_dependency_blocked", lambda r, b: (False, ""))
 
@@ -488,6 +514,7 @@ def test_worktree_plan_blocks_reviewer_route_non_worker_role(monkeypatch):
     monkeypatch.setattr("signposter.worktree.get_current_branch", lambda: "main")
     monkeypatch.setattr("signposter.worktree.has_blocking_dirty_changes", lambda: False)
     monkeypatch.setattr("signposter.worktree.branch_exists", lambda b: False)
+    monkeypatch.setattr("signposter.worktree.remote_branch_exists", lambda b: False)
     monkeypatch.setattr("signposter.worktree.worktree_path_exists", lambda p: False)
     monkeypatch.setattr("signposter.worktree.is_dependency_blocked", lambda r, b: (False, ""))
 
