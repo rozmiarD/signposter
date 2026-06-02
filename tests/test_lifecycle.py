@@ -316,6 +316,47 @@ def test_lifecycle_status_summary_incomplete_shows_stop_reason():
     assert "stop: incomplete — PR #5 is not merged" in out
 
 
+def test_lifecycle_status_surfaces_post_merge_integration_gap():
+    s = _make_complete_status(
+        issue_state="OPEN",
+        workflow_state="state:done",
+        pr_state="MERGED",
+        pr_merged=True,
+        integrated=False,
+        issue_closed=False,
+        status="incomplete — issue #4 is not CLOSED",
+    )
+
+    out = format_lifecycle_status(s)
+    summary = format_lifecycle_status_summary(s)
+
+    assert "Post-merge gaps:" in out
+    assert "category: integration-needed" in out
+    assert "issue closed: no" in out
+    assert "state:merged label: no" in out
+    assert "next: run integration plan/apply for this PR" in out
+    assert "post-merge gap: integration-needed" in summary
+
+
+def test_lifecycle_status_surfaces_post_merge_cleanup_gap():
+    s = _make_complete_status(
+        cleanup_complete=False,
+        worktree_exists=True,
+        local_branch_exists=True,
+        status="incomplete — local worktree still exists",
+    )
+
+    out = format_lifecycle_status(s)
+    summary = format_lifecycle_status_summary(s)
+
+    assert "Post-merge gaps:" in out
+    assert "category: cleanup-needed" in out
+    assert "worktree exists: yes" in out
+    assert "local branch exists: yes" in out
+    assert "next: run cleanup plan/apply for this PR" in out
+    assert "post-merge gap: cleanup-needed" in summary
+
+
 def test_lifecycle_status_handler_summary_output(capsys):
     args = Namespace(
         repo="ExatronOmega/signposter",
