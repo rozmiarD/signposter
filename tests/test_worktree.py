@@ -1,11 +1,64 @@
 """Tests for worktree planning (HARDENING-007)."""
 
+import pytest
 
 from signposter.worktree import (
     _slugify_title,
     generate_proposed_branch,
     generate_proposed_worktree,
 )
+
+
+def _patch_plan_inputs(
+    monkeypatch,
+    *,
+    state: str = "active",
+    route: str = "worker",
+    role: str = "worker",
+    phase: str = "build",
+    dirty: bool = False,
+    branch_exists: bool = False,
+    worktree_exists: bool = False,
+    dependency_blocked: bool = False,
+):
+    from signposter.dispatch import DispatchDecision
+    from signposter.scan import LabeledItem
+
+    item = LabeledItem(
+        number=77,
+        title="Safety audit task",
+        html_url="url",
+        labels=[f"state:{state}", f"role:{role}", f"phase:{phase}"],
+        item_type="issue",
+    )
+
+    monkeypatch.setattr("signposter.worktree.fetch_issue_by_number", lambda r, n: item)
+    monkeypatch.setattr("signposter.worktree.fetch_issue_context", lambda r, n: {"body": ""})
+    monkeypatch.setattr(
+        "signposter.worktree.classify_candidate",
+        lambda i: DispatchDecision(
+            item=i,
+            phase=phase,
+            state=state,
+            role=role,
+            risk="medium",
+            area=None,
+            proposed_route=route,
+            proposed_gate="ci",
+            reason="test",
+        ),
+    )
+    monkeypatch.setattr("signposter.worktree.get_current_branch", lambda: "main")
+    monkeypatch.setattr("signposter.worktree.has_blocking_dirty_changes", lambda: dirty)
+    monkeypatch.setattr("signposter.worktree.branch_exists", lambda b: branch_exists)
+    monkeypatch.setattr("signposter.worktree.worktree_path_exists", lambda p: worktree_exists)
+    monkeypatch.setattr(
+        "signposter.worktree.is_dependency_blocked",
+        lambda r, b: (
+            dependency_blocked,
+            "dependency #12 is not complete" if dependency_blocked else "",
+        ),
+    )
 
 
 def test_slugify_title_basic():
@@ -121,6 +174,65 @@ def test_worktree_plan_ready_for_active_worker(monkeypatch):
     assert plan.status == "ready"
     assert "work/issue-12-implement-feature-x" in plan.proposed_branch
     assert "signposter-work/12" in plan.proposed_worktree
+
+
+@pytest.mark.parametrize("terminal_state", ["done", "failed", "merged"])
+def test_worktree_plan_blocks_terminal_states(monkeypatch, terminal_state):
+    from signposter.worktree import plan_worktree_for_issue
+
+    _patch_plan_inputs(monkeypatch, state=terminal_state)
+
+    plan = plan_worktree_for_issue("test/repo", 77)
+
+    assert plan.status == f"blocked — issue is state:{terminal_state}"
+    assert plan.working_tree_clean is True
+    assert plan.branch_exists is False
+    assert plan.worktree_exists is False
+
+
+def test_worktree_plan_blocks_unresolved_dependencies(monkeypatch):
+    from signposter.worktree import plan_worktree_for_issue
+
+    _patch_plan_inputs(monkeypatch, dependency_blocked=True)
+
+    plan = plan_worktree_for_issue("test/repo", 77)
+
+    assert plan.status == "blocked — dependency #12 is not complete"
+    assert plan.has_unresolved_dependencies is True
+    assert plan.dependency_block_reason == "dependency #12 is not complete"
+
+
+def test_worktree_plan_blocks_dirty_tree_before_creation(monkeypatch):
+    from signposter.worktree import plan_worktree_for_issue
+
+    _patch_plan_inputs(monkeypatch, dirty=True)
+
+    plan = plan_worktree_for_issue("test/repo", 77)
+
+    assert plan.status == "blocked — working tree has uncommitted changes"
+    assert plan.working_tree_clean is False
+
+
+def test_worktree_plan_blocks_existing_branch(monkeypatch):
+    from signposter.worktree import plan_worktree_for_issue
+
+    _patch_plan_inputs(monkeypatch, branch_exists=True)
+
+    plan = plan_worktree_for_issue("test/repo", 77)
+
+    assert plan.status.startswith("blocked — proposed branch already exists:")
+    assert plan.branch_exists is True
+
+
+def test_worktree_plan_blocks_existing_worktree_path(monkeypatch):
+    from signposter.worktree import plan_worktree_for_issue
+
+    _patch_plan_inputs(monkeypatch, worktree_exists=True)
+
+    plan = plan_worktree_for_issue("test/repo", 77)
+
+    assert plan.status.startswith("blocked — proposed worktree path already exists:")
+    assert plan.worktree_exists is True
 
 
 # --- HARDENING-008: guarded worktree apply tests ---
