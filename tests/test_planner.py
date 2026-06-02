@@ -1748,26 +1748,29 @@ def test_build_planner_status_reports_seeded_active_manifest(tmp_path: Path) -> 
 def test_build_planner_status_counts_groups_lifecycle_buckets() -> None:
     counts = build_planner_status_counts(
         [
-            {"state": "unseeded"},
-            {"state": "open"},
-            {"state": "ready"},
-            {"state": "active"},
-            {"state": "done"},
-            {"state": "merged"},
-            {"state": "closed"},
-            {"state": "blocked"},
-            {"state": "failed"},
+            {"key": "UNSEEDED", "state": "unseeded"},
+            {"key": "OPEN-BLOCKED", "state": "open", "depends_on": []},
+            {"key": "OPEN-READY", "state": "open", "workflow_state": "ready"},
+            {"key": "READY", "state": "ready"},
+            {"key": "WAITING", "state": "open", "depends_on": ["MISSING"]},
+            {"key": "ACTIVE", "state": "active"},
+            {"key": "DONE", "state": "done"},
+            {"key": "MERGED", "state": "merged"},
+            {"key": "CLOSED", "state": "closed"},
+            {"key": "BLOCKED", "state": "blocked"},
+            {"key": "FAILED", "state": "failed"},
         ]
     )
 
     assert counts == {
-        "total": 9,
+        "total": 11,
         "pending": 1,
         "ready": 2,
+        "waiting": 1,
         "active": 1,
         "done": 1,
         "merged": 1,
-        "blocked": 2,
+        "blocked": 3,
         "completed": 3,
     }
 
@@ -1787,6 +1790,10 @@ def test_format_planner_status_contains_safety_notes(tmp_path: Path) -> None:
     output = format_planner_status(build_planner_status(manifest))
 
     assert "Signposter Planner Status" in output
+    assert "Progress:" in output
+    assert "  pending: 5" in output
+    assert "  ready: 0" in output
+    assert "  waiting: 0" in output
     assert "WATCH-001 — issue: none — state: unseeded" in output
     assert "depends on: WATCH-001" in output
     assert "No GitHub mutation was performed." in output
@@ -2296,7 +2303,8 @@ def test_build_planner_run_plan_from_status_reports_next_open_task(
     assert result["status_counts"] == {
         "total": 5,
         "pending": 0,
-        "ready": 5,
+        "ready": 1,
+        "waiting": 4,
         "active": 0,
         "done": 0,
         "merged": 0,
@@ -2401,6 +2409,7 @@ def test_format_planner_run_plan_contains_dashboard_sections(
     assert "Task counts:" in output
     assert "  total: 5" in output
     assert "  ready: 1" in output
+    assert "  waiting: 4" in output
     assert "  completed: 0" in output
     assert "Next task:" in output
     assert "WATCH-001 — issue: #10 — state: open" in output

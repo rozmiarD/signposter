@@ -1202,10 +1202,16 @@ COMPLETED_PLANNER_STATES = {"closed", "done", "merged"}
 
 def build_planner_status_counts(tasks: list[dict[str, Any]]) -> dict[str, int]:
     """Return compact planner task counts for dashboard rendering."""
+    completed = {
+        task.get("key")
+        for task in tasks
+        if str(task.get("state", "")).lower() in COMPLETED_PLANNER_STATES
+    }
     counts = {
         "total": len(tasks),
         "pending": 0,
         "ready": 0,
+        "waiting": 0,
         "active": 0,
         "done": 0,
         "merged": 0,
@@ -1215,10 +1221,16 @@ def build_planner_status_counts(tasks: list[dict[str, Any]]) -> dict[str, int]:
 
     for task in tasks:
         state = str(task.get("state", "")).lower()
-        if state in {"ready", "open"}:
-            counts["ready"] += 1
-        elif state == "active":
+        workflow_state = str(task.get("workflow_state", "") or "").lower()
+        missing_dependencies = [
+            dependency
+            for dependency in task.get("depends_on", [])
+            if dependency not in completed
+        ]
+        if state == "active":
             counts["active"] += 1
+        elif state == "unseeded":
+            counts["pending"] += 1
         elif state == "done":
             counts["done"] += 1
             counts["completed"] += 1
@@ -1228,6 +1240,12 @@ def build_planner_status_counts(tasks: list[dict[str, Any]]) -> dict[str, int]:
         elif state == "closed":
             counts["completed"] += 1
         elif state in {"blocked", "failed"}:
+            counts["blocked"] += 1
+        elif missing_dependencies:
+            counts["waiting"] += 1
+        elif state == "ready" or workflow_state == "ready":
+            counts["ready"] += 1
+        elif state == "open":
             counts["blocked"] += 1
         else:
             counts["pending"] += 1
@@ -1485,6 +1503,7 @@ def format_planner_run_plan(result: dict[str, Any]) -> str:
                 f"  total: {counts.get('total', 0)}",
                 f"  pending: {counts.get('pending', 0)}",
                 f"  ready: {counts.get('ready', 0)}",
+                f"  waiting: {counts.get('waiting', 0)}",
                 f"  active: {counts.get('active', 0)}",
                 f"  done: {counts.get('done', 0)}",
                 f"  merged: {counts.get('merged', 0)}",
@@ -2393,6 +2412,7 @@ def _workflow_state_from_manifest_labels(labels: list[Any]) -> str | None:
 
 def format_planner_status(status: dict[str, Any]) -> str:
     """Format planner status summary."""
+    counts = build_planner_status_counts(status["tasks"])
     lines = [
         "Signposter Planner Status",
         "",
@@ -2404,6 +2424,17 @@ def format_planner_status(status: dict[str, Any]) -> str:
         "",
         "Status:",
         f"  {status['status']}",
+        "",
+        "Progress:",
+        f"  total: {counts.get('total', 0)}",
+        f"  pending: {counts.get('pending', 0)}",
+        f"  ready: {counts.get('ready', 0)}",
+        f"  waiting: {counts.get('waiting', 0)}",
+        f"  active: {counts.get('active', 0)}",
+        f"  done: {counts.get('done', 0)}",
+        f"  merged: {counts.get('merged', 0)}",
+        f"  blocked: {counts.get('blocked', 0)}",
+        f"  completed: {counts.get('completed', 0)}",
         "",
         "Tasks:",
     ]
