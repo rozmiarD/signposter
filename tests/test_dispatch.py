@@ -33,7 +33,25 @@ def test_classify_build_worker_low_risk():
 
     assert decision.proposed_route == "worker"
     assert decision.proposed_gate == "ci"
-    assert "low-risk build" in decision.reason.lower()
+    assert "build task" in decision.reason.lower()
+
+
+def test_classify_active_build_worker_medium_risk_keeps_ci_gate():
+    item = make_item(
+        5,
+        [
+            "state:active",
+            "phase:build",
+            "role:worker",
+            "risk:medium",
+            "area:scheduler",
+            "gate:ci",
+        ],
+    )
+    decision = classify_candidate(item)
+
+    assert decision.proposed_route == "worker"
+    assert decision.proposed_gate == "ci"
 
 
 def test_classify_review_reviewer():
