@@ -554,7 +554,11 @@ def test_integration_apply_dry_run_ready_still_lists_mutations():
 
 
 def test_noop_integration_plan_ready(monkeypatch, tmp_path):
-    from signposter.integration import plan_noop_integration_for_issue
+    from signposter.integration import (
+        format_noop_integration_apply_dry_run,
+        format_noop_integration_plan,
+        plan_noop_integration_for_issue,
+    )
 
     monkeypatch.chdir(tmp_path)
     artifact_dir = tmp_path / "artifacts" / "runs"
@@ -616,9 +620,21 @@ No unrelated files were changed.
     assert plan.local_branch_exists is False
     assert plan.associated_pr_detected is False
 
+    plan_output = format_noop_integration_plan(plan)
+    apply_output = format_noop_integration_apply_dry_run(plan, "test/repo")
+
+    for output in (plan_output, apply_output):
+        assert "Verified preconditions:" in output
+        assert "issue is open: yes" in output
+        assert "workflow state is state:done: yes" in output
+        assert "gate passed: yes" in output
+        assert "no associated PR detected: yes" in output
+        assert "worktree absent: yes" in output
+        assert "local branch absent: yes" in output
+
 
 def test_noop_integration_plan_blocks_when_worktree_exists(monkeypatch, tmp_path):
-    from signposter.integration import plan_noop_integration_for_issue
+    from signposter.integration import format_noop_integration_plan, plan_noop_integration_for_issue
 
     monkeypatch.chdir(tmp_path)
     (tmp_path.parent / "signposter-work" / "12").mkdir(parents=True)
@@ -672,3 +688,6 @@ No unrelated files were changed.
     plan = plan_noop_integration_for_issue("test/repo", 12)
 
     assert "worktree still exists" in plan.status
+    output = format_noop_integration_plan(plan)
+    assert "Verified preconditions:" in output
+    assert "worktree absent: no" in output

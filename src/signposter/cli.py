@@ -63,6 +63,7 @@ from signposter.integration import (
     format_integration_plan,
     format_noop_integration_apply_dry_run,
     format_noop_integration_plan,
+    format_noop_integration_preconditions,
     plan_integration_for_pr,
     plan_noop_integration_for_issue,
 )
@@ -2371,6 +2372,11 @@ def run_noop_integration_apply(args: argparse.Namespace) -> int:
             if result.get("errors"):
                 for err in result["errors"]:
                     print(f"    {err}")
+            if plan:
+                print("")
+                print("Verified preconditions:")
+                for line in format_noop_integration_preconditions(plan):
+                    print(line)
             print("")
             print("Status:")
             print(f"  {'completed' if success else 'failed'}")
