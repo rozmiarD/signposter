@@ -31,6 +31,16 @@ class CheckResult:
     details: str | None = None
 
 
+@dataclass(frozen=True)
+class ValidationCommandPlan:
+    changed_files: tuple[str, ...]
+    targeted_ruff: str
+    targeted_pytest: str
+    full_ruff: str
+    full_pytest: str
+    notes: tuple[str, ...]
+
+
 def check_python_version() -> CheckResult:
     """Check that Python version meets minimum requirements."""
     version = sys.version_info
@@ -458,6 +468,82 @@ def format_automation_doctor_report(results: list[CheckResult]) -> str:
             "  No OpenClaw execution was performed.",
         ]
     )
+    return "\n".join(lines)
+
+
+def _dedupe_preserve_order(items: list[str]) -> tuple[str, ...]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in items:
+        normalized = item.strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        result.append(normalized)
+    return tuple(result)
+
+
+def _infer_pytest_targets(changed_files: tuple[str, ...]) -> tuple[str, ...]:
+    explicit_tests = [
+        path for path in changed_files
+        if path.startswith("tests/") and path.endswith(".py")
+    ]
+    inferred_tests: list[str] = list(explicit_tests)
+
+    for path in changed_files:
+        if not path.startswith("src/signposter/") or not path.endswith(".py"):
+            continue
+        stem = Path(path).stem
+        candidate = Path("tests") / f"test_{stem}.py"
+        if candidate.exists():
+            inferred_tests.append(str(candidate))
+
+    return _dedupe_preserve_order(inferred_tests) or ("tests/",)
+
+
+def build_validation_command_plan(
+    changed_files: list[str] | tuple[str, ...] | None = None,
+) -> ValidationCommandPlan:
+    """Build a read-only command plan for local validation."""
+    normalized_changed = _dedupe_preserve_order(list(changed_files or []))
+    ruff_targets = normalized_changed or (".",)
+    pytest_targets = _infer_pytest_targets(normalized_changed)
+    return ValidationCommandPlan(
+        changed_files=normalized_changed,
+        targeted_ruff="ruff check " + " ".join(ruff_targets),
+        targeted_pytest="python -m pytest " + " ".join(pytest_targets) + " -q",
+        full_ruff="ruff check .",
+        full_pytest="python -m pytest tests/ -q",
+        notes=(
+            "Read-only validation command discovery.",
+            "Run targeted commands before full validation.",
+            "Use the repository virtualenv or project-standard Python wrapper when needed.",
+            "No validation command was executed.",
+        ),
+    )
+
+
+def format_validation_command_plan(plan: ValidationCommandPlan) -> str:
+    lines = ["Signposter Validation Commands", ""]
+    lines.append("Changed files:")
+    if plan.changed_files:
+        lines.extend(f"  - {path}" for path in plan.changed_files)
+    else:
+        lines.append("  none provided")
+
+    lines.append("")
+    lines.append("Targeted validation:")
+    lines.append(f"  ruff: {plan.targeted_ruff}")
+    lines.append(f"  pytest: {plan.targeted_pytest}")
+
+    lines.append("")
+    lines.append("Full validation:")
+    lines.append(f"  ruff: {plan.full_ruff}")
+    lines.append(f"  pytest: {plan.full_pytest}")
+
+    lines.append("")
+    lines.append("Notes:")
+    lines.extend(f"  {note}" for note in plan.notes)
     return "\n".join(lines)
 
 
