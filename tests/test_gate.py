@@ -783,6 +783,58 @@ No merge was performed by the implemented code.
     assert decision.proposed_transition == "state:active → state:done"
 
 
+def test_evaluate_human_gate_passes_with_structured_evidence_fields():
+    from signposter.gate import evaluate_human_gate
+
+    summary = """
+# Signposter Human Gate Summary
+
+**Exit Code:** 0
+
+Human approval: approved
+Scope reviewed: yes
+Validation status: passed
+
+Safety:
+No GitHub mutation was performed by the implemented code.
+No OpenClaw execution was performed by the implemented code.
+No issue was closed by the implemented code.
+No merge was performed by the implemented code.
+"""
+
+    decision = evaluate_human_gate(0, summary)
+
+    assert decision.decision == "pass"
+    assert (
+        decision.reason
+        == "Human gate approval evidence found with validation and safety context."
+    )
+
+
+def test_evaluate_human_gate_reports_missing_components():
+    from signposter.gate import evaluate_human_gate
+
+    summary = """
+# Signposter Human Gate Summary
+
+**Exit Code:** 0
+
+Human approval: approved
+Validation status: passed
+
+Safety:
+No GitHub mutation was performed by the implemented code.
+No OpenClaw execution was performed by the implemented code.
+No issue was closed by the implemented code.
+No merge was performed by the implemented code.
+"""
+
+    decision = evaluate_human_gate(0, summary)
+
+    assert decision.decision == "needs-work"
+    assert decision.reason == "Human gate approval evidence missing or incomplete: scope."
+
+
 def test_evaluate_human_gate_blocks_ambiguous_approval():
     from signposter.gate import evaluate_human_gate
 
