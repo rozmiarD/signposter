@@ -2768,6 +2768,8 @@ def run_orchestrator_run_next(args: argparse.Namespace) -> int:
             limit=getattr(args, "limit", 50),
             apply=getattr(args, "apply", False),
             execute=getattr(args, "execute", False),
+            manifest_path=getattr(args, "manifest", None),
+            sync_github=getattr(args, "sync_github", False),
         )
         if getattr(args, "summary", False):
             print(format_orchestrator_run_next_summary(result))
@@ -2804,6 +2806,8 @@ def run_orchestrator_run_next_loop_cli(args: argparse.Namespace) -> int:
             tolerate_active_ambiguity=getattr(args, "tolerate_active_ambiguity", False),
             tolerate_blocked_lifecycle=getattr(args, "tolerate_blocked_lifecycle", False),
             tolerate_failed_step=getattr(args, "tolerate_failed_step", False),
+            manifest_path=getattr(args, "manifest", None),
+            sync_github=getattr(args, "sync_github", False),
         )
         if getattr(args, "summary", False):
             print(format_orchestrator_run_next_loop_summary(result))
@@ -2942,6 +2946,16 @@ def _register_orchestrator_subcommands(
     )
     run_next_parser.add_argument("--repo", required=True)
     run_next_parser.add_argument("--limit", type=int, default=50)
+    run_next_parser.add_argument(
+        "--manifest",
+        default=None,
+        help="Use planner manifest selection instead of the GitHub scheduler",
+    )
+    run_next_parser.add_argument(
+        "--sync-github",
+        action="store_true",
+        help="Fetch GitHub issue state before planner manifest selection",
+    )
     run_next_parser.add_argument("--apply", action="store_true")
     run_next_parser.add_argument("--execute", action="store_true")
     run_next_parser.add_argument("--summary", action="store_true")
@@ -2953,6 +2967,16 @@ def _register_orchestrator_subcommands(
     )
     run_next_loop_parser.add_argument("--repo", required=True)
     run_next_loop_parser.add_argument("--limit", type=int, default=50)
+    run_next_loop_parser.add_argument(
+        "--manifest",
+        default=None,
+        help="Use planner manifest selection instead of the GitHub scheduler",
+    )
+    run_next_loop_parser.add_argument(
+        "--sync-github",
+        action="store_true",
+        help="Fetch GitHub issue state before planner manifest selection",
+    )
     run_next_loop_parser.add_argument("--max-cycles", type=int, default=1)
     run_next_loop_parser.add_argument("--max-tasks", type=int, default=1)
     run_next_loop_parser.add_argument("--apply", action="store_true")
