@@ -6,6 +6,8 @@ STALE_OR_FAILOVER_SIGNALS = (
     "provider unavailable",
     "provider error",
     "model unavailable",
+    "unsupported model",
+    "model is not supported",
     "no model available",
     "failover",
     "fallback provider failed",
