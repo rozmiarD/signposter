@@ -95,7 +95,7 @@ def test_format_comment_shows_missing_artifacts():
 
 @patch("signposter.report.subprocess.run")
 def test_post_comment_dry_run(mock_run):
-    body = "Test body"
+    body = "Signposter test body"
     cmds = post_comment("ExatronOmega/signposter", 2, body, dry_run=True)
 
     assert len(cmds) == 1
@@ -108,7 +108,7 @@ def test_post_comment_dry_run(mock_run):
 def test_post_comment_apply_calls_gh(mock_run):
     mock_run.return_value = type("obj", (object,), {"returncode": 0, "stdout": "", "stderr": ""})()
 
-    body = "Test body for apply"
+    body = "Signposter test body for apply"
     cmds = post_comment("ExatronOmega/signposter", 2, body, dry_run=False)
 
     mock_run.assert_called_once()
@@ -208,3 +208,28 @@ def test_format_comment_excerpt_has_no_ansi():
     assert "[worker] Starting..." in body
     assert "Warning: something happened" in body
     assert "Normal line" in body
+
+
+@patch("signposter.report.subprocess.run")
+def test_post_comment_rejects_unsafe_body_before_subprocess(mock_run):
+    body = "Signposter report\n\nFixes #2"
+
+    with pytest.raises(ValueError, match="auto-close keyword"):
+        post_comment("ExatronOmega/signposter", 2, body, dry_run=False)
+
+    mock_run.assert_not_called()
+
+
+def test_format_comment_rejects_secret_in_excerpt():
+    summary = "**Agent:** worker\n**Exit Code:** 0"
+    token = "github_pat_" + ("A" * 30)
+
+    with pytest.raises(ValueError, match="possible GitHub token"):
+        format_comment(
+            summary,
+            "ExatronOmega/signposter",
+            42,
+            summary_path="artifacts/runs/issue-42.summary.md",
+            raw_path="artifacts/runs/issue-42.raw.txt",
+            raw_content=f"Signposter output\n{token}",
+        )

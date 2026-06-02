@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from signposter.comments import ensure_github_comment_body
 from signposter.gate import evaluate_ci_gate
 from signposter.labels import check_labels
 from signposter.review import _run_gh_pr_view
@@ -377,7 +378,7 @@ CI: {plan.main_ci_status}
 
 No local worktree cleanup was performed.
 """
-    return comment.strip()
+    return ensure_github_comment_body(comment.strip())
 
 
 def _integration_apply_status(plan: IntegrationPlan, repo: str | None = None) -> str:
@@ -500,6 +501,14 @@ def apply_integration(
         }
 
     issue = plan.associated_issue
+    try:
+        integration_comment = _build_integration_comment(plan)
+    except ValueError as e:
+        return {
+            "mode": "apply_blocked",
+            "plan": plan,
+            "error": str(e),
+        }
 
     # Perform mutations
     results = []
@@ -533,11 +542,10 @@ def apply_integration(
 
     # 2. Post integration comment
     try:
-        comment = _build_integration_comment(plan)
         cmd = [
             "gh", "issue", "comment", str(issue),
             "-R", repo,
-            "--body", comment,
+            "--body", integration_comment,
         ]
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         if proc.returncode != 0:
@@ -969,4 +977,3 @@ def apply_noop_integration(
         "success": not errors,
         "errors": errors,
     }
-

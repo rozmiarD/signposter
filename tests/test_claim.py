@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
+
 from signposter.claim import (
     ClaimDryRunResult,
     ClaimPlan,
@@ -165,6 +167,41 @@ def test_perform_claim_mutation_returns_correct_commands():
     assert "`state:ready → state:active`" in commands[1]
     assert "`route:worker`" in commands[1]
     assert "`gate:ci`" in commands[1]
+
+
+def test_claim_apply_audits_comment_before_label_mutation(monkeypatch):
+    """Unsafe claim comments must block before the label edit command runs."""
+    from signposter.claim import perform_claim_mutation
+
+    item = make_ready_item(42, ["phase:build", "risk:low", "role:worker"])
+    decision = make_decision(
+        item, phase="build", risk="low", proposed_route="worker", proposed_gate="ci"
+    )
+    plan = ClaimPlan(
+        item=item,
+        dispatch=decision,
+        lease_owner="local-dry-run-worker",
+        proposed_state="active",
+        labels_to_remove=["state:ready"],
+        labels_to_add=["state:active", "gate:ci"],
+        reason="test",
+    )
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        raise AssertionError("subprocess must not run")
+
+    monkeypatch.setattr("signposter.claim.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        "signposter.claim.format_claim_comment",
+        lambda **kwargs: "Signposter claim\n\nCloses #42",
+    )
+
+    with pytest.raises(ValueError, match="auto-close keyword"):
+        perform_claim_mutation(plan, "ExatronOmega/signposter", dry_run=False)
+
+    assert calls == []
 
 
 # =============================================================================
