@@ -37,7 +37,7 @@ from signposter.openclaw_runtime import (
     normalize_subprocess_output,
     openclaw_timeout_settings,
 )
-from signposter.role_policy import get_role_policy
+from signposter.role_policy import execution_agent_for_backend, get_role_policy
 from signposter.role_routing import select_role_for_issue
 from signposter.scan import LabeledItem, fetch_issue_by_number, fetch_issue_context
 from signposter.worktree import get_worktree_status_for_issue
@@ -112,6 +112,7 @@ def _fallback_runner_plan(plan: RunnerPlan) -> RunnerPlan | None:
             profile=plan.proposed_profile or "worker",
         )
         fallback_session_key = f"{base_session_key}-fallback-model"
+        fallback_agent = plan.selected_openclaw_agent
         return replace(
             plan,
             selected_model=fallback_model,
@@ -120,7 +121,7 @@ def _fallback_runner_plan(plan: RunnerPlan) -> RunnerPlan | None:
                 f"unsupported model for {plan.selected_model}"
             ),
             proposed_command_shape=(
-                f"openclaw agent --agent {plan.selected_openclaw_agent} "
+                f"openclaw agent --agent {fallback_agent} "
                 f"--session-key {fallback_session_key} "
                 f"--model {fallback_model} "
                 f"--thinking {plan.selected_reasoning_effort} "
@@ -144,18 +145,19 @@ def _fallback_runner_plan(plan: RunnerPlan) -> RunnerPlan | None:
         f"{base_session_key}-fallback-{fallback_policy.name.lower()}"
     )
 
+    fallback_agent = execution_agent_for_backend(fallback_policy, plan.proposed_runner)
     return replace(
         plan,
         selected_role_name=fallback_policy.name,
         selected_model=fallback_policy.model,
         selected_reasoning_effort=fallback_policy.reasoning_effort,
-        selected_openclaw_agent=fallback_policy.openclaw_agent,
+        selected_openclaw_agent=fallback_agent,
         role_selection_reason=(
             f"fallback from {plan.selected_role_name} after runtime reported "
             f"unsupported model for {plan.selected_model}"
         ),
         proposed_command_shape=(
-            f"openclaw agent --agent {fallback_policy.openclaw_agent} "
+            f"openclaw agent --agent {fallback_agent} "
             f"--session-key {fallback_session_key} "
             f"--model {fallback_policy.model} "
             f"--thinking {fallback_policy.reasoning_effort} "
@@ -246,9 +248,10 @@ def plan_runner(repo: str, *, limit: int = 1, backend: str | None = None) -> lis
             target_number=item.number,
             profile=profile,
         )
+        execution_agent = execution_agent_for_backend(role_selection.policy, runner)
         command_shape = build_backend_command_shape(
             backend=runner,
-            agent=profile,
+            agent=execution_agent,
             session_key=session_key,
             model=role_selection.policy.model,
             reasoning_effort=role_selection.policy.reasoning_effort,
@@ -275,7 +278,7 @@ def plan_runner(repo: str, *, limit: int = 1, backend: str | None = None) -> lis
             selected_role_name=role_selection.policy.name,
             selected_model=role_selection.policy.model,
             selected_reasoning_effort=role_selection.policy.reasoning_effort,
-            selected_openclaw_agent=role_selection.policy.openclaw_agent,
+            selected_openclaw_agent=execution_agent,
             role_selection_reason=role_selection.reason,
         )
         plans.append(plan)
@@ -320,9 +323,10 @@ def plan_runner_for_issue(
         target_number=item.number,
         profile=profile,
     )
+    execution_agent = execution_agent_for_backend(role_selection.policy, runner)
     command_shape = build_backend_command_shape(
         backend=runner,
-        agent=profile,
+        agent=execution_agent,
         session_key=session_key,
         model=role_selection.policy.model,
         reasoning_effort=role_selection.policy.reasoning_effort,
@@ -349,7 +353,7 @@ def plan_runner_for_issue(
         selected_role_name=role_selection.policy.name,
         selected_model=role_selection.policy.model,
         selected_reasoning_effort=role_selection.policy.reasoning_effort,
-        selected_openclaw_agent=role_selection.policy.openclaw_agent,
+        selected_openclaw_agent=execution_agent,
         role_selection_reason=role_selection.reason,
     )
 
@@ -407,9 +411,10 @@ def plan_active_runner_from_prompts(
             target_number=item.number,
             profile=profile,
         )
+        execution_agent = execution_agent_for_backend(role_selection.policy, runner)
         command_shape = build_backend_command_shape(
             backend=runner,
-            agent=profile,
+            agent=execution_agent,
             session_key=session_key,
             model=role_selection.policy.model,
             reasoning_effort=role_selection.policy.reasoning_effort,
@@ -432,7 +437,7 @@ def plan_active_runner_from_prompts(
                 selected_role_name=role_selection.policy.name,
                 selected_model=role_selection.policy.model,
                 selected_reasoning_effort=role_selection.policy.reasoning_effort,
-                selected_openclaw_agent=role_selection.policy.openclaw_agent,
+                selected_openclaw_agent=execution_agent,
                 role_selection_reason=role_selection.reason,
             )
         )

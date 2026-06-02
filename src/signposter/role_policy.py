@@ -41,6 +41,7 @@ class RolePolicy:
     restrictions: tuple[str, ...] = ()
     manual_only: bool = False
     legacy_fallback: bool = False
+    codex_cli_agent: str | None = None
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,7 @@ ACTIVE_ROLE_POLICIES: dict[str, RolePolicy] = {
     "ROUTER_CLASSIFIER": RolePolicy(
         name="ROUTER_CLASSIFIER",
         openclaw_agent="worker_light",
+        codex_cli_agent="codex_router_classifier",
         model="openai/gpt-5.4-mini",
         reasoning_effort="minimal",
         use_case="Cheap routing and classification for recoverable stages.",
@@ -74,6 +76,7 @@ ACTIVE_ROLE_POLICIES: dict[str, RolePolicy] = {
     "ARTIFACT_SUMMARIZER": RolePolicy(
         name="ARTIFACT_SUMMARIZER",
         openclaw_agent="worker_light",
+        codex_cli_agent="codex_artifact_summarizer",
         model="openai/gpt-5.4-mini",
         reasoning_effort="minimal",
         use_case="Bounded raw-output summarization and evidence extraction.",
@@ -86,6 +89,7 @@ ACTIVE_ROLE_POLICIES: dict[str, RolePolicy] = {
     "ISSUE_FACTORY": RolePolicy(
         name="ISSUE_FACTORY",
         openclaw_agent="planner_main",
+        codex_cli_agent="codex_issue_factory",
         model="openai/gpt-5.4-mini",
         reasoning_effort="low",
         use_case="Issue shaping, labels, acceptance criteria, dependencies.",
@@ -94,6 +98,7 @@ ACTIVE_ROLE_POLICIES: dict[str, RolePolicy] = {
     "PLANNER_MAIN": RolePolicy(
         name="PLANNER_MAIN",
         openclaw_agent="planner_main",
+        codex_cli_agent="codex_planner_main",
         model="openai/gpt-5.4",
         reasoning_effort="medium",
         use_case="Freeform goal to roadmap/task DAG planning.",
@@ -102,6 +107,7 @@ ACTIVE_ROLE_POLICIES: dict[str, RolePolicy] = {
     "WORKER_LIGHT": RolePolicy(
         name="WORKER_LIGHT",
         openclaw_agent="worker_light",
+        codex_cli_agent="codex_worker_light",
         model="xai/grok-build-0.1",
         reasoning_effort="low",
         use_case="Docs, tests, simple patch, low-risk refactor.",
@@ -111,6 +117,7 @@ ACTIVE_ROLE_POLICIES: dict[str, RolePolicy] = {
     "WORKER_CODE": RolePolicy(
         name="WORKER_CODE",
         openclaw_agent="worker_code",
+        codex_cli_agent="codex_worker_code",
         model="openai/gpt-5.3-codex",
         reasoning_effort="low",
         use_case="Code-heavy repo and terminal tasks.",
@@ -119,6 +126,7 @@ ACTIVE_ROLE_POLICIES: dict[str, RolePolicy] = {
     "WORKER_CORE": RolePolicy(
         name="WORKER_CORE",
         openclaw_agent="worker_core",
+        codex_cli_agent="codex_worker_core",
         model="openai/gpt-5.4",
         reasoning_effort="medium",
         use_case="Core Signposter semantics, safety, and orchestration changes.",
@@ -127,6 +135,7 @@ ACTIVE_ROLE_POLICIES: dict[str, RolePolicy] = {
     "REVIEWER_LIGHT": RolePolicy(
         name="REVIEWER_LIGHT",
         openclaw_agent="reviewer_light",
+        codex_cli_agent="codex_reviewer_light",
         model="xai/grok-build-0.1",
         reasoning_effort="low",
         use_case="Docs-only and small low/medium-risk PR review.",
@@ -136,6 +145,7 @@ ACTIVE_ROLE_POLICIES: dict[str, RolePolicy] = {
     "REVIEWER_CORE": RolePolicy(
         name="REVIEWER_CORE",
         openclaw_agent="reviewer_core",
+        codex_cli_agent="codex_reviewer_core",
         model="openai/gpt-5.4",
         reasoning_effort="medium",
         use_case="Lifecycle, gate, merge, policy, and OpenClaw review.",
@@ -144,6 +154,7 @@ ACTIVE_ROLE_POLICIES: dict[str, RolePolicy] = {
     "CRITICAL_OVERRIDE": RolePolicy(
         name="CRITICAL_OVERRIDE",
         openclaw_agent="main",
+        codex_cli_agent="codex_critical_override",
         model="openai/gpt-5.4",
         reasoning_effort="high",
         use_case="Explicit critical/manual escalation path only.",
@@ -156,6 +167,7 @@ ACTIVE_ROLE_POLICIES: dict[str, RolePolicy] = {
     "RECONCILE_LIGHT": RolePolicy(
         name="RECONCILE_LIGHT",
         openclaw_agent="planner_main",
+        codex_cli_agent="codex_reconcile_light",
         model="openai/gpt-5.4-mini",
         reasoning_effort="low",
         use_case="Simple next/side/stop reconcile decisions.",
@@ -164,6 +176,7 @@ ACTIVE_ROLE_POLICIES: dict[str, RolePolicy] = {
     "RECONCILE_CORE": RolePolicy(
         name="RECONCILE_CORE",
         openclaw_agent="planner_main",
+        codex_cli_agent="codex_reconcile_core",
         model="openai/gpt-5.4",
         reasoning_effort="medium",
         use_case="DAG-changing reconcile and dependency conflict handling.",
@@ -172,6 +185,7 @@ ACTIVE_ROLE_POLICIES: dict[str, RolePolicy] = {
     "LEGACY_BACKUP": RolePolicy(
         name="LEGACY_BACKUP",
         openclaw_agent="worker_code",
+        codex_cli_agent="codex_legacy_backup",
         model="openai/gpt-5.2",
         reasoning_effort="low",
         use_case="Explicit compatibility fallback only.",
@@ -188,6 +202,13 @@ ACTIVE_ROLE_POLICIES: dict[str, RolePolicy] = {
 def get_role_policy(role_name: str) -> RolePolicy:
     """Return the active policy for a role name."""
     return ACTIVE_ROLE_POLICIES[role_name]
+
+
+def execution_agent_for_backend(policy: RolePolicy, backend: str) -> str:
+    """Return the backend-specific execution agent/profile metadata for a role."""
+    if backend == "codex-cli":
+        return policy.codex_cli_agent or policy.openclaw_agent
+    return policy.openclaw_agent
 
 
 def _openclaw_config_path(env: dict[str, str] | None = None) -> Path:
@@ -274,6 +295,12 @@ def validate_role_policy(policy: RolePolicy) -> list[str]:
         errors.append(
             f"{policy.name}: reasoning effort '{policy.reasoning_effort}' is not allowed"
         )
+
+    if not policy.openclaw_agent.strip():
+        errors.append(f"{policy.name}: openclaw_agent must not be empty")
+
+    if policy.codex_cli_agent is not None and not policy.codex_cli_agent.strip():
+        errors.append(f"{policy.name}: codex_cli_agent must not be empty")
 
     if "-pro" in policy.model or policy.model.endswith("-nano"):
         errors.append(f"{policy.name}: forbidden model family '{policy.model}'")
@@ -415,6 +442,8 @@ def format_role_policy_status(registry: dict[str, RolePolicy] | None = None) -> 
     for role_name in sorted(active_registry):
         policy = active_registry[role_name]
         lines.append(f"{policy.name}")
+        lines.append(f"  openclaw_agent: {policy.openclaw_agent}")
+        lines.append(f"  codex_cli_agent: {execution_agent_for_backend(policy, 'codex-cli')}")
         lines.append(f"  agent: {policy.openclaw_agent}")
         lines.append(f"  model: {policy.model}")
         lines.append(f"  reasoning: {policy.reasoning_effort}")
