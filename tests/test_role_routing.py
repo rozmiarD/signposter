@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from signposter.dispatch import classify_candidate
 from signposter.role_routing import (
+    resolve_role_execution,
     select_role_for_issue,
     select_role_for_reconcile,
     select_role_for_review,
@@ -65,6 +66,39 @@ def test_core_issue_routes_to_worker_core():
     selection = select_role_for_issue(item, classify_candidate(item))
 
     assert selection.policy.name == "WORKER_CORE"
+
+
+def test_role_execution_selection_resolves_codex_cli_metadata():
+    item = make_item(
+        5,
+        ["state:ready", "phase:build", "role:worker", "risk:high", "area:scheduler"],
+        "Route deterministic scheduler stages to role policies",
+    )
+    selection = select_role_for_issue(item, classify_candidate(item))
+
+    execution = resolve_role_execution(selection, backend="codex-cli")
+
+    assert execution.backend == "codex-cli"
+    assert execution.execution_agent == "codex_worker_core"
+    assert execution.model == "openai/gpt-5.4"
+    assert execution.reasoning_effort == "medium"
+    assert "backend=codex-cli" in execution.reason
+
+
+def test_role_execution_selection_preserves_openclaw_metadata():
+    item = make_item(
+        6,
+        ["state:ready", "phase:build", "role:worker", "risk:high", "area:scheduler"],
+        "Route deterministic scheduler stages to role policies",
+    )
+    selection = select_role_for_issue(item, classify_candidate(item))
+
+    execution = resolve_role_execution(selection, backend="openclaw")
+
+    assert execution.backend == "openclaw"
+    assert execution.execution_agent == "worker_core"
+    assert execution.model == "openai/gpt-5.4"
+    assert execution.reasoning_effort == "medium"
 
 
 def test_small_docs_review_routes_to_reviewer_light():
