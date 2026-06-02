@@ -10,6 +10,7 @@ import re
 from dataclasses import dataclass
 
 DEFAULT_MAX_COMMENT_CHARS = 6000
+TRANSITION_COMMENT_MAX_CHARS = 240
 _ANSI_ESCAPE_RE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 _AUTO_CLOSE_KEYWORD_RE = re.compile(
     r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s*(?:issue\s+)?#\d+\b",
@@ -86,6 +87,11 @@ def ensure_github_comment_body(body: str, **kwargs: object) -> str:
     return body
 
 
+def ensure_transition_comment_body(body: str) -> str:
+    """Return body when it fits the compact state-transition comment budget."""
+    return ensure_github_comment_body(body, max_chars=TRANSITION_COMMENT_MAX_CHARS)
+
+
 def format_claim_comment(
     *,
     route: str | None,
@@ -95,16 +101,15 @@ def format_claim_comment(
     """Return a compact claim comment.
 
     Example:
-        **Signposter:** claimed task for local worker run.
+        **Signposter:** claimed task.
 
         `state:ready → state:active` · `route:worker` · `gate:ci`
     """
     route = route or "unknown"
     gate = gate or "none"
 
-    # Keep it very short. "local worker run" is acceptable for the common case.
-    # We avoid leaking full lease_owner unless it's clearly useful.
-    header = "**Signposter:** claimed task for local worker run."
+    # Route and gate chips carry the operational detail; keep the prose short.
+    header = "**Signposter:** claimed task."
 
     parts = [
         "`state:ready → state:active`",
@@ -114,13 +119,13 @@ def format_claim_comment(
         parts.append(f"`gate:{gate}`")
 
     body = " · ".join(parts)
-    return ensure_github_comment_body(f"{header}\n\n{body}")
+    return ensure_transition_comment_body(f"{header}\n\n{body}")
 
 
 def format_release_comment() -> str:
     """Return a compact release comment."""
-    return ensure_github_comment_body(
-        "**Signposter:** released task back to queue.\n\n"
+    return ensure_transition_comment_body(
+        "**Signposter:** released task.\n\n"
         "`state:active → state:ready` · removed `gate:*`"
     )
 
@@ -130,7 +135,7 @@ def format_complete_comment() -> str:
 
     Always notes that the issue remains open (no auto-close).
     """
-    return ensure_github_comment_body(
+    return ensure_transition_comment_body(
         "**Signposter:** completed task.\n\n"
         "`state:active → state:done` · issue remains open"
     )
@@ -143,7 +148,7 @@ def format_fail_comment(*, removed_gates: bool = False) -> str:
     Uses compact form `removed gate:*` per HARDENING-001 adjustment.
     """
     gate_part = " · removed gate:*" if removed_gates else ""
-    return ensure_github_comment_body(
-        "**Signposter:** marked task as failed.\n\n"
+    return ensure_transition_comment_body(
+        "**Signposter:** marked task failed.\n\n"
         f"`state:active → state:failed`{gate_part}"
     )

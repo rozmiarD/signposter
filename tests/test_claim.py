@@ -163,7 +163,7 @@ def test_perform_claim_mutation_returns_correct_commands():
     assert "--add-label state:active,gate:ci" in commands[0]
     assert "--remove-label state:ready" in commands[0]
     assert "gh issue comment 42" in commands[1]
-    assert "**Signposter:** claimed task for local worker run." in commands[1]
+    assert "**Signposter:** claimed task." in commands[1]
     assert "`state:ready → state:active`" in commands[1]
     assert "`route:worker`" in commands[1]
     assert "`gate:ci`" in commands[1]
