@@ -824,6 +824,20 @@ def plan_noop_integration_for_issue(repo: str, issue_number: int) -> NoopIntegra
     )
 
 
+def format_noop_integration_preconditions(plan: NoopIntegrationPlan) -> list[str]:
+    return [
+        f"  issue is open: {'yes' if plan.issue_state == 'OPEN' else 'no'}",
+        (
+            "  workflow state is state:done: "
+            f"{'yes' if plan.current_workflow_state == 'state:done' else 'no'}"
+        ),
+        f"  gate passed: {'yes' if plan.gate_decision == 'pass' else 'no'}",
+        f"  no associated PR detected: {'yes' if not plan.associated_pr_detected else 'no'}",
+        f"  worktree absent: {'yes' if not plan.worktree_exists else 'no'}",
+        f"  local branch absent: {'yes' if not plan.local_branch_exists else 'no'}",
+    ]
+
+
 def format_noop_integration_plan(plan: NoopIntegrationPlan) -> str:
     lines = [f"Signposter No-op Integration Plan — Issue #{plan.issue_number}\n"]
 
@@ -845,6 +859,9 @@ def format_noop_integration_plan(plan: NoopIntegrationPlan) -> str:
     lines.append(f"  worktree path: {plan.worktree_path}")
     lines.append(f"  worktree exists: {'yes' if plan.worktree_exists else 'no'}")
     lines.append(f"  local branch exists: {'yes' if plan.local_branch_exists else 'no'}")
+
+    lines.append("\nVerified preconditions:")
+    lines.extend(format_noop_integration_preconditions(plan))
 
     lines.append("\nPlanned GitHub mutations:")
     if plan.status == "ready":
@@ -876,6 +893,9 @@ def format_noop_integration_apply_dry_run(plan: NoopIntegrationPlan, repo: str) 
     lines.append(f"  status: {plan.status}")
     lines.append(f"  gate decision: {plan.gate_decision}")
     lines.append(f"  close issue: {'yes' if plan.close_issue else 'no'}")
+
+    lines.append("\nVerified preconditions:")
+    lines.extend(format_noop_integration_preconditions(plan))
 
     lines.append("\nPlanned GitHub mutations:")
     if plan.status == "ready":
