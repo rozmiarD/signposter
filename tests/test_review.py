@@ -1356,7 +1356,63 @@ def test_gate_blocked_for_malformed_confidence():
     with patch("os.path.isfile", return_value=True), patch("builtins.open", create=True) as m:
         m.return_value.__enter__.return_value.read.return_value = text
         result = evaluate_review_gate("test/repo", 5)
-        assert "confidence below threshold" in result.status
+        assert "reviewer confidence must be present and parseable" in result.status
+
+
+def test_gate_blocked_for_confidence_out_of_range():
+    from signposter.review import evaluate_review_gate
+
+    text = """Verdict: APPROVE
+Confidence: 1.20
+Risk: low
+Scope match: yes
+CI considered: yes
+Merge recommendation: yes
+Automerge eligible: no"""
+
+    with patch("os.path.isfile", return_value=True), patch("builtins.open", create=True) as m:
+        m.return_value.__enter__.return_value.read.return_value = text
+        result = evaluate_review_gate("test/repo", 5)
+
+    assert result.gate_pass is False
+    assert result.reason == "reviewer confidence must be between 0 and 1"
+
+
+def test_gate_blocked_for_unknown_risk_has_contract_reason():
+    from signposter.review import evaluate_review_gate
+
+    text = """Verdict: APPROVE
+Confidence: 0.95
+Risk: maybe
+Scope match: yes
+CI considered: yes
+Merge recommendation: yes
+Automerge eligible: no"""
+
+    with patch("os.path.isfile", return_value=True), patch("builtins.open", create=True) as m:
+        m.return_value.__enter__.return_value.read.return_value = text
+        result = evaluate_review_gate("test/repo", 5)
+
+    assert result.gate_pass is False
+    assert result.reason == "reviewer risk must be low, medium, or high (got maybe)"
+
+
+def test_gate_blocked_for_missing_scope_has_contract_reason():
+    from signposter.review import evaluate_review_gate
+
+    text = """Verdict: APPROVE
+Confidence: 0.95
+Risk: low
+CI considered: yes
+Merge recommendation: yes
+Automerge eligible: no"""
+
+    with patch("os.path.isfile", return_value=True), patch("builtins.open", create=True) as m:
+        m.return_value.__enter__.return_value.read.return_value = text
+        result = evaluate_review_gate("test/repo", 5)
+
+    assert result.gate_pass is False
+    assert result.reason == "scope match must be yes or no (got missing)"
 
 
 def test_format_review_gate_contains_safety_notes():
@@ -1424,6 +1480,19 @@ def test_validate_review_artifact_blocks_unsafe_marker(tmp_path):
 
     assert result.status == "blocked"
     assert "unsafe execution marker" in result.errors[0]
+
+
+def test_validate_review_artifact_blocks_confidence_out_of_range(tmp_path):
+    from signposter.artifact import plan_review_summary, write_manual_artifact
+    from signposter.review import validate_review_artifact
+
+    plan = plan_review_summary(pr=73, confidence=1.20, risk="low", runs_dir=tmp_path)
+    write_manual_artifact(plan, apply=True)
+
+    result = validate_review_artifact(73, summary_path=plan.path)
+
+    assert result.status == "blocked"
+    assert "Confidence must be between 0 and 1" in result.errors
 
 
 def test_validate_review_artifact_blocks_unsafe_raw_marker(tmp_path):
