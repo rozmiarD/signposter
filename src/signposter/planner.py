@@ -2346,6 +2346,7 @@ def build_planner_next_from_status(status: dict[str, Any]) -> dict[str, Any]:
                 "parent": task.get("parent"),
                 "return_to": task.get("return_to"),
                 "side_task": bool(task.get("side_task", False)),
+                "return_status": task.get("return_status"),
             }
             if task.get("side_task"):
                 return {
@@ -2392,6 +2393,7 @@ def build_planner_next_from_status(status: dict[str, Any]) -> dict[str, Any]:
                 "parent": task.get("parent"),
                 "return_to": task.get("return_to"),
                 "side_task": bool(task.get("side_task", False)),
+                "return_status": task.get("return_status"),
             }
             if task.get("side_task"):
                 return {
@@ -2484,6 +2486,17 @@ def format_planner_next_from_status(result: dict[str, Any]) -> str:
                     f"  mainline: {mainline}",
                 ]
             )
+            return_status = task.get("return_status") or {}
+            if return_status:
+                lines.extend(
+                    [
+                        f"  return state: {return_status.get('state', 'unknown')}",
+                        "  return ready: "
+                        f"{'yes' if return_status.get('ready') else 'no'}",
+                        "  mainline waiting on side-task: "
+                        f"{'yes' if return_status.get('mainline_waiting') else 'no'}",
+                    ]
+                )
 
     if result["waiting"]:
         lines.extend(["", "Waiting:"])
@@ -2734,6 +2747,8 @@ def build_planner_status(
             }
         )
 
+    _annotate_side_task_return_status(tasks)
+
     if not tasks:
         status = "empty"
     elif all(task["github_issue"] is None for task in tasks):
@@ -2758,6 +2773,77 @@ def build_planner_status(
             "No task execution was performed.",
         ],
     }
+
+
+def _annotate_side_task_return_status(tasks: list[dict[str, Any]]) -> None:
+    """Attach return-to-mainline readiness metadata to side-task rows."""
+    tasks_by_issue = {
+        int(task["github_issue"]): task
+        for task in tasks
+        if task.get("github_issue") is not None
+    }
+    completed = {
+        task["key"]
+        for task in tasks
+        if str(task.get("state", "")).lower() in COMPLETED_PLANNER_STATES
+    }
+
+    for task in tasks:
+        if not task.get("side_task"):
+            continue
+
+        return_issue = _coerce_int(task.get("return_to"))
+        return_task = tasks_by_issue.get(return_issue) if return_issue is not None else None
+        side_completed = str(task.get("state", "")).lower() in COMPLETED_PLANNER_STATES
+        if return_task is None:
+            task["return_status"] = {
+                "state": "missing",
+                "ready": False,
+                "mainline_waiting": not side_completed,
+                "missing_dependencies": [],
+                "reason": "return target is not present in the manifest",
+            }
+            continue
+
+        missing_dependencies = [
+            dependency
+            for dependency in return_task.get("depends_on", [])
+            if dependency not in completed
+        ]
+        return_state = str(return_task.get("state", "")).lower() or "unknown"
+        return_workflow_state = str(return_task.get("workflow_state", "") or "").lower()
+        return_is_ready_state = return_state == "ready" or (
+            return_state == "open" and return_workflow_state == "ready"
+        )
+        return_ready = (
+            side_completed
+            and return_is_ready_state
+            and not missing_dependencies
+        )
+        mainline_waiting = (
+            not side_completed
+            and return_state not in COMPLETED_PLANNER_STATES
+        )
+        task["return_status"] = {
+            "state": return_state,
+            "ready": return_ready,
+            "mainline_waiting": mainline_waiting,
+            "missing_dependencies": missing_dependencies,
+            "reason": (
+                "side task complete and return target can resume"
+                if return_ready
+                else "return target is waiting for side task or dependencies"
+            ),
+        }
+
+
+def _coerce_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _workflow_state_from_manifest_labels(labels: list[Any]) -> str | None:
@@ -2834,6 +2920,20 @@ def format_planner_status(status: dict[str, Any]) -> str:
                     f" · return-to: {return_to}"
                     f" · mainline: {mainline}"
                 )
+                return_status = task.get("return_status") or {}
+                if return_status:
+                    ready = "yes" if return_status.get("ready") else "no"
+                    waiting = "yes" if return_status.get("mainline_waiting") else "no"
+                    missing = ", ".join(return_status.get("missing_dependencies", []))
+                    detail = (
+                        "    return state: "
+                        f"{return_status.get('state', 'unknown')}"
+                        f" · return ready: {ready}"
+                        f" · mainline waiting on side-task: {waiting}"
+                    )
+                    if missing:
+                        detail += f" · missing: {missing}"
+                    lines.append(detail)
 
     lines.extend(["", "Notes:"])
     lines.extend(f"  {note}" for note in status["notes"])

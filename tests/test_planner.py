@@ -3273,6 +3273,115 @@ def test_build_planner_next_from_status_returns_to_mainline_after_side_task_comp
     assert result["next"]["key"] == "MAIN-001"
 
 
+def test_build_planner_status_marks_mainline_waiting_on_active_side_task(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    manifest["issues"] = [
+        {
+            "key": "SIDE-001",
+            "title": "Side task",
+            "labels": ["state:active"],
+            "depends_on": [],
+            "body_file": "side.md",
+            "body_size": 1,
+            "github_issue": 11,
+            "github_url": "https://github.com/ExatronOmega/signposter/issues/11",
+            "mainline": "H042",
+            "parent": 10,
+            "return_to": 10,
+            "side_task": True,
+        },
+        {
+            "key": "MAIN-001",
+            "title": "Mainline",
+            "labels": ["state:ready"],
+            "depends_on": ["SIDE-001"],
+            "body_file": "main.md",
+            "body_size": 1,
+            "github_issue": 10,
+            "github_url": "https://github.com/ExatronOmega/signposter/issues/10",
+            "mainline": "H042",
+            "parent": None,
+            "return_to": None,
+            "side_task": False,
+        },
+    ]
+
+    status = build_planner_status(manifest, {10: "open", 11: "active"})
+    side_task = status["tasks"][0]
+
+    assert side_task["return_status"]["state"] == "open"
+    assert side_task["return_status"]["ready"] is False
+    assert side_task["return_status"]["mainline_waiting"] is True
+    assert side_task["return_status"]["missing_dependencies"] == ["SIDE-001"]
+
+
+def test_build_planner_status_marks_return_target_ready_after_side_completion(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    manifest["issues"] = [
+        {
+            "key": "SIDE-001",
+            "title": "Side task",
+            "labels": ["state:merged"],
+            "depends_on": [],
+            "body_file": "side.md",
+            "body_size": 1,
+            "github_issue": 11,
+            "github_url": "https://github.com/ExatronOmega/signposter/issues/11",
+            "mainline": "H042",
+            "parent": 10,
+            "return_to": 10,
+            "side_task": True,
+        },
+        {
+            "key": "MAIN-001",
+            "title": "Mainline",
+            "labels": ["state:ready"],
+            "depends_on": ["SIDE-001"],
+            "body_file": "main.md",
+            "body_size": 1,
+            "github_issue": 10,
+            "github_url": "https://github.com/ExatronOmega/signposter/issues/10",
+            "mainline": "H042",
+            "parent": None,
+            "return_to": None,
+            "side_task": False,
+        },
+    ]
+
+    status = build_planner_status(manifest, {10: "open", 11: "merged"})
+    side_task = status["tasks"][0]
+    output = format_planner_status(status)
+
+    assert side_task["return_status"]["ready"] is True
+    assert side_task["return_status"]["mainline_waiting"] is False
+    assert "return state: open · return ready: yes" in output
+    assert "mainline waiting on side-task: no" in output
+
+
 def test_format_planner_step_contains_suggested_command_and_safety_notes(
     tmp_path: Path,
 ) -> None:
@@ -3333,11 +3442,44 @@ def test_format_planner_next_from_status_shows_side_task_transition() -> None:
     assert "parent: #10" in output
     assert "return-to: #10" in output
     assert "mainline: H042" in output
+    assert "return state: ready" not in output
     assert "No GitHub mutation was performed." in output
     assert "No claim was performed." in output
     assert "No worktree was created." in output
     assert "No OpenClaw execution was performed." in output
     assert "No task execution was performed." in output
+
+
+def test_format_planner_next_from_status_shows_return_readiness() -> None:
+    result = {
+        "status": "ready",
+        "reason": "dependency-ready side-task selected before mainline",
+        "next": {
+            "key": "SIDE-001",
+            "github_issue": 11,
+            "github_url": "https://github.com/ExatronOmega/signposter/issues/11",
+            "state": "ready",
+            "depends_on": [],
+            "mainline": "H042",
+            "parent": 10,
+            "return_to": 10,
+            "side_task": True,
+            "return_status": {
+                "state": "ready",
+                "ready": False,
+                "mainline_waiting": True,
+                "missing_dependencies": ["SIDE-001"],
+            },
+        },
+        "waiting": [],
+        "blocked": [],
+    }
+
+    output = format_planner_next_from_status(result)
+
+    assert "return state: ready" in output
+    assert "return ready: no" in output
+    assert "mainline waiting on side-task: yes" in output
 
 
 def test_format_planner_next_from_status_shows_missing_ready_label_reconcile_hint() -> None:
