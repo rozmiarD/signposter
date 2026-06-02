@@ -24,6 +24,7 @@ from signposter.planner import (
     build_planner_step_from_next,
     evaluate_worker_issue_body_size,
     format_gh_issue_create_command,
+    format_planner_advance_apply_result,
     format_planner_advance_plan,
     format_planner_impact,
     format_planner_issue_body,
@@ -2160,6 +2161,14 @@ def test_apply_planner_advance_plan_executes_single_ready_mutation(
         ["gh", "issue", "edit", "11", "-R", "ExatronOmega/signposter", "--add-label", "state:ready"]
     ]
 
+    output = format_planner_advance_apply_result(result)
+    assert "Status detail:" in output
+    assert (
+        "applied — GitHub label mutations listed below were executed because "
+        "--apply was provided."
+    ) in output
+    assert "Issue closure was not performed." in output
+
 
 def test_apply_planner_advance_plan_refuses_blocked_plan() -> None:
     advance_plan = {
@@ -2182,6 +2191,10 @@ def test_apply_planner_advance_plan_refuses_blocked_plan() -> None:
     assert result["commands"] == []
     assert result["errors"] == ["advance plan is not ready"]
     assert calls == []
+
+    output = format_planner_advance_apply_result(result)
+    assert "Status detail:" in output
+    assert "blocked — no GitHub label mutation was executed." in output
 
 
 def test_apply_planner_advance_plan_executes_multi_target_apply(
@@ -2631,13 +2644,17 @@ def test_format_planner_advance_plan_contains_dry_run_mutation_and_safety_notes(
 
     assert "Signposter Planner Advance — Issue #10" in output
     assert "Status:\n  ready" in output
+    assert "Status detail:" in output
+    assert "ready — dry-run only; use planner advance --apply to add listed labels" in output
     assert "Source task:" in output
     assert "WATCH-001 — state: closed" in output
     assert "Would promote:" in output
     assert "WATCH-002 — issue: #11 — state: open" in output
     assert "Planned GitHub mutations:" in output
+    assert "Preview only; these commands were not executed." in output
     assert "gh issue edit 11 -R ExatronOmega/signposter --add-label state:ready" in output
     assert "No GitHub mutation was performed." in output
+    assert "No issue was closed." in output
     assert "No manifest mutation was performed." in output
     assert "No OpenClaw execution was performed." in output
     assert "No LLM analysis was performed." in output
