@@ -255,6 +255,25 @@ def run_orchestrator_step(
             notes=notes,
         )
 
+    if apply and planned.takeover_category:
+        return OrchestratorStep(
+            next=planned,
+            status="blocked",
+            applied=False,
+            exit_code=None,
+            stdout="",
+            stderr="",
+            stop_reason=(
+                "takeover plan requires explicit manual recovery before apply: "
+                f"{planned.takeover_category}"
+            ),
+            notes=[
+                *notes,
+                "Takeover apply guard stopped before running the lifecycle command.",
+                "Preserve existing evidence and choose resume or manual fallback first.",
+            ],
+        )
+
     if not apply:
         return OrchestratorStep(
             next=planned,
