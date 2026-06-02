@@ -636,6 +636,12 @@ def format_lifecycle_status(status: LifecycleStatus) -> str:
     lines.append(f"  local branch exists: {'yes' if status.local_branch_exists else 'no'}")
     lines.append(f"  cleanup complete: {'yes' if status.cleanup_complete else 'no'}")
 
+    post_merge_gaps = _post_merge_gap_lines(status)
+    if post_merge_gaps:
+        lines.append("\nPost-merge gaps:")
+        for line in post_merge_gaps:
+            lines.append(f"  {line}")
+
     # Linkage (H022C)
     lines.append("\nLinkage:")
     if status.linkage_source:
@@ -658,6 +664,48 @@ def format_lifecycle_status(status: LifecycleStatus) -> str:
             lines.append(f"  {n}")
 
     return "\n".join(lines)
+
+
+def _post_merge_gap_lines(status: LifecycleStatus) -> list[str]:
+    """Return bounded diagnostics for merged PRs that still need integration or cleanup."""
+    if not status.pr_merged:
+        return []
+
+    lines: list[str] = []
+    if not status.integrated:
+        lines.extend(
+            [
+                "category: integration-needed",
+                f"issue closed: {'yes' if status.issue_closed else 'no'}",
+                (
+                    "state:merged label: "
+                    f"{'yes' if status.workflow_state == 'state:merged' else 'no'}"
+                ),
+                "next: run integration plan/apply for this PR",
+            ]
+        )
+
+    if status.integrated and not status.cleanup_complete:
+        lines.extend(
+            [
+                "category: cleanup-needed",
+                f"worktree exists: {'yes' if status.worktree_exists else 'no'}",
+                f"local branch exists: {'yes' if status.local_branch_exists else 'no'}",
+                "next: run cleanup plan/apply for this PR",
+            ]
+        )
+
+    return lines
+
+
+def _post_merge_gap_summary(status: LifecycleStatus) -> str:
+    if not status.pr_merged:
+        return "none"
+    if not status.integrated:
+        return "integration-needed"
+    if not status.cleanup_complete:
+        return "cleanup-needed"
+    return "none"
 
 
 def format_lifecycle_status_summary(status: LifecycleStatus) -> str:
@@ -697,6 +745,7 @@ def format_lifecycle_status_summary(status: LifecycleStatus) -> str:
         f"review: {review}",
         f"integration: {'complete' if status.integrated else 'pending'}",
         f"cleanup: {cleanup}",
+        f"post-merge gap: {_post_merge_gap_summary(status)}",
         f"stop: {stop}",
         "notes: read-only; no GitHub mutation; no local cleanup",
     ]
