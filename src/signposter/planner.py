@@ -1796,10 +1796,27 @@ def build_planner_impact_from_status(
         }
 
     state = str(task.get("state", "")).lower()
-    downstream_tasks = [
-        item["key"]
+    downstream_task_items = [
+        item
         for item in tasks
         if task.get("key") in item.get("depends_on", [])
+    ]
+    downstream_tasks = [item["key"] for item in downstream_task_items]
+    side_task_downstream_tasks = [
+        item["key"] for item in downstream_task_items if item.get("side_task")
+    ]
+    blocked_downstream_tasks = [
+        item["key"]
+        for item in downstream_task_items
+        if str(item.get("state", "")).lower() in {"blocked", "failed"}
+    ]
+    advanceable_downstream_tasks = [
+        item["key"]
+        for item in downstream_task_items
+        if str(item.get("state", "")).lower() == "open"
+    ]
+    mainline_downstream_tasks = [
+        item["key"] for item in downstream_task_items if not item.get("side_task")
     ]
 
     if state not in COMPLETED_PLANNER_STATES:
@@ -1822,8 +1839,36 @@ def build_planner_impact_from_status(
         }
 
     score = 10 if downstream_tasks else 0
+    if len(downstream_tasks) > 1:
+        score += min(30, (len(downstream_tasks) - 1) * 10)
+    if side_task_downstream_tasks:
+        score += 10
+    if task.get("side_task"):
+        score += 5
+    if blocked_downstream_tasks:
+        score += 50
+
     level = _planner_impact_level(score)
-    decision = "advance_mainline" if score < 40 else "requires_reconcile"
+    if blocked_downstream_tasks:
+        decision = "block_mainline"
+    elif downstream_tasks and not advanceable_downstream_tasks:
+        decision = "already_advanced"
+    elif score >= 40:
+        decision = "requires_reconcile"
+    else:
+        decision = "advance_mainline"
+
+    signals: list[str] = []
+    if mainline_downstream_tasks:
+        signals.append("mainline_dependent")
+    if side_task_downstream_tasks:
+        signals.append("side_task_dependent")
+    if task.get("side_task"):
+        signals.append("completed_side_task")
+    if blocked_downstream_tasks:
+        signals.append("blocked_downstream")
+    if downstream_tasks and not advanceable_downstream_tasks and not blocked_downstream_tasks:
+        signals.append("downstream_already_advanced")
 
     reasons = [
         f"issue is completed: state={task.get('state')}",
@@ -1833,6 +1878,14 @@ def build_planner_impact_from_status(
         reasons.append("task has downstream dependents")
     else:
         reasons.append("task has no downstream dependents")
+    if side_task_downstream_tasks:
+        reasons.append("task has side-task downstream dependents")
+    if task.get("side_task"):
+        reasons.append("completed task is a side-task")
+    if blocked_downstream_tasks:
+        reasons.append("one or more downstream tasks are blocked")
+    if downstream_tasks and not advanceable_downstream_tasks and not blocked_downstream_tasks:
+        reasons.append("downstream tasks are already ready, active, or completed")
 
     suggested_command = None
     if decision == "advance_mainline":
@@ -1849,9 +1902,13 @@ def build_planner_impact_from_status(
             "score": score,
             "level": level,
             "decision": decision,
+            "signals": signals,
         },
         "downstream_tasks": downstream_tasks,
-        "requires_llm_analysis": decision != "advance_mainline",
+        "side_task_downstream_tasks": side_task_downstream_tasks,
+        "blocked_downstream_tasks": blocked_downstream_tasks,
+        "advanceable_downstream_tasks": advanceable_downstream_tasks,
+        "requires_llm_analysis": decision == "requires_reconcile",
         "suggested_command": suggested_command,
         "reasons": reasons,
     }
@@ -1871,6 +1928,7 @@ def format_planner_impact(result: dict[str, Any]) -> str:
         f"  score: {impact['score']}",
         f"  level: {impact['level']}",
         f"  decision: {impact['decision']}",
+        f"  signals: {', '.join(impact.get('signals', [])) or 'none'}",
     ]
 
     task = result.get("task")
@@ -1889,6 +1947,12 @@ def format_planner_impact(result: dict[str, Any]) -> str:
             "",
             "Downstream:",
             f"  downstream: {', '.join(downstream) if downstream else 'none'}",
+            "  advanceable downstream: "
+            f"{', '.join(result.get('advanceable_downstream_tasks', [])) or 'none'}",
+            "  side-task downstream: "
+            f"{', '.join(result.get('side_task_downstream_tasks', [])) or 'none'}",
+            "  blocked downstream: "
+            f"{', '.join(result.get('blocked_downstream_tasks', [])) or 'none'}",
             "",
             "Requires:",
             f"  LLM analysis: {str(result.get('requires_llm_analysis', False)).lower()}",
