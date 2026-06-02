@@ -39,8 +39,7 @@ from signposter.openclaw_runtime import (
     normalize_subprocess_output,
     openclaw_timeout_settings,
 )
-from signposter.role_policy import execution_agent_for_backend
-from signposter.role_routing import select_role_for_review
+from signposter.role_routing import resolve_role_execution, select_role_for_review
 from signposter.runner import build_openclaw_session_key
 
 
@@ -427,7 +426,7 @@ def plan_review_for_pr(
         file_paths=file_paths,
     )
     backend_plan = resolve_execution_backend(backend)
-    execution_agent = execution_agent_for_backend(role_selection.policy, backend_plan.backend)
+    role_execution = resolve_role_execution(role_selection, backend=backend_plan.backend)
     session_key = build_openclaw_session_key(
         target_kind="pr",
         target_number=pr_number,
@@ -436,10 +435,10 @@ def plan_review_for_pr(
     prompt_path = f"artifacts/prompts/pr-{pr_number}-review.md"
     command_shape = build_backend_command_shape(
         backend=backend_plan.backend,
-        agent=execution_agent,
+        agent=role_execution.execution_agent,
         session_key=session_key,
-        model=role_selection.policy.model,
-        reasoning_effort=role_selection.policy.reasoning_effort,
+        model=role_execution.model,
+        reasoning_effort=role_execution.reasoning_effort,
         prompt_path=prompt_path,
     )
 
@@ -472,9 +471,9 @@ def plan_review_for_pr(
         backend_execution_supported=backend_plan.execution_supported,
         backend_notes=backend_plan.notes,
         selected_role_name=role_selection.policy.name,
-        selected_model=role_selection.policy.model,
-        selected_reasoning_effort=role_selection.policy.reasoning_effort,
-        selected_openclaw_agent=execution_agent,
+        selected_model=role_execution.model,
+        selected_reasoning_effort=role_execution.reasoning_effort,
+        selected_openclaw_agent=role_execution.execution_agent,
         role_selection_reason=role_selection.reason,
     )
 

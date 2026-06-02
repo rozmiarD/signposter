@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from signposter.dispatch import DispatchDecision, extract_label_value
-from signposter.role_policy import RolePolicy, get_role_policy
+from signposter.role_policy import RolePolicy, execution_agent_for_backend, get_role_policy
 from signposter.scan import LabeledItem
 
 CORE_AREAS = {
@@ -44,6 +44,33 @@ class RoleSelection:
     stage_kind: str
     deterministic: bool = True
     escalation_active: bool = False
+
+
+@dataclass(frozen=True)
+class RoleExecutionSelection:
+    """Backend-specific execution metadata derived from a role selection."""
+
+    role: RoleSelection
+    backend: str
+    execution_agent: str
+    model: str
+    reasoning_effort: str
+    reason: str
+
+
+def resolve_role_execution(selection: RoleSelection, *, backend: str) -> RoleExecutionSelection:
+    """Resolve role/model/reasoning into backend-specific execution metadata."""
+    return RoleExecutionSelection(
+        role=selection,
+        backend=backend,
+        execution_agent=execution_agent_for_backend(selection.policy, backend),
+        model=selection.policy.model,
+        reasoning_effort=selection.policy.reasoning_effort,
+        reason=(
+            f"{selection.reason}; backend={backend}; "
+            f"agent={execution_agent_for_backend(selection.policy, backend)}"
+        ),
+    )
 
 
 def _contains_any(text: str, patterns: tuple[str, ...]) -> bool:
