@@ -2134,6 +2134,16 @@ def test_build_planner_run_plan_from_status_reports_next_open_task(
     assert result["step"]["suggested_command"] == (
         "signposter run --repo ExatronOmega/signposter --issue 10 --dry-run"
     )
+    assert result["auto_advance"] == {
+        "status": "pending-task-completion",
+        "candidate_count": 0,
+        "next_action": (
+            "signposter run --repo ExatronOmega/signposter --issue 10 --dry-run"
+        ),
+        "reason": "run the selected task before advancing dependencies",
+        "codex_stage": "deterministic scheduler; no Codex CLI execution required",
+        "token_use": "zero LLM/backend tokens",
+    }
     assert result["advance_candidates"] == []
     assert result["requires_llm_analysis"] is False
 
@@ -2187,6 +2197,17 @@ def test_build_planner_run_plan_from_status_reports_advance_candidate(
             "targets": ["WATCH-002"],
         }
     ]
+    assert result["auto_advance"] == {
+        "status": "ready",
+        "candidate_count": 1,
+        "next_action": (
+            f"signposter planner advance --manifest {manifest_path} "
+            "--issue 10 --dry-run"
+        ),
+        "reason": "completed dependencies can promote downstream tasks",
+        "codex_stage": "deterministic scheduler; no Codex CLI execution required",
+        "token_use": "zero LLM/backend tokens",
+    }
     assert result["requires_llm_analysis"] is False
 
 
@@ -2231,6 +2252,11 @@ def test_format_planner_run_plan_contains_dashboard_sections(
     assert "4 task(s) waiting for dependencies" in output
     assert "Suggested step command:" in output
     assert "signposter run --repo ExatronOmega/signposter --issue 10 --dry-run" in output
+    assert "Auto-advance status:" in output
+    assert "status: pending-task-completion" in output
+    assert "candidates: 0" in output
+    assert "Codex stage: deterministic scheduler; no Codex CLI execution required" in output
+    assert "token use: zero LLM/backend tokens" in output
     assert "Advance candidates:" in output
     assert "none" in output
     assert "No GitHub mutation was performed." in output

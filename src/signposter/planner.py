@@ -1358,6 +1358,12 @@ def build_planner_run_plan_from_status(
             }
         )
 
+    auto_advance = build_planner_auto_advance_status(
+        next_plan=next_plan,
+        step_plan=step_plan,
+        advance_candidates=advance_candidates,
+    )
+
     return {
         "status": "ready",
         "repo": status.get("repo", ""),
@@ -1366,6 +1372,7 @@ def build_planner_run_plan_from_status(
         "status_counts": build_planner_status_counts(status.get("tasks", [])),
         "next": next_plan,
         "step": step_plan,
+        "auto_advance": auto_advance,
         "advance_candidates": advance_candidates,
         "requires_llm_analysis": any(
             candidate.get("requires_llm_analysis", False)
@@ -1380,6 +1387,75 @@ def build_planner_run_plan_from_status(
             "No OpenClaw execution was performed.",
             "No LLM analysis was performed.",
         ],
+    }
+
+
+def build_planner_auto_advance_status(
+    *,
+    next_plan: dict[str, Any],
+    step_plan: dict[str, Any],
+    advance_candidates: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Summarize deterministic DAG auto-advance readiness for planner run."""
+    candidate_count = len(advance_candidates)
+    if advance_candidates:
+        first_candidate = advance_candidates[0]
+        return {
+            "status": "ready",
+            "candidate_count": candidate_count,
+            "next_action": first_candidate.get("suggested_command") or "none",
+            "reason": "completed dependencies can promote downstream tasks",
+            "codex_stage": "deterministic scheduler; no Codex CLI execution required",
+            "token_use": "zero LLM/backend tokens",
+        }
+
+    if next_plan.get("status") == "completed":
+        return {
+            "status": "completed",
+            "candidate_count": 0,
+            "next_action": "none",
+            "reason": "planner DAG has no pending tasks",
+            "codex_stage": "deterministic scheduler; no Codex CLI execution required",
+            "token_use": "zero LLM/backend tokens",
+        }
+
+    if next_plan.get("next"):
+        return {
+            "status": "pending-task-completion",
+            "candidate_count": 0,
+            "next_action": step_plan.get("suggested_command") or "none",
+            "reason": "run the selected task before advancing dependencies",
+            "codex_stage": "deterministic scheduler; no Codex CLI execution required",
+            "token_use": "zero LLM/backend tokens",
+        }
+
+    if next_plan.get("waiting"):
+        return {
+            "status": "waiting-for-dependencies",
+            "candidate_count": 0,
+            "next_action": "none",
+            "reason": "tasks are waiting for unfinished dependencies",
+            "codex_stage": "deterministic scheduler; no Codex CLI execution required",
+            "token_use": "zero LLM/backend tokens",
+        }
+
+    if next_plan.get("blocked"):
+        return {
+            "status": "blocked",
+            "candidate_count": 0,
+            "next_action": "inspect reconcile hints",
+            "reason": "planner found blocked dependency-ready work",
+            "codex_stage": "deterministic scheduler; no Codex CLI execution required",
+            "token_use": "zero LLM/backend tokens",
+        }
+
+    return {
+        "status": "idle",
+        "candidate_count": 0,
+        "next_action": "none",
+        "reason": "no deterministic auto-advance action is available",
+        "codex_stage": "deterministic scheduler; no Codex CLI execution required",
+        "token_use": "zero LLM/backend tokens",
     }
 
 
@@ -1447,6 +1523,20 @@ def format_planner_run_plan(result: dict[str, Any]) -> str:
         lines.append(f"  {step['suggested_command']}")
     else:
         lines.append("  none")
+
+    auto_advance = result.get("auto_advance", {})
+    lines.extend(
+        [
+            "",
+            "Auto-advance status:",
+            f"  status: {auto_advance.get('status', 'unknown')}",
+            f"  candidates: {auto_advance.get('candidate_count', 0)}",
+            f"  next action: {auto_advance.get('next_action', 'none')}",
+            f"  reason: {auto_advance.get('reason', 'unknown')}",
+            f"  Codex stage: {auto_advance.get('codex_stage', 'unknown')}",
+            f"  token use: {auto_advance.get('token_use', 'unknown')}",
+        ]
+    )
 
     candidates = result.get("advance_candidates", [])
     lines.extend(["", "Advance candidates:"])
