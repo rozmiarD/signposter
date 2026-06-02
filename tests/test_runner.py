@@ -342,6 +342,35 @@ def test_render_prompt_worker_marks_omitted_sections_for_large_context():
     assert "...[omitted " in content
 
 
+def test_compact_worker_issue_body_uses_tighter_budget_than_generic_body():
+    from signposter.runner import (
+        PROMPT_COMPACTION_LIMITS,
+        _compact_issue_body,
+        _compact_worker_issue_body,
+    )
+
+    text = "\n".join(f"issue body line {i} {'x' * 80}" for i in range(80))
+
+    worker = _compact_worker_issue_body(text)
+    generic = _compact_issue_body(text)
+
+    assert len(worker) <= PROMPT_COMPACTION_LIMITS["worker_issue_body_chars"]
+    assert len(worker.splitlines()) <= PROMPT_COMPACTION_LIMITS["worker_issue_body_lines"] + 1
+    assert len(worker) < len(generic)
+    assert "...[omitted " in worker
+
+
+def test_compact_worker_comments_use_worker_specific_budget():
+    from signposter.runner import PROMPT_COMPACTION_LIMITS, _compact_worker_comments
+
+    text = "\n".join(f"comment line {i} {'x' * 60}" for i in range(20))
+    compact = _compact_worker_comments(text)
+
+    assert len(compact) <= PROMPT_COMPACTION_LIMITS["worker_comments_chars"]
+    assert len(compact.splitlines()) <= PROMPT_COMPACTION_LIMITS["worker_comments_lines"] + 1
+    assert "...[omitted " in compact
+
+
 def test_render_prompt_worker_omission_marker_stays_within_comment_budget():
     from signposter.runner import _compact_comments
 
