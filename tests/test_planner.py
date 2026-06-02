@@ -363,6 +363,19 @@ def test_format_planner_issue_body_contains_agent_contract() -> None:
     assert "No OpenClaw execution was performed." in body
 
 
+def test_format_planner_issue_body_contains_dependency_metadata() -> None:
+    plan = build_planner_draft("build lifecycle watch")
+    issue = plan["issues"][1]
+
+    body = format_planner_issue_body(plan, issue)
+
+    assert "Dependencies:\n* WATCH-001" in body
+    assert "Dependency metadata:" in body
+    assert "* key: WATCH-001" in body
+    assert "github issue: assigned during guarded seed apply" in body
+    assert "status: pending" in body
+
+
 def test_build_planner_seed_plan_includes_issue_body() -> None:
     plan = build_planner_draft("build lifecycle watch")
 
@@ -930,6 +943,7 @@ def test_apply_planner_seed_manifest_uses_fake_runner_and_updates_manifest(
             "key": "WATCH-001",
             "github_issue": 101,
             "github_url": "https://github.com/ExatronOmega/signposter/issues/101",
+            "status": "resolved",
         }
     ]
 
@@ -1709,7 +1723,12 @@ def test_build_planner_seed_manifest_materializes_github_ready_dependency_metada
 
     assert manifest["issues"][0]["dependency_metadata"] == []
     assert manifest["issues"][1]["dependency_metadata"] == [
-        {"key": "WATCH-001", "github_issue": None, "github_url": ""}
+        {
+            "key": "WATCH-001",
+            "github_issue": None,
+            "github_url": "",
+            "status": "pending",
+        }
     ]
     assert manifest["issues"][1]["github_depends_on"] == []
     assert manifest["issue_key_map"] == {}
