@@ -49,10 +49,14 @@ def classify_candidate(item: LabeledItem) -> DispatchDecision:
     reason = "default routing"
 
     # Explicit routing rules (bootstrap phase)
-    if phase == "build" and role == "worker" and risk == "low":
+    if phase == "build" and role == "worker" and risk == "high":
+        route = "reviewer"
+        gate = "human"
+        reason = "high risk requires human gate"
+    elif phase == "build" and role == "worker":
         route = "worker"
         gate = "ci"
-        reason = "low-risk build task assigned to worker with CI gate"
+        reason = "build task assigned to worker with CI gate"
     elif phase == "review" and role == "reviewer":
         route = "reviewer"
         gate = "review"
@@ -61,10 +65,6 @@ def classify_candidate(item: LabeledItem) -> DispatchDecision:
         route = "planner"
         gate = None
         reason = "planning task routed to planner"
-    elif risk == "high":
-        route = "reviewer"
-        gate = "human"
-        reason = "high risk requires human gate"
     elif state == "ready":
         route = "worker"
         gate = "ci"
