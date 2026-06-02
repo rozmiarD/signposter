@@ -671,11 +671,20 @@ def build_review_prompt(
 - Size classification: {plan.size}
 
 ## Selected Role Policy
+- backend: {plan.proposed_runner}
+- backend reason: {plan.backend_reason}
 - role identity: {plan.selected_role_name}
 - selected model: {plan.selected_model}
 - selected reasoning effort: {plan.selected_reasoning_effort}
 - Execution agent/profile: {plan.reviewer_profile}
 - role selection reason: {plan.role_selection_reason}
+- command shape: {plan.proposed_command_shape}
+
+## Prompt Contract
+- expected output format: structured review opinion exactly matching the format below
+- artifact requirements: raw backend output stays local; GitHub comments and
+  reviews must use bounded summaries
+- uncertainty handling: prefer NEEDS_CHANGES or BLOCK when evidence is insufficient
 
 ## Changed Files Excerpt (from GitHub metadata, bounded)
 {_format_authoritative_changed_files(file_paths or [])}

@@ -956,11 +956,21 @@ def render_prompt(
 {role_profile}
 
 ## Selected Role Policy
+- backend: {plan.proposed_runner}
+- backend reason: {plan.backend_reason}
 - role identity: {plan.selected_role_name}
 - selected model: {plan.selected_model}
 - selected reasoning effort: {plan.selected_reasoning_effort}
 - Execution agent/profile: {plan.selected_openclaw_agent}
 - role selection reason: {plan.role_selection_reason}
+- command shape: {plan.proposed_command_shape}
+
+## Prompt Contract
+- expected output format: concise execution summary with changed files, validation,
+  safety notes, and completion status
+- artifact requirements: keep raw backend output local under artifacts/runs/
+  and provide bounded summaries only
+- uncertainty handling: if uncertain, state exactly what is missing instead of guessing
 
 ## Private Repository Rule
 {private_rule}
@@ -1041,11 +1051,21 @@ def _render_compact_worker_prompt(
 - Prompt artifact: {plan.proposed_prompt_path}
 
 ## Selected Role Policy
+- backend: {plan.proposed_runner}
+- backend reason: {plan.backend_reason}
 - role identity: {plan.selected_role_name}
 - selected model: {plan.selected_model}
 - selected reasoning effort: {plan.selected_reasoning_effort}
 - Execution agent/profile: {plan.selected_openclaw_agent}
 - role selection reason: {plan.role_selection_reason}
+- command shape: {plan.proposed_command_shape}
+
+## Prompt Contract
+- expected output format: concise execution summary with changed files, validation,
+  safety notes, and completion status
+- artifact requirements: keep raw backend output local under artifacts/runs/
+  and provide bounded summaries only
+- uncertainty handling: if uncertain, state exactly what is missing instead of guessing
 
 ## Issue Body
 {body_text}
