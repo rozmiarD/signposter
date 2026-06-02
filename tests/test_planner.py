@@ -2711,7 +2711,11 @@ def test_build_planner_impact_from_status_advances_low_impact_completed_task(
     assert result["impact"]["score"] == 10
     assert result["impact"]["level"] == "low"
     assert result["impact"]["decision"] == "advance_mainline"
+    assert result["impact"]["signals"] == ["mainline_dependent"]
     assert result["downstream_tasks"] == ["WATCH-002"]
+    assert result["advanceable_downstream_tasks"] == ["WATCH-002"]
+    assert result["side_task_downstream_tasks"] == []
+    assert result["blocked_downstream_tasks"] == []
     assert result["requires_llm_analysis"] is False
     assert result["suggested_command"] == (
         f"signposter planner advance --manifest {manifest_path} --issue 10 --dry-run"
@@ -2751,6 +2755,123 @@ def test_build_planner_impact_from_status_blocks_open_task(
     assert "issue is not completed" in result["reasons"][0]
 
 
+def test_build_planner_impact_from_status_surfaces_side_task_downstream() -> None:
+    status = {
+        "tasks": [
+            {
+                "key": "MAIN-001",
+                "state": "merged",
+                "github_issue": 10,
+                "depends_on": [],
+                "side_task": False,
+            },
+            {
+                "key": "SIDE-001",
+                "state": "open",
+                "github_issue": 11,
+                "depends_on": ["MAIN-001"],
+                "side_task": True,
+                "return_to": 10,
+            },
+        ]
+    }
+
+    result = build_planner_impact_from_status(
+        status,
+        issue=10,
+        manifest_path="/tmp/manifest.json",
+    )
+
+    assert result["status"] == "ready"
+    assert result["impact"]["score"] == 20
+    assert result["impact"]["decision"] == "advance_mainline"
+    assert result["impact"]["signals"] == ["side_task_dependent"]
+    assert result["downstream_tasks"] == ["SIDE-001"]
+    assert result["advanceable_downstream_tasks"] == ["SIDE-001"]
+    assert result["side_task_downstream_tasks"] == ["SIDE-001"]
+    assert result["blocked_downstream_tasks"] == []
+    assert result["requires_llm_analysis"] is False
+    assert "task has side-task downstream dependents" in result["reasons"]
+
+
+def test_build_planner_impact_from_status_reports_already_advanced_downstream() -> None:
+    status = {
+        "tasks": [
+            {
+                "key": "MAIN-001",
+                "state": "merged",
+                "github_issue": 10,
+                "depends_on": [],
+                "side_task": False,
+            },
+            {
+                "key": "NEXT-001",
+                "state": "active",
+                "github_issue": 11,
+                "depends_on": ["MAIN-001"],
+                "side_task": False,
+            },
+        ]
+    }
+
+    result = build_planner_impact_from_status(
+        status,
+        issue=10,
+        manifest_path="/tmp/manifest.json",
+    )
+
+    assert result["status"] == "ready"
+    assert result["impact"]["score"] == 10
+    assert result["impact"]["decision"] == "already_advanced"
+    assert result["impact"]["signals"] == [
+        "mainline_dependent",
+        "downstream_already_advanced",
+    ]
+    assert result["downstream_tasks"] == ["NEXT-001"]
+    assert result["advanceable_downstream_tasks"] == []
+    assert result["suggested_command"] is None
+    assert "downstream tasks are already ready, active, or completed" in result["reasons"]
+
+
+def test_build_planner_impact_from_status_blocks_failed_downstream() -> None:
+    status = {
+        "tasks": [
+            {
+                "key": "MAIN-001",
+                "state": "merged",
+                "github_issue": 10,
+                "depends_on": [],
+                "side_task": False,
+            },
+            {
+                "key": "NEXT-001",
+                "state": "failed",
+                "github_issue": 11,
+                "depends_on": ["MAIN-001"],
+                "side_task": False,
+            },
+        ]
+    }
+
+    result = build_planner_impact_from_status(
+        status,
+        issue=10,
+        manifest_path="/tmp/manifest.json",
+    )
+
+    assert result["status"] == "ready"
+    assert result["impact"]["score"] == 60
+    assert result["impact"]["level"] == "high"
+    assert result["impact"]["decision"] == "block_mainline"
+    assert result["impact"]["signals"] == ["mainline_dependent", "blocked_downstream"]
+    assert result["downstream_tasks"] == ["NEXT-001"]
+    assert result["advanceable_downstream_tasks"] == []
+    assert result["blocked_downstream_tasks"] == ["NEXT-001"]
+    assert result["requires_llm_analysis"] is False
+    assert result["suggested_command"] is None
+    assert "one or more downstream tasks are blocked" in result["reasons"]
+
+
 def test_format_planner_impact_contains_score_decision_and_safety_notes(
     tmp_path: Path,
 ) -> None:
@@ -2785,7 +2906,11 @@ def test_format_planner_impact_contains_score_decision_and_safety_notes(
     assert "score: 10" in output
     assert "level: low" in output
     assert "decision: advance_mainline" in output
+    assert "signals: mainline_dependent" in output
     assert "downstream: WATCH-002" in output
+    assert "advanceable downstream: WATCH-002" in output
+    assert "side-task downstream: none" in output
+    assert "blocked downstream: none" in output
     assert f"signposter planner advance --manifest {manifest_path} --issue 10 --dry-run" in output
     assert "No GitHub mutation was performed." in output
     assert "No manifest mutation was performed." in output
