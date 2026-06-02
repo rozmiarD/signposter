@@ -1445,6 +1445,10 @@ def validate_review_artifact(
         errors.append("Merge recommendation must be yes or no")
     if opinion.automerge_eligible not in ("yes", "no"):
         errors.append("Automerge eligible must be yes or no")
+    errors.extend(
+        f"Missing reviewer summary schema field: {field}"
+        for field in _missing_reviewer_summary_schema_fields(text)
+    )
 
     return ReviewArtifactValidation(
         pr_number=pr_number,
@@ -1475,6 +1479,33 @@ def _review_raw_path_for_summary(summary_path: str) -> str | None:
         return str(raw_path)
     resolved = _resolve_existing_artifact_path(str(raw_path))
     return resolved or str(raw_path)
+
+
+def _missing_reviewer_summary_schema_fields(text: str) -> list[str]:
+    lowered = (text or "").lower()
+    required_any = {
+        "agent or backend metadata": ("agent:", "**agent:**", "backend:", "**backend:**"),
+        "pr number": ("pr: #", "**pr:** #"),
+    }
+    missing = [
+        field
+        for field, needles in required_any.items()
+        if not any(needle in lowered for needle in needles)
+    ]
+    required = {
+        "findings section": "findings:",
+        "reasoning summary": "reasoning summary:",
+        "validation considered section": "## validation considered",
+        "safety notes section": "## safety notes",
+        "no github review safety note": "no github review was submitted",
+        "no pr approval safety note": "no pr approval was submitted",
+        "no merge safety note": "no merge was performed",
+        "no issue close safety note": "no issue was closed",
+    }
+    missing.extend(
+        field for field, needle in required.items() if needle not in lowered
+    )
+    return missing
 
 
 def _review_artifact_guidance(*, errors: list[str], raw_exists: bool) -> list[str]:
