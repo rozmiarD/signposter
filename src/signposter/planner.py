@@ -588,6 +588,7 @@ def format_planner_issue_body(plan: dict[str, Any], issue: dict[str, Any]) -> st
     """Format a planner task as a bounded GitHub issue body."""
     dependencies = issue.get("depends_on", [])
     dependency_lines = _markdown_bullets(dependencies, fallback="none")
+    dependency_metadata_lines = _format_issue_dependency_metadata(dependencies)
     acceptance_lines = _markdown_bullets(issue.get("acceptance", []))
     stop_condition_lines = _markdown_bullets(issue.get("stop_conditions", []))
 
@@ -637,6 +638,9 @@ def format_planner_issue_body(plan: dict[str, Any], issue: dict[str, Any]) -> st
             "",
             "Dependencies:",
             dependency_lines,
+            "",
+            "Dependency metadata:",
+            dependency_metadata_lines,
             "",
             "Rules:",
             "1. If a required precondition is missing, block safely.",
@@ -721,6 +725,22 @@ def build_planner_seed_plan(plan: dict[str, Any]) -> dict[str, Any]:
         return {"status": "blocked", "errors": body_errors, "issues": issues}
 
     return {"status": "ready", "errors": [], "issues": issues}
+
+
+def _format_issue_dependency_metadata(dependencies: list[str]) -> str:
+    if not dependencies:
+        return "* none"
+
+    lines: list[str] = []
+    for dependency in dependencies:
+        lines.extend(
+            [
+                f"* key: {dependency}",
+                "  github issue: assigned during guarded seed apply",
+                "  status: pending",
+            ]
+        )
+    return "\n".join(lines)
 
 
 
@@ -1111,6 +1131,7 @@ def _refresh_seed_manifest_dependency_metadata(manifest: dict[str, Any]) -> dict
                     "key": dependency_key,
                     "github_issue": github_issue,
                     "github_url": github_url,
+                    "status": "resolved" if github_issue is not None else "pending",
                 }
             )
             if github_issue is not None:
