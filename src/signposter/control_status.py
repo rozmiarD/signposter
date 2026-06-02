@@ -114,6 +114,12 @@ def format_control_plane_status(result: ControlPlaneStatus) -> str:
         if active_counts:
             compact = ", ".join(f"{key}={value}" for key, value in sorted(active_counts.items()))
             lines.append(f"  active: {compact}")
+        active_notes = result.scheduler.active_notes or []
+        if active_notes:
+            lines.append("  active diagnostics:")
+            lines.extend(f"    {item}" for item in active_notes[:5])
+            if len(active_notes) > 5:
+                lines.append(f"    ... {len(active_notes) - 5} more")
 
     lines.extend(["", "Orchestrator:"])
     if result.orchestrator is None:
