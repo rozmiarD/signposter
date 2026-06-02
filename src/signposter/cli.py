@@ -42,7 +42,9 @@ from signposter.control_status import (
 from signposter.dispatch import cli_main as dispatch_cli_main
 from signposter.doctor import (
     CheckStatus,
+    build_validation_command_plan,
     format_automation_doctor_report,
+    format_validation_command_plan,
     run_automation_doctor_checks,
 )
 from signposter.doctor import (
@@ -224,6 +226,18 @@ def main() -> None:
         "--automation",
         action="store_true",
         help="Run read-only automation prerequisite checks only",
+    )
+    doctor_parser.add_argument(
+        "topic",
+        nargs="?",
+        choices=["validation"],
+        help="Optional doctor topic; use 'validation' to show local validation commands",
+    )
+    doctor_parser.add_argument(
+        "--changed-file",
+        action="append",
+        default=[],
+        help="Changed file for doctor validation command discovery; may be repeated",
     )
     doctor_parser.set_defaults(func=run_doctor)
 
@@ -1438,6 +1452,10 @@ def _find_latest_summary_for_issue(issue: int) -> str | None:
 
 def run_doctor(args: argparse.Namespace) -> int:
     """Execute the doctor command."""
+    if getattr(args, "topic", None) == "validation":
+        plan = build_validation_command_plan(getattr(args, "changed_file", []) or [])
+        print(format_validation_command_plan(plan))
+        return 0
     if getattr(args, "automation", False):
         results = run_automation_doctor_checks()
         print(format_automation_doctor_report(results))
