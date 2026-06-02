@@ -10,7 +10,9 @@ import sys
 from pathlib import Path
 
 from signposter.artifact import (
+    audit_run_artifacts,
     format_manual_artifact_plan,
+    format_run_artifact_audit,
     format_worker_artifact_validation,
     plan_review_summary,
     plan_worker_summary,
@@ -1220,6 +1222,23 @@ def main() -> None:
     )
     validate_worker_artifact_parser.set_defaults(func=run_artifact_validate_worker_summary)
 
+    audit_runs_parser = artifact_subparsers.add_parser(
+        "audit-runs",
+        help="Audit local run artifact naming and raw/summary pairing (read-only)",
+    )
+    audit_runs_parser.add_argument(
+        "--runs-dir",
+        default="artifacts/runs",
+        help="Directory for local run artifacts",
+    )
+    audit_runs_parser.add_argument(
+        "--limit",
+        type=int,
+        default=8,
+        help="Maximum examples to show per finding category",
+    )
+    audit_runs_parser.set_defaults(func=run_artifact_audit_runs)
+
     review_artifact_parser = artifact_subparsers.add_parser(
         "write-review-summary",
         help="Create a local manual reviewer summary artifact",
@@ -1767,6 +1786,16 @@ def run_artifact_validate_worker_summary(args: argparse.Namespace) -> int:
     )
     print(format_worker_artifact_validation(result))
     return 0 if result.status == "pass" else 1
+
+
+def run_artifact_audit_runs(args: argparse.Namespace) -> int:
+    """Audit local run artifact naming and pairing."""
+    result = audit_run_artifacts(
+        runs_dir=getattr(args, "runs_dir", "artifacts/runs"),
+        limit=getattr(args, "limit", 8),
+    )
+    print(format_run_artifact_audit(result))
+    return 0 if result.status == "ready" else 1
 
 
 def run_artifact_record_bug(args: argparse.Namespace) -> int:

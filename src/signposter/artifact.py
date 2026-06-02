@@ -6,6 +6,7 @@ No GitHub mutation, no OpenClaw execution.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -42,6 +43,32 @@ class WorkerArtifactValidation:
     raw_exists: bool = False
     raw_stale_signal: str | None = None
     guidance: list[str] | None = None
+
+
+@dataclass(frozen=True)
+class RunsArtifactAudit:
+    """Read-only audit result for local run artifact naming and pairing."""
+
+    runs_dir: str
+    exists: bool
+    status: str
+    total_files: int
+    summary_count: int
+    raw_count: int
+    canonical_pairs: int
+    diagnostic_pairs: int
+    summary_without_raw: tuple[str, ...]
+    raw_without_summary: tuple[str, ...]
+    unknown_names: tuple[str, ...]
+    unsafe_markers: tuple[str, ...]
+    limit: int
+
+
+_RUN_ARTIFACT_RE = re.compile(
+    r"^(?P<target>(?:issue-\d+-(?:worker|reviewer|gate)|pr-\d+-reviewer))"
+    r"(?P<variant>(?:\.[A-Za-z0-9_-]+)*)"
+    r"\.(?P<kind>summary\.md|raw\.txt)$"
+)
 
 
 def build_worker_summary(
@@ -126,6 +153,176 @@ def build_worker_summary(
         ]
     )
     return "\n".join(lines) + "\n"
+
+
+def audit_run_artifacts(
+    *,
+    runs_dir: str | Path = "artifacts/runs",
+    limit: int = 8,
+) -> RunsArtifactAudit:
+    """Audit local run artifact names and raw/summary pair retention.
+
+    This is intentionally read-only. It identifies naming and pairing gaps but
+    never deletes or rewrites local evidence.
+    """
+    root = Path(runs_dir)
+    bounded_limit = max(0, limit)
+    if not root.is_dir():
+        return RunsArtifactAudit(
+            runs_dir=str(root),
+            exists=False,
+            status="blocked",
+            total_files=0,
+            summary_count=0,
+            raw_count=0,
+            canonical_pairs=0,
+            diagnostic_pairs=0,
+            summary_without_raw=(),
+            raw_without_summary=(),
+            unknown_names=(),
+            unsafe_markers=(),
+            limit=bounded_limit,
+        )
+
+    files = sorted(path for path in root.iterdir() if path.is_file())
+    grouped: dict[str, set[str]] = {}
+    canonical_pairs = 0
+    diagnostic_pairs = 0
+    unknown_names: list[str] = []
+    unsafe_markers: list[str] = []
+    summary_count = 0
+    raw_count = 0
+
+    for path in files:
+        name = path.name
+        match = _RUN_ARTIFACT_RE.match(name)
+        if not match:
+            unknown_names.append(name)
+            continue
+
+        kind = match.group("kind")
+        variant = match.group("variant")
+        stem = name.removesuffix(".summary.md").removesuffix(".raw.txt")
+        grouped.setdefault(stem, set()).add(kind)
+        if kind == "summary.md":
+            summary_count += 1
+        else:
+            raw_count += 1
+
+        signal = _read_artifact_safety_signal(path)
+        if signal:
+            unsafe_markers.append(f"{name}: {signal}")
+
+        if {"summary.md", "raw.txt"} <= grouped[stem]:
+            if variant:
+                diagnostic_pairs += 1
+            else:
+                canonical_pairs += 1
+
+    summary_without_raw: list[str] = []
+    raw_without_summary: list[str] = []
+    for stem, kinds in sorted(grouped.items()):
+        if "summary.md" in kinds and "raw.txt" not in kinds:
+            summary_without_raw.append(f"{stem}.summary.md")
+        if "raw.txt" in kinds and "summary.md" not in kinds:
+            raw_without_summary.append(f"{stem}.raw.txt")
+
+    return RunsArtifactAudit(
+        runs_dir=str(root),
+        exists=True,
+        status="ready",
+        total_files=len(files),
+        summary_count=summary_count,
+        raw_count=raw_count,
+        canonical_pairs=canonical_pairs,
+        diagnostic_pairs=diagnostic_pairs,
+        summary_without_raw=tuple(summary_without_raw[:bounded_limit]),
+        raw_without_summary=tuple(raw_without_summary[:bounded_limit]),
+        unknown_names=tuple(unknown_names[:bounded_limit]),
+        unsafe_markers=tuple(unsafe_markers[:bounded_limit]),
+        limit=bounded_limit,
+    )
+
+
+def _read_artifact_safety_signal(path: Path) -> str | None:
+    try:
+        return find_stale_or_failover_signal(
+            path.read_text(encoding="utf-8", errors="replace")
+        )
+    except OSError:
+        return "unreadable artifact"
+
+
+def format_run_artifact_audit(result: RunsArtifactAudit) -> str:
+    """Render a compact read-only run artifact audit."""
+    lines = [
+        "Signposter Run Artifact Audit",
+        "",
+        "Runs:",
+        f"  path: {result.runs_dir}",
+        f"  exists: {'yes' if result.exists else 'no'}",
+        "",
+        "Status:",
+        f"  {result.status}",
+    ]
+    if not result.exists:
+        lines.extend(
+            [
+                "",
+                "Reason:",
+                "  runs directory is missing or is not a directory",
+                "",
+                "Notes:",
+                "  No GitHub mutation was performed.",
+                "  No OpenClaw execution was performed.",
+                "  No local artifact was modified.",
+            ]
+        )
+        return "\n".join(lines)
+
+    lines.extend(
+        [
+            "",
+            "Counts:",
+            f"  files: {result.total_files}",
+            f"  summaries: {result.summary_count}",
+            f"  raw outputs: {result.raw_count}",
+            f"  canonical raw/summary pairs: {result.canonical_pairs}",
+            f"  retained diagnostic raw/summary pairs: {result.diagnostic_pairs}",
+            "",
+            "Findings:",
+            f"  summary without raw: {len(result.summary_without_raw)} shown",
+            f"  raw without summary: {len(result.raw_without_summary)} shown",
+            f"  unknown names: {len(result.unknown_names)} shown",
+            f"  unsafe markers: {len(result.unsafe_markers)} shown",
+        ]
+    )
+    _append_limited_examples(lines, "Summary without raw", result.summary_without_raw)
+    _append_limited_examples(lines, "Raw without summary", result.raw_without_summary)
+    _append_limited_examples(lines, "Unknown names", result.unknown_names)
+    _append_limited_examples(lines, "Unsafe markers", result.unsafe_markers)
+    lines.extend(
+        [
+            "",
+            "Retention:",
+            "  active evidence uses canonical issue-N-worker/pr-N-reviewer raw+summary pairs",
+            "  diagnostic suffixes such as .codex-runtime.* are retained local evidence",
+            "  this audit does not delete, rename, upload, or rewrite artifacts",
+            "",
+            "Notes:",
+            "  No GitHub mutation was performed.",
+            "  No OpenClaw execution was performed.",
+            "  No local artifact was modified.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _append_limited_examples(lines: list[str], heading: str, values: tuple[str, ...]) -> None:
+    if not values:
+        return
+    lines.extend(["", f"{heading}:"])
+    lines.extend(f"  - {value}" for value in values)
 
 
 def build_review_summary(

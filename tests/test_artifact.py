@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from signposter.artifact import (
+    audit_run_artifacts,
+    format_run_artifact_audit,
     format_worker_artifact_validation,
     plan_review_summary,
     plan_worker_summary,
@@ -9,6 +11,64 @@ from signposter.artifact import (
 )
 from signposter.gate import evaluate_ci_gate
 from signposter.review import evaluate_review_gate
+
+
+def test_audit_run_artifacts_counts_canonical_and_diagnostic_pairs(tmp_path):
+    (tmp_path / "issue-7-worker.summary.md").write_text("summary", encoding="utf-8")
+    (tmp_path / "issue-7-worker.raw.txt").write_text("raw", encoding="utf-8")
+    (tmp_path / "pr-3-reviewer.summary.md").write_text("summary", encoding="utf-8")
+    (tmp_path / "pr-3-reviewer.raw.txt").write_text("raw", encoding="utf-8")
+    (tmp_path / "issue-7-worker.codex-runtime.summary.md").write_text(
+        "runtime summary",
+        encoding="utf-8",
+    )
+    (tmp_path / "issue-7-worker.codex-runtime.raw.txt").write_text(
+        "runtime raw",
+        encoding="utf-8",
+    )
+    (tmp_path / "issue-8-worker.raw.txt").write_text("raw only", encoding="utf-8")
+    (tmp_path / "loose.log").write_text("unknown", encoding="utf-8")
+
+    result = audit_run_artifacts(runs_dir=tmp_path)
+    out = format_run_artifact_audit(result)
+
+    assert result.status == "ready"
+    assert result.canonical_pairs == 2
+    assert result.diagnostic_pairs == 1
+    assert result.raw_without_summary == ("issue-8-worker.raw.txt",)
+    assert result.unknown_names == ("loose.log",)
+    assert "Signposter Run Artifact Audit" in out
+    assert "diagnostic suffixes such as .codex-runtime.*" in out
+    assert "No GitHub mutation was performed." in out
+    assert "No local artifact was modified." in out
+
+
+def test_audit_run_artifacts_blocks_missing_runs_dir(tmp_path):
+    missing = tmp_path / "missing"
+
+    result = audit_run_artifacts(runs_dir=missing)
+    out = format_run_artifact_audit(result)
+
+    assert result.status == "blocked"
+    assert result.exists is False
+    assert "runs directory is missing" in out
+    assert "No GitHub mutation was performed." in out
+
+
+def test_audit_run_artifacts_reports_unsafe_marker(tmp_path):
+    (tmp_path / "issue-7-worker.summary.md").write_text("summary", encoding="utf-8")
+    (tmp_path / "issue-7-worker.raw.txt").write_text(
+        "Model unavailable.",
+        encoding="utf-8",
+    )
+
+    result = audit_run_artifacts(runs_dir=tmp_path)
+    out = format_run_artifact_audit(result)
+
+    assert result.status == "ready"
+    assert result.unsafe_markers == ("issue-7-worker.raw.txt: model unavailable",)
+    assert "Unsafe markers:" in out
+    assert "issue-7-worker.raw.txt: model unavailable" in out
 
 
 def test_worker_summary_plan_is_gate_compatible():
