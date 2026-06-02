@@ -130,6 +130,32 @@ def test_record_runtime_bug_ledger_entry_records_runtime_blocker(
     assert entry.current_pr is None
     assert "WORKER_CORE" in entry.summary
     assert "openai/gpt-5.4" in entry.notes
+    assert "OpenClaw" not in entry.summary
+
+
+def test_record_runtime_bug_ledger_entry_records_codex_unsupported_model(
+    tmp_path: Path,
+) -> None:
+    ledger = tmp_path / "bug-ledger.json"
+
+    record = record_runtime_bug_ledger_entry(
+        target_kind="issue",
+        target_number=180,
+        diagnosis_status="unsupported-model",
+        diagnosis_reason="Codex CLI rejected the selected model for this account.",
+        selected_role="WORKER_CORE",
+        selected_model="openai/gpt-5.4",
+        raw_path="artifacts/runs/issue-180-worker.raw.txt",
+        summary_path="artifacts/runs/issue-180-worker.summary.md",
+        ledger_path=ledger,
+    )
+
+    assert record.status == "recorded"
+    entry = load_bug_ledger(ledger)[0]
+    assert entry.status == "runtime-blocker"
+    assert entry.current_issue == 180
+    assert "unsupported-model" in entry.summary
+    assert "Codex CLI rejected" in entry.notes
 
 
 def test_record_runtime_bug_ledger_entry_skips_success(tmp_path: Path) -> None:

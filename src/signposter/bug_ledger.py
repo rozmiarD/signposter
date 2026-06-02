@@ -52,9 +52,13 @@ class RuntimeBugLedgerRecord:
 
 
 RUNTIME_BUG_LEDGER_STATUSES = {
+    "missing-binary",
+    "missing-prompt",
     "timeout",
     "runtime-stall",
     "unsupported-model",
+    "malformed-output",
+    "runtime-error",
     "failover-or-stale-runtime",
 }
 
@@ -285,10 +289,7 @@ def record_runtime_bug_ledger_entry(
 
     current_issue = target_number if target_kind == "issue" else None
     current_pr = target_number if target_kind == "pr" else None
-    summary = (
-        f"{target_kind} #{target_number}: OpenClaw {diagnosis_status} "
-        f"for {selected_role}"
-    )
+    summary = f"{target_kind} #{target_number}: runtime {diagnosis_status} for {selected_role}"
     notes = (
         f"model={selected_model}; raw={raw_path}; summary={summary_path}; "
         f"reason={diagnosis_reason[:180]}"
