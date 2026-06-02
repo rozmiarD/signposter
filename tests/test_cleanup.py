@@ -195,6 +195,25 @@ def test_cleanup_apply_refuses_when_plan_not_ready():
         assert "Refusing cleanup apply" in result.get("error", "")
 
 
+def test_cleanup_apply_already_cleaned_does_not_call_subprocess():
+    """completed cleanup plans are idempotent and do not touch git."""
+    plan = _make_plan(
+        status="completed",
+        worktree_exists=False,
+        local_branch_exists=False,
+    )
+
+    with (
+        patch("signposter.cleanup.plan_cleanup_for_pr", return_value=plan),
+        patch("signposter.cleanup.subprocess.run") as mock_run,
+    ):
+        result = apply_cleanup("ExatronOmega/signposter", 5, apply=True)
+
+    mock_run.assert_not_called()
+    assert result["mode"] == "apply_blocked"
+    assert "completed" in result.get("error", "")
+
+
 def test_cleanup_apply_replans_once_after_post_integration_issue_state_race():
     """apply should refresh once when integration just closed the issue."""
     stale = _make_plan(
