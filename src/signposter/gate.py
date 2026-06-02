@@ -57,6 +57,7 @@ def build_gate_heuristic_audit() -> GateHeuristicAudit:
             "stale/failover artifact markers block before scoped evidence checks",
             "actual Python exception output requires traceback framing, not the word alone",
             "scoped code/test/no-op paths require validation and safety statements",
+            "validated no-op completion requires explicit unchanged-tree evidence",
             "human gate accepts explicit approval/scope/validation fields plus safety evidence",
         ),
         phrase_matchers=(
@@ -339,8 +340,8 @@ def evaluate_ci_gate(
             decision="pass",
             reason=(
                 "Worker completed successfully (exit 0) with validated no-op completion "
-                "evidence: the requested behavior already exists, validation passed, "
-                "manual smoke passed, and no files were changed."
+                "evidence: the requested behavior already exists, targeted/full validation "
+                "passed, manual smoke passed, and the worktree had no file changes."
             ),
             confidence="medium",
             proposed_transition="state:active → state:done",
@@ -770,16 +771,27 @@ def _has_validated_noop_completion_evidence(text: str) -> bool:
     if not all(signal in t for signal in required):
         return False
 
-    noop_signals = [
+    noop_claim_signals = [
         "no-op completion",
-        "no files were changed",
-        "no files changed",
-        "files changed\n\nno files",
         "already exists",
         "already present",
         "no additional code changes were needed",
+        "requested behavior already exists",
     ]
-    if sum(1 for signal in noop_signals if signal in t) < 2:
+    if sum(1 for signal in noop_claim_signals if signal in t) < 2:
+        return False
+
+    unchanged_tree_signals = [
+        "no files were changed",
+        "no files changed",
+        "files changed\n\nno files",
+        "files changed\n\nnone",
+        "changed files: none",
+        "worktree changes: none",
+        "isolated worktree remained unchanged",
+        "no diff was produced",
+    ]
+    if not any(signal in t for signal in unchanged_tree_signals):
         return False
 
     behavior_signals = [
