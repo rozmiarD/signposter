@@ -21,6 +21,7 @@ def test_control_plane_status_formats_empty_read_only_view() -> None:
 
     assert result.status == "ready"
     assert "Signposter Control Plane Status" in output
+    assert "Agreement:\n  status: not evaluated" in output
     assert "manifest: not provided" in output
     assert "Scheduler:\n  status: not evaluated" in output
     assert "Orchestrator:\n  status: not evaluated" in output
@@ -92,6 +93,11 @@ def test_control_plane_status_formats_active_sources() -> None:
     output = format_control_plane_status(result)
 
     assert result.status == "ready"
+    assert "Agreement:" in output
+    assert "status: aligned" in output
+    assert "planner issue: #157" in output
+    assert "scheduler issue: #157" in output
+    assert "active issues: none" in output
     assert "counts: total=5 ready=1 active=0 merged=4 blocked=0" in output
     assert "next: H045E (#157, state=ready)" in output
     assert "next: #157 — H045E" in output
@@ -124,6 +130,7 @@ def test_control_plane_status_surfaces_active_issue_stuck_diagnostics() -> None:
     output = format_control_plane_status(result)
 
     assert result.status == "ready"
+    assert "active issues: #2" in output
     assert "active: stale-active=1" in output
     assert "active diagnostics:" in output
     assert "#2: worktree=missing, prompt=missing, summary=missing" in output
@@ -160,6 +167,116 @@ def test_control_plane_status_surfaces_blocked_state() -> None:
     assert "Status:\n  blocked" in output
     assert "stop: OpenClaw execution requires explicit --execute" in output
     assert "takeover: runtime-stall — worker artifact incomplete" in output
+
+
+def test_control_plane_status_blocks_disagreed_targets() -> None:
+    planner = {
+        "planner_status": "active",
+        "next": {
+            "next": {
+                "key": "H045E",
+                "github_issue": 157,
+                "state": "ready",
+            }
+        },
+    }
+    scheduler = SchedulerNext(
+        repo="ExatronOmega/signposter",
+        status="ready",
+        issue=LabeledItem(
+            number=158,
+            title="H045F",
+            html_url="https://github.com/ExatronOmega/signposter/issues/158",
+            labels=["state:ready"],
+            item_type="issue",
+        ),
+        reason="selected",
+        skipped=[],
+        notes=[],
+    )
+    orchestrator = SimpleNamespace(
+        status="ready",
+        action="claim-issue",
+        stop_reason=None,
+        takeover_category=None,
+        takeover_reason=None,
+        lifecycle=SimpleNamespace(issue_number=158),
+    )
+
+    result = build_control_plane_status(
+        repo="ExatronOmega/signposter",
+        planner_run=planner,
+        scheduler_next=scheduler,
+        orchestrator_next=orchestrator,
+    )
+
+    output = format_control_plane_status(result)
+
+    assert result.status == "blocked"
+    assert "Agreement:" in output
+    assert "status: disagreement" in output
+    assert "planner issue: #157" in output
+    assert "scheduler issue: #158" in output
+    assert "orchestrator issue: #158" in output
+    assert "evaluated sources point at different issues" in output
+
+
+def test_control_plane_status_blocks_ready_target_when_active_work_differs() -> None:
+    planner = {
+        "planner_status": "active",
+        "next": {
+            "next": {
+                "key": "H049-032",
+                "github_issue": 239,
+                "state": "ready",
+            }
+        },
+        "active_tasks": [
+            {
+                "key": "H049-029",
+                "github_issue": 236,
+                "state": "active",
+            }
+        ],
+    }
+    scheduler = SchedulerNext(
+        repo="ExatronOmega/signposter",
+        status="ready",
+        issue=LabeledItem(
+            number=239,
+            title="H049-032",
+            html_url="https://github.com/ExatronOmega/signposter/issues/239",
+            labels=["state:ready"],
+            item_type="issue",
+        ),
+        reason="selected",
+        skipped=[],
+        notes=[],
+    )
+    orchestrator = SimpleNamespace(
+        status="ready",
+        action="claim-issue",
+        stop_reason=None,
+        takeover_category=None,
+        takeover_reason=None,
+        lifecycle=SimpleNamespace(issue_number=239),
+    )
+
+    result = build_control_plane_status(
+        repo="ExatronOmega/signposter",
+        planner_run=planner,
+        scheduler_next=scheduler,
+        orchestrator_next=orchestrator,
+    )
+
+    output = format_control_plane_status(result)
+
+    assert result.status == "blocked"
+    assert "status: disagreement" in output
+    assert "planner issue: #239" in output
+    assert "scheduler issue: #239" in output
+    assert "orchestrator issue: #239" in output
+    assert "active issues: #236" in output
 
 
 def test_control_plane_status_cli_combines_sources(

@@ -3088,6 +3088,15 @@ def run_control_plane_status(args: argparse.Namespace) -> int:
             planner_status,
             manifest_path=str(manifest_path),
         )
+        planner_run["active_tasks"] = [
+            {
+                "key": task.get("key"),
+                "github_issue": task.get("github_issue"),
+                "state": task.get("state"),
+            }
+            for task in planner_status.get("tasks", [])
+            if str(task.get("state", "")).lower() == "active"
+        ]
 
     scheduler_next = select_next_issue(repo, limit=getattr(args, "limit", 50))
     orchestrator_next = None
