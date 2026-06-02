@@ -2419,11 +2419,74 @@ def test_format_planner_run_plan_contains_dashboard_sections(
     assert "signposter run --repo ExatronOmega/signposter --issue 10 --dry-run" in output
     assert "Advance candidates:" in output
     assert "none" in output
+    assert "Reconcile policy:" in output
+    assert "mode: deterministic-first" in output
+    assert "default LLM analysis: false" in output
+    assert "escalation: not required" in output
+    assert "LLM/human reconcile only for requires_reconcile impact decisions" in output
+    assert "planner run/advance/impact use zero LLM tokens by default" in output
     assert "No GitHub mutation was performed." in output
     assert "No manifest mutation was performed." in output
     assert "No claim was performed." in output
     assert "No worktree was created." in output
     assert "No OpenClaw execution was performed." in output
+    assert "No LLM analysis was performed." in output
+
+
+def test_format_planner_run_plan_reconcile_policy_blocks_without_llm() -> None:
+    status = {
+        "repo": "ExatronOmega/signposter",
+        "status": "active",
+        "tasks": [
+            {
+                "key": "DONE-001",
+                "title": "Done task",
+                "github_issue": 10,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/10",
+                "state": "done",
+                "github_state": "closed",
+                "workflow_state": "done",
+                "labels": ["state:done"],
+                "depends_on": [],
+                "github_depends_on": [],
+                "dependency_metadata": [],
+                "mainline": None,
+                "parent": None,
+                "return_to": None,
+                "side_task": False,
+            },
+            {
+                "key": "OPEN-001",
+                "title": "Open task missing ready",
+                "github_issue": 11,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/11",
+                "state": "open",
+                "github_state": "open",
+                "workflow_state": None,
+                "labels": [],
+                "depends_on": ["DONE-001"],
+                "github_depends_on": [10],
+                "dependency_metadata": [],
+                "mainline": None,
+                "parent": None,
+                "return_to": None,
+                "side_task": False,
+            },
+        ],
+    }
+
+    output = format_planner_run_plan(
+        build_planner_run_plan_from_status(
+            status,
+            manifest_path="/tmp/seed-manifest.json",
+        )
+    )
+
+    assert "Reconcile policy:" in output
+    assert "mode: deterministic-first" in output
+    assert "default LLM analysis: false" in output
+    assert "escalation: blocked — deterministic stop before mutation" in output
+    assert "Requires:\n  LLM analysis: false" in output
     assert "No LLM analysis was performed." in output
 
 
