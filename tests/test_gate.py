@@ -171,6 +171,89 @@ Validation error: pytest failed on tests/test_gate.py
     assert "failure-context error" in decision.reason
 
 
+def test_evaluate_ci_gate_blocks_provider_runtime_signal():
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+"""
+    raw = "Provider unavailable while running the selected execution backend."
+
+    decision = evaluate_ci_gate(0, summary, raw)
+
+    assert decision.decision == "needs-work"
+    assert "stale/failover signal" in decision.reason
+
+
+def test_evaluate_ci_gate_blocks_actual_execution_failed_signal():
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+# Signposter Execution Summary
+
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+Execution failed during backend execution.
+"""
+
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "needs-work"
+    assert "execution failed" in decision.reason
+
+
+def test_evaluate_ci_gate_allows_positive_manual_takeover_summary():
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+# Signposter Execution Summary
+
+**Repository:** ExatronOmega/signposter
+**Issue:** #258
+**Agent:** human/operator
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+## Scoped completion evidence
+
+PASS - scoped test-only task completed with validation evidence.
+
+## Files changed
+
+- tests/test_gate.py
+
+## Implemented behavior / verified behavior
+
+- Manual takeover artifacts were preserved locally.
+- Positive worker evidence stays structured and bounded.
+
+## Validation evidence
+
+- ruff check .
+- pytest tests/ -q
+
+## Safety
+
+No GitHub mutation was performed by the implemented command.
+No OpenClaw execution was performed by the implemented command.
+No manifest mutation was performed.
+No unrelated files were changed.
+"""
+
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "pass"
+    assert "scoped test-only evidence" in decision.reason
+
+
 def test_gate_heuristic_audit_maps_gate_surfaces_and_risks():
     audit = build_gate_heuristic_audit()
     output = format_gate_heuristic_audit(audit)
