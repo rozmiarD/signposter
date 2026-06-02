@@ -114,6 +114,28 @@ def branch_exists(branch: str, cwd: str | Path = ".") -> bool:
         return False
 
 
+def remote_branch_exists(
+    branch: str,
+    *,
+    remote: str = "origin",
+    cwd: str | Path = ".",
+) -> bool:
+    """Check if a remote-tracking branch exists in local git metadata."""
+    if not branch:
+        return False
+    ref = f"refs/remotes/{remote}/{branch}"
+    try:
+        result = subprocess.run(
+            ["git", "show-ref", "--verify", "--quiet", ref],
+            cwd=str(cwd),
+            capture_output=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
 def worktree_path_exists(path: str | Path) -> bool:
     """Check if a directory exists at the proposed worktree path."""
     try:

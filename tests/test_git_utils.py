@@ -5,6 +5,7 @@ from signposter.git_utils import (
     get_git_status_short,
     has_blocking_dirty_changes,
     is_working_tree_clean,
+    remote_branch_exists,
 )
 
 
@@ -31,3 +32,31 @@ def test_find_uncommitted_repo_changes_filters_allowed_paths():
 def test_has_blocking_dirty_changes_is_bool():
     result = has_blocking_dirty_changes(".")
     assert isinstance(result, bool)
+
+
+def test_remote_branch_exists_checks_remote_tracking_ref(monkeypatch):
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        return type("Result", (), {"returncode": 0})()
+
+    monkeypatch.setattr("signposter.git_utils.subprocess.run", fake_run)
+
+    assert remote_branch_exists("work/issue-1-test") is True
+    assert calls[0][0] == [
+        "git",
+        "show-ref",
+        "--verify",
+        "--quiet",
+        "refs/remotes/origin/work/issue-1-test",
+    ]
+
+
+def test_remote_branch_exists_returns_false_when_ref_missing(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        return type("Result", (), {"returncode": 1})()
+
+    monkeypatch.setattr("signposter.git_utils.subprocess.run", fake_run)
+
+    assert remote_branch_exists("work/issue-1-test") is False
