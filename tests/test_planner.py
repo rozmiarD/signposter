@@ -91,6 +91,25 @@ def test_validate_planner_plan_rejects_unsafe_plan() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "unsafe_text",
+    [
+        "Closed #123",
+        "Fixed issue #123",
+        "Resolve https://github.com/acme/project/issues/123",
+    ],
+)
+def test_validate_planner_plan_rejects_extended_auto_close_variants(
+    unsafe_text: str,
+) -> None:
+    plan = build_planner_draft("build lifecycle watch")
+    plan["issues"][0]["acceptance"] = [unsafe_text]
+
+    errors = validate_planner_plan(plan)
+
+    assert "WATCH-001: contains auto-close keyword" in errors
+
+
 def test_cli_planner_draft_writes_file(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
