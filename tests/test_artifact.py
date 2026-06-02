@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from signposter.artifact import (
     audit_run_artifacts,
+    audit_worker_prompt,
     format_run_artifact_audit,
     format_worker_artifact_validation,
+    format_worker_prompt_audit,
     plan_review_summary,
     plan_worker_summary,
     validate_worker_summary_artifact,
@@ -69,6 +71,127 @@ def test_audit_run_artifacts_reports_unsafe_marker(tmp_path):
     assert result.unsafe_markers == ("issue-7-worker.raw.txt: model unavailable",)
     assert "Unsafe markers:" in out
     assert "issue-7-worker.raw.txt: model unavailable" in out
+
+
+def test_audit_worker_prompt_passes_required_task_boundary_fields(tmp_path):
+    prompt = tmp_path / "issue-246.md"
+    prompt.write_text(
+        "# Signposter Worker Prompt\n"
+        "\n"
+        "## Context\n"
+        "- Repository: ExatronOmega/signposter\n"
+        "- Issue: #246 - H049-039 - Worker prompt quality audit\n"
+        "- Labels: phase:build, state:active, risk:low\n"
+        "- Route/phase/role/risk/area/gate: worker/build/worker/low/runner/ci\n"
+        "- Working directory: ../signposter-work/246\n"
+        "\n"
+        "## Selected Role Policy\n"
+        "- backend: codex-cli\n"
+        "- role identity: WORKER_CORE\n"
+        "- selected model: openai/gpt-5.4\n"
+        "- selected reasoning effort: medium\n"
+        "\n"
+        "## Prompt Contract\n"
+        "- expected output format: concise execution summary\n"
+        "- artifact requirements: keep raw backend output local\n"
+        "- uncertainty handling: state missing evidence\n"
+        "\n"
+        "## Issue Body\n"
+        "Task body.\n"
+        "\n"
+        "## Rules\n"
+        "- Do not fetch the GitHub URL.\n"
+        "- Implement only this scoped issue.\n"
+        "\n"
+        "## Task\n"
+        "Implement only the scoped changes.\n"
+        "\n"
+        "## Validation\n"
+        "- Run targeted validation.\n",
+        encoding="utf-8",
+    )
+
+    result = audit_worker_prompt(prompt_path=prompt)
+    out = format_worker_prompt_audit(result)
+
+    assert result.status == "ready"
+    assert result.missing_fields == ()
+    assert "Signposter Worker Prompt Audit" in out
+    assert "Missing task-boundary fields:\n  none" in out
+    assert "No GitHub mutation was performed." in out
+    assert "No local prompt or artifact was modified." in out
+
+
+def test_audit_worker_prompt_blocks_missing_prompt(tmp_path):
+    result = audit_worker_prompt(prompt_path=tmp_path / "missing.md")
+    out = format_worker_prompt_audit(result)
+
+    assert result.status == "blocked"
+    assert result.exists is False
+    assert result.missing_fields == ("prompt artifact",)
+    assert "exists: no" in out
+
+
+def test_audit_worker_prompt_reports_missing_task_boundary_fields(tmp_path):
+    prompt = tmp_path / "issue-246.md"
+    prompt.write_text(
+        "# Signposter Worker Prompt\n\n## Context\n- Repository: test/repo\n",
+        encoding="utf-8",
+    )
+
+    result = audit_worker_prompt(prompt_path=prompt)
+
+    assert result.status == "blocked"
+    assert "issue context" in result.missing_fields
+    assert "selected role policy section" in result.missing_fields
+    assert "validation section" in result.missing_fields
+
+
+def test_audit_worker_prompt_reports_repeated_policy_lines(tmp_path):
+    prompt = tmp_path / "issue-246.md"
+    repeated = "- Do not broaden scope beyond the current issue."
+    prompt.write_text(
+        "# Signposter Worker Prompt\n"
+        "\n"
+        "## Context\n"
+        "- Repository: ExatronOmega/signposter\n"
+        "- Issue: #246 - H049-039 - Worker prompt quality audit\n"
+        "- Labels: phase:build, state:active, risk:low\n"
+        "- Route/phase/role/risk/area/gate: worker/build/worker/low/runner/ci\n"
+        "- Working directory: ../signposter-work/246\n"
+        "\n"
+        "## Selected Role Policy\n"
+        "- backend: codex-cli\n"
+        "- role identity: WORKER_CORE\n"
+        "- selected model: openai/gpt-5.4\n"
+        "- selected reasoning effort: medium\n"
+        "\n"
+        "## Prompt Contract\n"
+        "- expected output format: concise execution summary\n"
+        "- artifact requirements: keep raw backend output local\n"
+        "- uncertainty handling: state missing evidence\n"
+        "\n"
+        "## Issue Body\n"
+        "Task body.\n"
+        "\n"
+        "## Rules\n"
+        "- Do not fetch the GitHub URL.\n"
+        "- Implement only this scoped issue.\n"
+        f"{repeated}\n"
+        f"{repeated}\n"
+        "\n"
+        "## Task\n"
+        "Implement only the scoped changes.\n"
+        "\n"
+        "## Validation\n"
+        "- Run targeted validation.\n",
+        encoding="utf-8",
+    )
+
+    result = audit_worker_prompt(prompt_path=prompt)
+
+    assert result.status == "ready"
+    assert result.repeated_lines == (f"2x {repeated}",)
 
 
 def test_worker_summary_plan_is_gate_compatible():
