@@ -3,10 +3,12 @@
 from signposter.comments import (
     TRANSITION_COMMENT_MAX_CHARS,
     audit_github_comment_body,
+    ensure_github_comment_body,
     format_claim_comment,
     format_complete_comment,
     format_fail_comment,
     format_release_comment,
+    redact_github_comment_body,
 )
 
 
@@ -107,6 +109,38 @@ def test_comment_audit_blocks_obvious_secret_material():
 
     assert not audit.valid
     assert "possible GitHub token" in "; ".join(audit.errors)
+
+
+def test_comment_redaction_removes_obvious_secret_material():
+    token = "github_pat_" + ("A" * 30)
+    body = f"Signposter report\n\nToken: {token}"
+
+    redacted = redact_github_comment_body(body)
+
+    assert token not in redacted
+    assert "[REDACTED:github-token]" in redacted
+    assert audit_github_comment_body(redacted).valid
+
+
+def test_comment_ensure_returns_redacted_safe_body():
+    token = "sk-" + ("A" * 30)
+    body = f"Signposter report\n\nToken: {token}"
+
+    safe = ensure_github_comment_body(body)
+
+    assert token not in safe
+    assert "[REDACTED:openai-token]" in safe
+
+
+def test_comment_redaction_removes_reviewer_token_assignment_value():
+    secret = "SIGNPOSTER_REVIEWER_GH_TOKEN=ghp_" + ("A" * 30)
+    body = f"Signposter report\n\n{secret}"
+
+    redacted = redact_github_comment_body(body)
+
+    assert "ghp_" not in redacted
+    assert "SIGNPOSTER_REVIEWER_GH_TOKEN=" not in redacted
+    assert "[REDACTED:reviewer-token-assignment]" in redacted
 
 
 def test_comment_audit_blocks_unbounded_comment():

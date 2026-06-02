@@ -17,13 +17,19 @@ _AUTO_CLOSE_KEYWORD_RE = re.compile(
     re.IGNORECASE,
 )
 _SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "reviewer token assignment",
+        re.compile(r"\bSIGNPOSTER_REVIEWER_GH_TOKEN\s*=\s*\S+", re.IGNORECASE),
+    ),
     ("GitHub token", re.compile(r"\b(?:github_pat|gh[pousr])_[A-Za-z0-9_]{20,}\b")),
     ("OpenAI token", re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b")),
     (
-        "reviewer token assignment",
-        re.compile(r"\bSIGNPOSTER_REVIEWER_GH_TOKEN\s*=", re.IGNORECASE),
+        "private key block",
+        re.compile(
+            r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----",
+            re.DOTALL,
+        ),
     ),
-    ("private key block", re.compile(r"BEGIN [A-Z ]*PRIVATE KEY")),
 )
 
 
@@ -79,12 +85,25 @@ def audit_github_comment_body(
     )
 
 
+def _redaction_marker(label: str) -> str:
+    return "[REDACTED:" + label.lower().replace(" ", "-") + "]"
+
+
+def redact_github_comment_body(body: str) -> str:
+    """Redact obvious secret-like material before a body can reach GitHub."""
+    redacted = body or ""
+    for label, pattern in _SECRET_PATTERNS:
+        redacted = pattern.sub(_redaction_marker(label), redacted)
+    return redacted
+
+
 def ensure_github_comment_body(body: str, **kwargs: object) -> str:
     """Return body when safe enough for GitHub, otherwise raise ValueError."""
-    audit = audit_github_comment_body(body, **kwargs)
+    redacted = redact_github_comment_body(body)
+    audit = audit_github_comment_body(redacted, **kwargs)
     if not audit.valid:
         raise ValueError("unsafe GitHub comment body: " + "; ".join(audit.errors))
-    return body
+    return redacted
 
 
 def ensure_transition_comment_body(body: str) -> str:
