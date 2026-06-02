@@ -17,6 +17,11 @@ from signposter.comments import ensure_github_comment_body
 
 # Regex to strip ANSI escape sequences (colors, cursor moves, etc.)
 _ANSI_ESCAPE_RE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+_PREFERRED_EXCERPT_SECTIONS = (
+    "## Scoped completion evidence",
+    "## Validation evidence",
+    "## Gate recommendation",
+)
 
 
 def strip_ansi(text: str) -> str:
@@ -107,14 +112,13 @@ def format_comment(
     else:
         lines.append("- **Prompt used:** missing")
 
-    # Key Excerpt - prefer raw content if provided
-    excerpt_source = raw_content or summary_content
+    excerpt_source = _select_evidence_excerpt_source(summary_content, raw_content)
     excerpt = _make_bounded_excerpt(excerpt_source)
 
     lines.extend(
         [
             "",
-            "## Key Excerpt (first ~20 lines or 1500 chars)",
+            "## Key Evidence Excerpt (bounded)",
             "",
             "```",
             excerpt,
@@ -129,6 +133,46 @@ def format_comment(
     )
 
     return ensure_github_comment_body("\n".join(lines))
+
+
+def _extract_preferred_summary_sections(summary_content: str) -> str | None:
+    """Return preferred evidence sections from a worker/reviewer summary."""
+    lines = (summary_content or "").splitlines()
+    selected_sections: list[str] = []
+
+    for heading in _PREFERRED_EXCERPT_SECTIONS:
+        try:
+            start = next(
+                idx for idx, line in enumerate(lines) if line.strip() == heading
+            )
+        except StopIteration:
+            continue
+
+        end = len(lines)
+        for idx in range(start + 1, len(lines)):
+            line = lines[idx].strip()
+            if line.startswith("## ") and line != heading:
+                end = idx
+                break
+
+        section = "\n".join(lines[start:end]).strip()
+        if section:
+            selected_sections.append(section)
+
+    if not selected_sections:
+        return None
+    return "\n\n".join(selected_sections)
+
+
+def _select_evidence_excerpt_source(
+    summary_content: str,
+    raw_content: str | None,
+) -> str:
+    """Prefer structured evidence summary sections, then raw output, then summary."""
+    preferred = _extract_preferred_summary_sections(summary_content)
+    if preferred:
+        return preferred
+    return raw_content or summary_content
 
 
 def _make_bounded_excerpt(text: str, max_lines: int = 20, max_chars: int = 1500) -> str:
@@ -153,7 +197,10 @@ def _make_bounded_excerpt(text: str, max_lines: int = 20, max_chars: int = 1500)
 
     excerpt = "\n".join(selected)
     if len(text) > max_chars or len(lines) > max_lines:
-        excerpt += "\n... (truncated)"
+        excerpt += (
+            f"\n... (omitted; excerpt limited to {max_lines} lines / "
+            f"{max_chars} chars)"
+        )
     return excerpt or "(no content)"
 
 
