@@ -19,6 +19,7 @@ from signposter.planner import (
     build_planner_run_plan_from_status,
     build_planner_seed_manifest,
     build_planner_seed_plan,
+    build_planner_side_task_plan,
     build_planner_status,
     build_planner_status_counts,
     build_planner_step_from_next,
@@ -31,6 +32,7 @@ from signposter.planner import (
     format_planner_next_from_status,
     format_planner_roadmap,
     format_planner_run_plan,
+    format_planner_side_task_plan,
     format_planner_status,
     format_planner_step,
     format_seed_label_preflight,
@@ -4166,3 +4168,209 @@ def test_cli_planner_next_requires_plan_or_manifest(
     assert exc_info.value.code == 1
     assert "Status:\n  blocked" in captured
     assert "either --plan or --manifest is required" in captured
+
+
+def _side_task_plan_manifest() -> dict[str, object]:
+    return {
+        "version": "planner.seed-manifest.v0.1",
+        "repo": "ExatronOmega/signposter",
+        "status": "applied",
+        "issues": [
+            {
+                "key": "H049-010",
+                "title": "Parent task",
+                "labels": [
+                    "phase:build",
+                    "risk:medium",
+                    "role:worker",
+                    "area:scheduler",
+                ],
+                "depends_on": [],
+                "github_issue": 210,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/210",
+                "mainline": "H049",
+                "parent": None,
+                "return_to": None,
+                "side_task": False,
+            },
+            {
+                "key": "H049-011",
+                "title": "Return task",
+                "labels": [
+                    "phase:build",
+                    "risk:medium",
+                    "role:worker",
+                    "area:scheduler",
+                ],
+                "depends_on": ["H049-010"],
+                "github_issue": 211,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/211",
+                "mainline": "H049",
+                "parent": None,
+                "return_to": None,
+                "side_task": False,
+            },
+        ],
+    }
+
+
+def test_build_planner_side_task_plan_ready() -> None:
+    result = build_planner_side_task_plan(
+        manifest=_side_task_plan_manifest(),
+        manifest_path="/tmp/manifest.json",
+        key="H049-S003",
+        title="Fix discovered scheduler edge",
+        reason="planner advance exposed a dependency edge",
+        depends_on=["H049-010"],
+        parent=210,
+        return_to=211,
+        risk="high",
+    )
+
+    assert result["status"] == "ready"
+    assert result["errors"] == []
+    assert result["requires_llm_analysis"] is False
+    assert result["planned_task"]["side_task"] is True
+    assert result["planned_task"]["parent"] == 210
+    assert result["planned_task"]["return_to"] == 211
+    assert result["planned_task"]["mainline"] == "H049"
+    assert "risk:high" in result["planned_task"]["labels"]
+    assert result["planned_github_mutations"] == []
+
+
+def test_build_planner_side_task_plan_does_not_mutate_input_manifest() -> None:
+    manifest = _side_task_plan_manifest()
+    before = json.loads(json.dumps(manifest))
+
+    build_planner_side_task_plan(
+        manifest=manifest,
+        manifest_path="/tmp/manifest.json",
+        key="H049-S003",
+        title="Fix discovered scheduler edge",
+        reason="planner advance exposed a dependency edge",
+        depends_on=["H049-010"],
+        parent=210,
+        return_to=211,
+    )
+
+    assert manifest == before
+
+
+def test_build_planner_side_task_plan_blocks_without_return_to() -> None:
+    result = build_planner_side_task_plan(
+        manifest=_side_task_plan_manifest(),
+        manifest_path="/tmp/manifest.json",
+        key="H049-S003",
+        title="Fix discovered scheduler edge",
+        reason="planner advance exposed a dependency edge",
+        depends_on=["H049-010"],
+        parent=210,
+        return_to=None,
+    )
+
+    assert result["status"] == "blocked"
+    assert "return_to issue is required" in result["errors"]
+    assert result["planned_manifest_mutations"] == []
+
+
+def test_build_planner_side_task_plan_blocks_missing_label_fields() -> None:
+    result = build_planner_side_task_plan(
+        manifest=_side_task_plan_manifest(),
+        manifest_path="/tmp/manifest.json",
+        key="H049-S003",
+        title="Fix discovered scheduler edge",
+        reason="planner advance exposed a dependency edge",
+        depends_on=["H049-010"],
+        parent=210,
+        return_to=211,
+        phase="",
+        gate=" ",
+    )
+
+    assert result["status"] == "blocked"
+    assert "phase is required" in result["errors"]
+    assert "gate is required" in result["errors"]
+
+
+def test_build_planner_side_task_plan_blocks_duplicate_key_and_unknown_dependency() -> None:
+    result = build_planner_side_task_plan(
+        manifest=_side_task_plan_manifest(),
+        manifest_path="/tmp/manifest.json",
+        key="H049-010",
+        title="Fix discovered scheduler edge",
+        reason="planner advance exposed a dependency edge",
+        depends_on=["MISSING-001"],
+        parent=210,
+        return_to=211,
+    )
+
+    assert result["status"] == "blocked"
+    assert "side-task key already exists in manifest: H049-010" in result["errors"]
+    assert "unknown dependency: MISSING-001" in result["errors"]
+
+
+def test_format_planner_side_task_plan_is_compact_and_safe() -> None:
+    result = build_planner_side_task_plan(
+        manifest=_side_task_plan_manifest(),
+        manifest_path="/tmp/manifest.json",
+        key="H049-S003",
+        title="Fix discovered scheduler edge",
+        reason="planner advance exposed a dependency edge",
+        depends_on=["H049-010"],
+        parent=210,
+        return_to=211,
+    )
+
+    output = format_planner_side_task_plan(result)
+
+    assert "Signposter Planner Side-Task Plan" in output
+    assert "Status:\n  ready" in output
+    assert "side-task: yes" in output
+    assert "parent: #210" in output
+    assert "return-to: #211" in output
+    assert "No GitHub mutation was performed." in output
+    assert "No manifest mutation was performed." in output
+    assert len(output.splitlines()) < 60
+
+
+def test_cli_planner_side_task_plan_reports_ready(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(_side_task_plan_manifest()),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "side-task-plan",
+            "--manifest",
+            str(manifest_path),
+            "--key",
+            "H049-S003",
+            "--title",
+            "Fix discovered scheduler edge",
+            "--reason",
+            "planner advance exposed a dependency edge",
+            "--depends-on",
+            "H049-010",
+            "--parent",
+            "210",
+            "--return-to",
+            "211",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+    assert exc_info.value.code in (None, 0)
+    assert "Signposter Planner Side-Task Plan" in captured
+    assert "No GitHub issue was created." in captured

@@ -103,6 +103,7 @@ from signposter.planner import (
     build_planner_run_plan_from_status,
     build_planner_seed_manifest,
     build_planner_seed_plan,
+    build_planner_side_task_plan,
     build_planner_status,
     build_planner_step_from_next,
     format_planner_advance_apply_result,
@@ -116,6 +117,7 @@ from signposter.planner import (
     format_planner_run_plan,
     format_planner_seed_apply_result,
     format_planner_seed_plan,
+    format_planner_side_task_plan,
     format_planner_status,
     format_planner_step,
     format_planner_validation,
@@ -664,6 +666,57 @@ def main() -> None:
         help="Fetch current GitHub issue states before scoring impact",
     )
     planner_impact_parser.set_defaults(func=run_planner_impact)
+
+    planner_side_task_plan_parser = planner_subparsers.add_parser(
+        "side-task-plan",
+        help="Show a read-only side-task insertion plan from a seed manifest",
+    )
+    planner_side_task_plan_parser.add_argument(
+        "--manifest",
+        required=True,
+        type=Path,
+        help="Path to the local planner seed manifest JSON file",
+    )
+    planner_side_task_plan_parser.add_argument(
+        "--key",
+        required=True,
+        help="New side-task key, e.g. H049-S003",
+    )
+    planner_side_task_plan_parser.add_argument(
+        "--title",
+        required=True,
+        help="New side-task title",
+    )
+    planner_side_task_plan_parser.add_argument(
+        "--reason",
+        required=True,
+        help="Why this side task is needed",
+    )
+    planner_side_task_plan_parser.add_argument(
+        "--depends-on",
+        action="append",
+        default=[],
+        help="Existing manifest task key dependency; repeat for multiple dependencies",
+    )
+    planner_side_task_plan_parser.add_argument(
+        "--parent",
+        type=int,
+        default=None,
+        help="GitHub issue number that exposed the side task",
+    )
+    planner_side_task_plan_parser.add_argument(
+        "--return-to",
+        type=int,
+        default=None,
+        help="GitHub issue number to resume after side completion",
+    )
+    planner_side_task_plan_parser.add_argument("--phase", default="build")
+    planner_side_task_plan_parser.add_argument("--risk", default="medium")
+    planner_side_task_plan_parser.add_argument("--role", default="worker")
+    planner_side_task_plan_parser.add_argument("--area", default="scheduler")
+    planner_side_task_plan_parser.add_argument("--gate", default="ci")
+    planner_side_task_plan_parser.add_argument("--mainline", default=None)
+    planner_side_task_plan_parser.set_defaults(func=run_planner_side_task_plan)
 
     planner_step_parser = planner_subparsers.add_parser(
         "step",
@@ -3682,6 +3735,51 @@ def run_planner_impact(args: argparse.Namespace) -> int:
     )
     print(format_planner_impact(impact))
     return 1 if impact["status"] == "blocked" else 0
+
+
+def run_planner_side_task_plan(args: argparse.Namespace) -> int:
+    """Show a read-only side-task insertion plan from a seed manifest."""
+    if not args.manifest.exists():
+        result = build_planner_side_task_plan(
+            manifest={"issues": []},
+            manifest_path=str(args.manifest),
+            key=args.key,
+            title=args.title,
+            reason=args.reason,
+            depends_on=args.depends_on,
+            parent=args.parent,
+            return_to=args.return_to,
+            phase=args.phase,
+            risk=args.risk,
+            role=args.role,
+            area=args.area,
+            gate=args.gate,
+            mainline=args.mainline,
+        )
+        result["status"] = "blocked"
+        result["errors"] = [f"manifest file not found: {args.manifest}"]
+        print(format_planner_side_task_plan(result))
+        return 1
+
+    manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+    result = build_planner_side_task_plan(
+        manifest=manifest,
+        manifest_path=str(args.manifest),
+        key=args.key,
+        title=args.title,
+        reason=args.reason,
+        depends_on=args.depends_on,
+        parent=args.parent,
+        return_to=args.return_to,
+        phase=args.phase,
+        risk=args.risk,
+        role=args.role,
+        area=args.area,
+        gate=args.gate,
+        mainline=args.mainline,
+    )
+    print(format_planner_side_task_plan(result))
+    return 0 if result["status"] == "ready" else 1
 
 
 def run_planner_step(args: argparse.Namespace) -> int:
