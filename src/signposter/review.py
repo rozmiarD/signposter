@@ -43,6 +43,13 @@ from signposter.openclaw_runtime import (
 from signposter.role_routing import resolve_role_execution, select_role_for_review
 from signposter.runner import build_openclaw_session_key
 
+REVIEW_PROMPT_LIMITS = {
+    "changed_files": 16,
+    "pr_body_lines": 28,
+    "pr_body_chars": 1600,
+    "diff_lines": 90,
+}
+
 
 @dataclass(frozen=True)
 class ReviewPlan:
@@ -600,8 +607,11 @@ def get_pr_diff(repo: str, pr_number: int, max_lines: int = 150) -> str:
     return diff or "<no diff content>"
 
 
-def _format_authoritative_changed_files(file_paths: list[str]) -> str:
-    max_files = 24
+def _format_authoritative_changed_files(
+    file_paths: list[str],
+    *,
+    max_files: int = REVIEW_PROMPT_LIMITS["changed_files"],
+) -> str:
     if not file_paths:
         return "- <no changed files returned by GitHub>"
     selected = file_paths[:max_files]
@@ -667,8 +677,8 @@ def build_review_prompt(
     plan_notes = "\n".join(f"- {n}" for n in plan.notes) if plan.notes else "- none"
     pr_body_excerpt = _compact_review_text(
         pr_body,
-        max_lines=40,
-        max_chars=2400,
+        max_lines=REVIEW_PROMPT_LIMITS["pr_body_lines"],
+        max_chars=REVIEW_PROMPT_LIMITS["pr_body_chars"],
         empty_fallback="<no body provided>",
     )
 
@@ -677,6 +687,10 @@ def build_review_prompt(
         if plan.associated_issue
         else "No associated issue detected via branch convention"
     )
+    body_lines_limit = REVIEW_PROMPT_LIMITS["pr_body_lines"]
+    body_chars_limit = REVIEW_PROMPT_LIMITS["pr_body_chars"]
+    changed_files_limit = REVIEW_PROMPT_LIMITS["changed_files"]
+    diff_lines_limit = REVIEW_PROMPT_LIMITS["diff_lines"]
 
     content = f"""You are an expert code reviewer acting as the Signposter reviewer agent.
 
@@ -707,6 +721,12 @@ def build_review_prompt(
 - Deletions: {plan.deletions}
 - Risk classification: {plan.risk_level}
 - Size classification: {plan.size}
+
+## Prompt Budget
+- Changed files shown: first {changed_files_limit} paths
+- PR body excerpt: max {body_lines_limit} lines / {body_chars_limit} chars
+- Diff excerpt: max {diff_lines_limit} lines
+- Omitted sections are marked explicitly and should be treated as bounded evidence.
 
 ## Selected Role Policy
 - backend: {plan.proposed_runner}
@@ -797,7 +817,7 @@ def write_review_prompt_artifact(
     except Exception:
         pr_body = ""
 
-    diff = get_pr_diff(repo, pr_number, max_lines=120)
+    diff = get_pr_diff(repo, pr_number, max_lines=REVIEW_PROMPT_LIMITS["diff_lines"])
     file_paths = _fetch_pr_file_paths(repo, pr_number)
 
     content = build_review_prompt(plan, pr_body, diff, file_paths=file_paths)
