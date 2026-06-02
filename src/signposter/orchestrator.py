@@ -647,11 +647,47 @@ def format_orchestrator_next(result: OrchestratorNext) -> str:
                 f"  reason: {result.takeover_reason or 'none'}",
             ]
         )
+        takeover_plan = _format_takeover_plan_lines(result.takeover_category)
+        if takeover_plan:
+            lines.extend(["", "Takeover plan:"])
+            lines.extend(f"  {line}" for line in takeover_plan)
 
     lines.extend(["", "Status:", f"  {result.status}"])
     lines.extend(["", "Notes:"])
     lines.extend(f"  {note}" for note in result.notes)
     return "\n".join(lines)
+
+
+def _format_takeover_plan_lines(category: str) -> list[str]:
+    """Return read-only recovery guidance for a planned takeover category."""
+    plans = {
+        "resume-existing-worktree": (
+            "resume existing worktree and prompt before replacing artifacts",
+            "write a manual worker summary only if resumed output is not usable",
+        ),
+        "regenerate-prompt": (
+            "regenerate prompt for the existing worktree before execution",
+            "preserve old prompt context if a manual summary is needed",
+        ),
+        "manual-worker-fallback": (
+            "repair or recreate worktree before continuing implementation",
+            "use the existing prompt to write a bounded manual worker summary",
+        ),
+        "inspect-blocker": (
+            "inspect labels, worktree, prompt, artifacts, and issue comments first",
+            "take over manually only after evidence shows resume is not safe",
+        ),
+    }
+    selected = plans.get(category)
+    if selected is None:
+        return []
+    resume_path, manual_fallback = selected
+    return [
+        "preserve evidence: keep existing raw, summary, prompt, branch, and worktree context",
+        f"resume path: {resume_path}",
+        f"manual fallback: {manual_fallback}",
+        "mutation policy: this plan is read-only; apply/execute flags remain required",
+    ]
 
 
 def format_orchestrator_step(result: OrchestratorStep) -> str:
