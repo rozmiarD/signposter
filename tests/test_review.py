@@ -1416,24 +1416,16 @@ def test_review_gate_blocks_unsafe_raw_marker(tmp_path):
 
 
 def test_format_review_artifact_validation_summary_is_concise(tmp_path):
+    from signposter.artifact import plan_review_summary, write_manual_artifact
     from signposter.review import (
         format_review_artifact_validation_summary,
         validate_review_artifact,
     )
 
-    path = tmp_path / "pr-73-reviewer.summary.md"
-    path.write_text(
-        "Verdict: APPROVE\n"
-        "Confidence: 0.91\n"
-        "Risk: medium\n"
-        "Scope match: yes\n"
-        "CI considered: yes\n"
-        "Merge recommendation: yes\n"
-        "Automerge eligible: no\n",
-        encoding="utf-8",
-    )
+    plan = plan_review_summary(pr=73, confidence=0.91, risk="medium", runs_dir=tmp_path)
+    write_manual_artifact(plan, apply=True)
 
-    result = validate_review_artifact(73, summary_path=str(path))
+    result = validate_review_artifact(73, summary_path=plan.path)
     out = format_review_artifact_validation_summary(result)
 
     assert out.splitlines() == [
@@ -1963,6 +1955,29 @@ def test_validate_review_artifact_blocks_malformed_fields(tmp_path):
     assert any("Verdict" in error for error in result.errors)
     assert any("Confidence" in error for error in result.errors)
     assert any("Risk" in error for error in result.errors)
+
+
+def test_validate_review_artifact_blocks_missing_schema_fields(tmp_path):
+    from signposter.review import validate_review_artifact
+
+    path = tmp_path / "pr-38-reviewer.summary.md"
+    path.write_text(
+        "Verdict: APPROVE\n"
+        "Confidence: 0.91\n"
+        "Risk: low\n"
+        "Scope match: yes\n"
+        "CI considered: yes\n"
+        "Merge recommendation: yes\n"
+        "Automerge eligible: no\n",
+        encoding="utf-8",
+    )
+
+    result = validate_review_artifact(38, summary_path=str(path))
+
+    assert result.status == "blocked"
+    assert any("agent or backend metadata" in error for error in result.errors)
+    assert any("validation considered section" in error for error in result.errors)
+    assert any("safety notes section" in error for error in result.errors)
 
 
 def test_format_review_artifact_validation_contains_status(tmp_path):
