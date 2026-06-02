@@ -891,6 +891,14 @@ def format_orchestrator_run_next_loop(result: OrchestratorRunNextLoop) -> str:
         f"  max tasks: {result.max_tasks}",
         f"  tasks started: {result.tasks_started}",
         "",
+        "Guard audit:",
+        "  max cycles: enforced",
+        "  max tasks: enforced",
+        "  apply required: yes",
+        "  execute required for backend: yes",
+        f"  stop category: {result.stop_category or 'none'}",
+        f"  stop tolerated: {'yes' if result.stop_tolerated else 'no'}",
+        "",
         "Selection:",
         (
             f"  current issue: #{result.selected_issue}"
