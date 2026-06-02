@@ -17,6 +17,7 @@ class ControlPlaneStatus:
     planner: dict[str, Any] | None
     scheduler: SchedulerNext | None
     orchestrator: OrchestratorNext | None
+    agreement: dict[str, Any]
     bugs: tuple[BugLedgerEntry, ...]
     notes: tuple[str, ...]
 
@@ -39,8 +40,15 @@ def build_control_plane_status(
         statuses.append(scheduler_next.status)
     if orchestrator_next is not None:
         statuses.append(orchestrator_next.status)
+    agreement = _build_agreement(
+        planner_run=planner_run,
+        scheduler_next=scheduler_next,
+        orchestrator_next=orchestrator_next,
+    )
 
-    if any(status == "blocked" for status in statuses):
+    if agreement["status"] == "disagreement":
+        status = "blocked"
+    elif any(status == "blocked" for status in statuses):
         status = "blocked"
     elif statuses and all(status in {"completed", "complete"} for status in statuses):
         status = "completed"
@@ -53,6 +61,7 @@ def build_control_plane_status(
         planner=planner_run,
         scheduler=scheduler_next,
         orchestrator=orchestrator_next,
+        agreement=agreement,
         bugs=bugs,
         notes=(
             "Read-only control-plane status.",
@@ -62,6 +71,122 @@ def build_control_plane_status(
             "No OpenClaw execution was performed.",
         ),
     )
+
+
+def _build_agreement(
+    *,
+    planner_run: dict[str, Any] | None,
+    scheduler_next: SchedulerNext | None,
+    orchestrator_next: OrchestratorNext | None,
+) -> dict[str, Any]:
+    planner_issue = _planner_next_issue(planner_run)
+    scheduler_issue = (
+        scheduler_next.issue.number
+        if scheduler_next is not None and scheduler_next.issue is not None
+        else None
+    )
+    active_issues = _unique_issues(
+        [
+            *_planner_active_issues(planner_run),
+            *_scheduler_active_issues(scheduler_next),
+        ]
+    )
+    lifecycle = getattr(orchestrator_next, "lifecycle", None)
+    orchestrator_issue = getattr(lifecycle, "issue_number", None)
+
+    sources = {
+        "planner": planner_issue,
+        "scheduler": scheduler_issue,
+        "orchestrator": orchestrator_issue,
+    }
+    for issue in active_issues:
+        sources[f"active:#{issue}"] = issue
+    evaluated = {source: issue for source, issue in sources.items() if issue is not None}
+    unique_issues = set(evaluated.values())
+
+    if len(active_issues) > 1:
+        status = "disagreement"
+        reason = "multiple active issues require explicit operator selection"
+    elif len(evaluated) < 2:
+        status = "not evaluated"
+        reason = "fewer than two target-selecting sources were evaluated"
+    elif len(unique_issues) == 1:
+        status = "aligned"
+        issue = next(iter(unique_issues))
+        reason = f"evaluated sources point at issue #{issue}"
+    else:
+        status = "disagreement"
+        reason = "evaluated sources point at different issues"
+
+    return {
+        "status": status,
+        "reason": reason,
+        "planner_issue": planner_issue,
+        "scheduler_issue": scheduler_issue,
+        "orchestrator_issue": orchestrator_issue,
+        "active_issues": active_issues,
+    }
+
+
+def _planner_next_issue(planner_run: dict[str, Any] | None) -> int | None:
+    if planner_run is None:
+        return None
+    next_plan = planner_run.get("next")
+    if not isinstance(next_plan, dict):
+        return None
+    next_task = next_plan.get("next")
+    if not isinstance(next_task, dict):
+        return None
+    issue = next_task.get("github_issue")
+    if issue is None:
+        return None
+    try:
+        return int(issue)
+    except (TypeError, ValueError):
+        return None
+
+
+def _scheduler_active_issues(scheduler_next: SchedulerNext | None) -> tuple[int, ...]:
+    if scheduler_next is None:
+        return ()
+    issues: list[int] = []
+    for item in scheduler_next.skipped:
+        if ": state:active" not in item:
+            continue
+        raw_issue = item.split(":", 1)[0].strip().removeprefix("#")
+        try:
+            issue = int(raw_issue)
+        except ValueError:
+            continue
+        if issue not in issues:
+            issues.append(issue)
+    return tuple(issues)
+
+
+def _planner_active_issues(planner_run: dict[str, Any] | None) -> tuple[int, ...]:
+    if planner_run is None:
+        return ()
+    issues: list[int] = []
+    for task in planner_run.get("active_tasks", []):
+        if not isinstance(task, dict):
+            continue
+        issue = task.get("github_issue")
+        if issue is None:
+            continue
+        try:
+            issue_number = int(issue)
+        except (TypeError, ValueError):
+            continue
+        issues.append(issue_number)
+    return tuple(issues)
+
+
+def _unique_issues(values: list[int]) -> tuple[int, ...]:
+    unique: list[int] = []
+    for value in values:
+        if value not in unique:
+            unique.append(value)
+    return tuple(unique)
 
 
 def format_control_plane_status(result: ControlPlaneStatus) -> str:
@@ -75,6 +200,20 @@ def format_control_plane_status(result: ControlPlaneStatus) -> str:
         "Repo:",
         f"  {result.repo}",
     ]
+
+    agreement = result.agreement
+    lines.extend(
+        [
+            "",
+            "Agreement:",
+            f"  status: {agreement.get('status', 'unknown')}",
+            f"  planner issue: {_format_issue_ref(agreement.get('planner_issue'))}",
+            f"  scheduler issue: {_format_issue_ref(agreement.get('scheduler_issue'))}",
+            f"  orchestrator issue: {_format_issue_ref(agreement.get('orchestrator_issue'))}",
+            f"  active issues: {_format_issue_refs(agreement.get('active_issues'))}",
+            f"  reason: {agreement.get('reason', 'unknown')}",
+        ]
+    )
 
     lines.extend(["", "Planner:"])
     if result.planner is None:
@@ -151,3 +290,15 @@ def format_control_plane_status(result: ControlPlaneStatus) -> str:
     lines.extend(["", "Notes:"])
     lines.extend(f"  {note}" for note in result.notes)
     return "\n".join(lines)
+
+
+def _format_issue_ref(value: Any) -> str:
+    if value is None:
+        return "none"
+    return f"#{value}"
+
+
+def _format_issue_refs(values: Any) -> str:
+    if not values:
+        return "none"
+    return ", ".join(f"#{value}" for value in values)
