@@ -80,6 +80,8 @@ def test_validate_worker_summary_artifact_passes_formal_summary(tmp_path):
     assert result.status == "pass"
     assert result.missing == []
     assert result.stale_signal is None
+    assert result.raw_exists is False
+    assert "raw output artifact not found" in out
     assert "Status:\n  pass" in out
 
 
@@ -111,6 +113,22 @@ def test_validate_worker_summary_artifact_blocks_unsafe_marker(tmp_path):
 
     assert result.status == "blocked"
     assert result.stale_signal == "model unavailable"
+
+
+def test_validate_worker_summary_artifact_blocks_unsafe_raw_marker(tmp_path):
+    plan = plan_worker_summary(repo="test/repo", issue=72, runs_dir=tmp_path)
+    write_manual_artifact(plan, apply=True)
+    raw = tmp_path / "issue-72-worker.raw.txt"
+    raw.write_text("The model is not supported for this account.\n", encoding="utf-8")
+
+    result = validate_worker_summary_artifact(72, runs_dir=tmp_path)
+    out = format_worker_artifact_validation(result)
+
+    assert result.status == "blocked"
+    assert result.raw_exists is True
+    assert result.raw_stale_signal == "model is not supported"
+    assert "Raw unsafe marker:" in out
+    assert "preserve unsafe backend output separately" in out
 
 
 def test_review_summary_plan_is_review_gate_compatible(tmp_path):

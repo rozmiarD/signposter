@@ -10,6 +10,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from signposter.artifact import WorkerArtifactValidation, validate_worker_summary_artifact
 from signposter.artifact_safety import find_stale_or_failover_signal
 
 
@@ -736,6 +737,39 @@ def run_gate_dry_run(
     )
     raw_text = load_raw_if_exists(raw_path)
 
+    worker_artifact_validation: WorkerArtifactValidation | None = None
+    if gate_type == "ci":
+        worker_artifact_validation = validate_worker_summary_artifact(
+            issue,
+            summary_path=summary_path,
+        )
+        if worker_artifact_validation.status != "pass":
+            reason = _worker_artifact_block_reason(worker_artifact_validation)
+            return {
+                "repo": repo,
+                "issue": issue,
+                "issue_title": issue_state["title"],
+                "current_state": issue_state["state"],
+                "labels": labels,
+                "has_state_active": has_active,
+                "has_gate_review": has_gate_review,
+                "has_gate_ci": has_gate_ci,
+                "has_gate_human": has_gate_human,
+                "gate_type": gate_type,
+                "summary_path": str(summary_path),
+                "raw_path": str(raw_path) if raw_path.exists() else None,
+                "exit_code": None,
+                "decision": "needs-work",
+                "reason": reason,
+                "confidence": "high",
+                "proposed_transition": "state:active (worker artifact repair required)",
+                "proposed_command": None,
+                "valid_for_gate": False,
+                "worker_artifact_validation": _worker_artifact_validation_payload(
+                    worker_artifact_validation
+                ),
+            }
+
     # Extract exit code from summary (simple heuristic)
     exit_code = 0
     for line in summary_text.splitlines():
@@ -788,6 +822,11 @@ def run_gate_dry_run(
         "proposed_transition": decision.proposed_transition,
         "proposed_command": proposed_cmd,
         "valid_for_gate": has_active and gate_type in {"review", "ci"},
+        "worker_artifact_validation": (
+            _worker_artifact_validation_payload(worker_artifact_validation)
+            if worker_artifact_validation is not None
+            else None
+        ),
     }
 
 
@@ -835,6 +874,29 @@ def format_gate_report(result: dict) -> str:
         lines.append(f"  Raw:     {result['raw_path']}")
     else:
         lines.append("  Raw:     (not found)")
+
+    worker_artifact = result.get("worker_artifact_validation")
+    if worker_artifact:
+        lines.extend(
+            [
+                "",
+                "Worker artifact preflight:",
+                f"  status: {worker_artifact['status']}",
+                f"  summary: {worker_artifact['summary_path']}",
+                f"  raw: {worker_artifact['raw_path'] or 'none'}",
+                f"  raw exists: {worker_artifact['raw_exists']}",
+            ]
+        )
+        if worker_artifact["summary_signal"]:
+            lines.append(f"  summary unsafe marker: {worker_artifact['summary_signal']}")
+        if worker_artifact["raw_signal"]:
+            lines.append(f"  raw unsafe marker: {worker_artifact['raw_signal']}")
+        if worker_artifact["missing"]:
+            lines.append("  missing:")
+            lines.extend(f"    - {item}" for item in worker_artifact["missing"])
+        if worker_artifact["guidance"]:
+            lines.append("  guidance:")
+            lines.extend(f"    - {item}" for item in worker_artifact["guidance"][:4])
 
     lines.extend(
         [
@@ -916,6 +978,19 @@ def evaluate_gate_for_complete(repo: str, issue: int) -> tuple[bool, str, str, s
     except Exception as e:
         return False, "error", f"Failed to load summary: {e}", gate_type
 
+    if has_gate_ci:
+        worker_artifact_validation = validate_worker_summary_artifact(
+            issue,
+            summary_path=summary_path,
+        )
+        if worker_artifact_validation.status != "pass":
+            return (
+                False,
+                "needs-work",
+                _worker_artifact_block_reason(worker_artifact_validation),
+                gate_type,
+            )
+
     # Load raw if present for better signals
     raw_path = Path(summary_path).with_name(
         Path(summary_path).name.replace(".summary.md", ".raw.txt")
@@ -945,3 +1020,30 @@ def evaluate_gate_for_complete(repo: str, issue: int) -> tuple[bool, str, str, s
         gate_decision.reason,
         gate_type,
     )
+
+
+def _worker_artifact_validation_payload(result: WorkerArtifactValidation) -> dict:
+    return {
+        "status": result.status,
+        "summary_path": result.path,
+        "summary_exists": result.exists,
+        "summary_signal": result.stale_signal,
+        "raw_path": result.raw_path,
+        "raw_exists": result.raw_exists,
+        "raw_signal": result.raw_stale_signal,
+        "missing": list(result.missing),
+        "guidance": list(result.guidance or []),
+    }
+
+
+def _worker_artifact_block_reason(result: WorkerArtifactValidation) -> str:
+    problems: list[str] = []
+    if not result.exists:
+        problems.append("summary artifact is missing")
+    if result.missing:
+        problems.append("summary artifact is missing required fields")
+    if result.stale_signal:
+        problems.append(f"summary artifact contains unsafe marker: {result.stale_signal}")
+    if result.raw_stale_signal:
+        problems.append(f"raw artifact contains unsafe marker: {result.raw_stale_signal}")
+    return "Worker artifact preflight blocked: " + "; ".join(problems)
