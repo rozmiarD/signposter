@@ -111,6 +111,38 @@ class CodexCliExecutionResult:
     summary_path: Path
 
 
+CODEX_CLI_FAILURE_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "unsupported-model",
+        (
+            "model is not supported",
+            "unsupported model",
+            "unknown model",
+            "model not found",
+        ),
+    ),
+    (
+        "runtime-stall",
+        (
+            "idle timed out",
+            "timed out waiting for progress",
+            "no progress",
+            "runtime stall",
+            "stalled",
+        ),
+    ),
+    (
+        "malformed-output",
+        (
+            "malformed output",
+            "invalid output",
+            "missing expected output",
+            "could not parse output",
+        ),
+    ),
+)
+
+
 def plan_codex_cli_invocation(
     *,
     agent: str,
@@ -163,6 +195,22 @@ def check_codex_cli_preflight(
         reason="codex CLI binary and prompt artifact are available",
         command_path=command_path,
     )
+
+
+def classify_codex_cli_failure(
+    *,
+    exit_code: int,
+    stdout: str,
+    stderr: str,
+) -> str:
+    """Classify non-success Codex CLI executions without network calls."""
+    if exit_code == -1:
+        return "timeout"
+    output = f"{stdout}\n{stderr}".lower()
+    for status, patterns in CODEX_CLI_FAILURE_PATTERNS:
+        if any(pattern in output for pattern in patterns):
+            return status
+    return "runtime-error"
 
 
 def execute_codex_cli_invocation(
@@ -218,11 +266,19 @@ def execute_codex_cli_invocation(
         stdout = proc.stdout or ""
         stderr = proc.stderr or ""
         exit_code = proc.returncode
-        status = "success" if exit_code == 0 else "failed"
+        status = (
+            "success"
+            if exit_code == 0
+            else classify_codex_cli_failure(
+                exit_code=exit_code,
+                stdout=stdout,
+                stderr=stderr,
+            )
+        )
         reason = (
             "Codex CLI execution completed successfully."
             if exit_code == 0
-            else f"Codex CLI exited with code {exit_code}."
+            else f"Codex CLI exited with code {exit_code}; classified as {status}."
         )
     except subprocess.TimeoutExpired as exc:
         stdout = exc.stdout or ""
