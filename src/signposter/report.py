@@ -13,7 +13,7 @@ import subprocess
 from pathlib import Path
 
 from signposter.artifact_safety import find_stale_or_failover_signal
-from signposter.comments import ensure_github_comment_body
+from signposter.comments import DEFAULT_MAX_COMMENT_CHARS, ensure_github_comment_body
 
 # Regex to strip ANSI escape sequences (colors, cursor moves, etc.)
 _ANSI_ESCAPE_RE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
@@ -21,6 +21,15 @@ _PREFERRED_EXCERPT_SECTIONS = (
     "## Scoped completion evidence",
     "## Validation evidence",
     "## Gate recommendation",
+)
+REPORT_COMMENT_MAX_CHARS = DEFAULT_MAX_COMMENT_CHARS
+_REPORT_SUMMARY_FIELD_MAX_CHARS = 500
+_REPORT_ARTIFACT_PATH_MAX_CHARS = 500
+_REPORT_EXCERPT_BUDGETS = (
+    (20, 1500),
+    (12, 900),
+    (8, 600),
+    (4, 300),
 )
 
 
@@ -80,13 +89,13 @@ def format_comment(
     # Extract key fields from the summary
     for line in summary_content.splitlines():
         if line.startswith("**Agent:**"):
-            lines.append(line)
+            lines.append(_bounded_inline(line, _REPORT_SUMMARY_FIELD_MAX_CHARS))
         elif line.startswith("**Exit Code:**"):
-            lines.append(line)
+            lines.append(_bounded_inline(line, _REPORT_SUMMARY_FIELD_MAX_CHARS))
         elif line.startswith("**Output Size:**"):
-            lines.append(line)
+            lines.append(_bounded_inline(line, _REPORT_SUMMARY_FIELD_MAX_CHARS))
         elif line.startswith("**Started (UTC):**"):
-            lines.append(line)
+            lines.append(_bounded_inline(line, _REPORT_SUMMARY_FIELD_MAX_CHARS))
 
     # Local artifact paths (explicit and clear)
     lines.extend(
@@ -98,41 +107,102 @@ def format_comment(
     )
 
     if summary_path:
-        lines.append(f"- **Summary:** `{summary_path}`")
+        summary_path_text = _bounded_inline(
+            str(summary_path),
+            _REPORT_ARTIFACT_PATH_MAX_CHARS,
+        )
+        lines.append(
+            f"- **Summary:** `{summary_path_text}`"
+        )
     else:
         lines.append("- **Summary:** missing")
 
     if raw_path:
-        lines.append(f"- **Raw output:** `{raw_path}` (full log, stored locally)")
+        lines.append(
+            "- **Raw output:** "
+            f"`{_bounded_inline(str(raw_path), _REPORT_ARTIFACT_PATH_MAX_CHARS)}` "
+            "(full log, stored locally)"
+        )
     else:
         lines.append("- **Raw output:** missing")
 
     if prompt_path:
-        lines.append(f"- **Prompt used:** `{prompt_path}`")
+        lines.append(
+            f"- **Prompt used:** `{_bounded_inline(prompt_path, _REPORT_ARTIFACT_PATH_MAX_CHARS)}`"
+        )
     else:
         lines.append("- **Prompt used:** missing")
 
     excerpt_source = _select_evidence_excerpt_source(summary_content, raw_content)
-    excerpt = _make_bounded_excerpt(excerpt_source)
+    return _fit_report_comment(lines, excerpt_source)
 
-    lines.extend(
-        [
-            "",
-            "## Key Evidence Excerpt (bounded)",
-            "",
-            "```",
-            excerpt,
-            "```",
-            "",
-        ]
-    )
 
-    lines.append(
+def _bounded_inline(text: str, max_chars: int) -> str:
+    """Return a single-line value bounded for inclusion in report comments."""
+    text = strip_ansi(text or "").replace("\n", " ").strip()
+    if len(text) <= max_chars:
+        return text
+    marker = "... (truncated)"
+    return text[: max(0, max_chars - len(marker))].rstrip() + marker
+
+
+def _build_report_comment(lines: list[str], excerpt: str, *, fenced: bool = True) -> str:
+    """Build the final report comment body from bounded sections."""
+    body_lines = [*lines, "", "## Key Evidence Excerpt (bounded)", ""]
+    if fenced:
+        body_lines.extend(["```", excerpt, "```", ""])
+    else:
+        body_lines.extend([excerpt, ""])
+
+    body_lines.append(
         "_This comment was posted by `signposter report --apply`. "
         "Full execution logs remain local only._"
     )
+    return "\n".join(body_lines)
 
-    return ensure_github_comment_body("\n".join(lines))
+
+def _fit_report_comment(lines: list[str], excerpt_source: str) -> str:
+    """Return a GitHub-safe report comment that fits the report body budget."""
+    for max_lines, max_chars in _REPORT_EXCERPT_BUDGETS:
+        excerpt = _make_bounded_excerpt(
+            excerpt_source,
+            max_lines=max_lines,
+            max_chars=max_chars,
+        )
+        candidate = _build_report_comment(lines, excerpt)
+        if len(candidate) <= REPORT_COMMENT_MAX_CHARS:
+            return ensure_github_comment_body(
+                candidate,
+                max_chars=REPORT_COMMENT_MAX_CHARS,
+            )
+
+    omitted = (
+        f"(evidence excerpt omitted; report comment limited to "
+        f"{REPORT_COMMENT_MAX_CHARS} chars)"
+    )
+    candidate = _build_report_comment(lines, omitted, fenced=False)
+    if len(candidate) <= REPORT_COMMENT_MAX_CHARS:
+        return ensure_github_comment_body(candidate, max_chars=REPORT_COMMENT_MAX_CHARS)
+
+    # If unusually long metadata still consumes the budget, emit a compact,
+    # auditable fallback instead of failing before the GitHub comment boundary.
+    fallback = "\n".join(
+        [
+            "# Signposter Runner Report",
+            "",
+            "## Report Summary",
+            "",
+            "Signposter report body exceeded the size budget after local truncation.",
+            "",
+            "## Key Evidence Excerpt (bounded)",
+            "",
+            omitted,
+            "",
+            "_This comment was posted by `signposter report --apply`. "
+            "Full execution logs remain local only._",
+        ]
+    )
+    return ensure_github_comment_body(fallback, max_chars=REPORT_COMMENT_MAX_CHARS)
 
 
 def _extract_preferred_summary_sections(summary_content: str) -> str | None:
