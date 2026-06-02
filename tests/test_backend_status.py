@@ -21,6 +21,7 @@ def test_backend_status_reports_openclaw_and_codex_cli() -> None:
     assert report.default_backend == "codex-cli"
     assert [backend.name for backend in report.backends] == ["openclaw", "codex-cli"]
     assert report.backends[0].status == "ready"
+    assert report.backends[0].reason.startswith("legacy fallback:")
     assert report.backends[1].status == "ready"
     assert report.fallback_order == ("codex-cli", "openclaw")
     assert "signposter.role_policy: role/model/reasoning registry" in report.source_modules
@@ -51,6 +52,7 @@ def test_backend_status_format_is_bounded_and_read_only() -> None:
     assert "Signposter Backend Status" in out
     assert "Default backend: codex-cli" in out
     assert "Fallback order: codex-cli -> openclaw" in out
+    assert "reason: legacy fallback:" in out
     assert "Audit:" in out
     assert "current default backend: codex-cli" in out
     assert "codex cli support: blocked" in out

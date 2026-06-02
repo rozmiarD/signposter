@@ -98,7 +98,7 @@ def _openclaw_health(
         selected_default=selected_default == "openclaw",
         execution_supported=True,
         status="ready" if preflight.ok else "blocked",
-        reason=preflight.reason,
+        reason=f"legacy fallback: {preflight.reason}",
         command_path=preflight.openclaw_path,
     )
 
