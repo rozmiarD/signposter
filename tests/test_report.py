@@ -49,7 +49,7 @@ def test_format_comment_has_clear_artifact_paths():
     assert "- **Summary:** `artifacts/runs/issue-2-reviewer.summary.md`" in body
     assert "- **Raw output:** `artifacts/runs/issue-2-reviewer.raw.txt`" in body
     assert "- **Prompt used:** `artifacts/prompts/issue-2.md`" in body
-    assert "Key Excerpt" in body
+    assert "Key Evidence Excerpt (bounded)" in body
 
 
 def test_format_comment_uses_raw_content_for_excerpt():
@@ -73,8 +73,41 @@ def test_format_comment_uses_raw_content_for_excerpt():
 
     assert "**Review Findings — Issue #2**" in body
     assert "No changes to scan output" in body
-    assert "Key Excerpt (first ~20 lines or 1500 chars)" in body
-    assert "... (truncated)" not in body  # short content
+    assert "Key Evidence Excerpt (bounded)" in body
+    assert "omitted; excerpt limited" not in body  # short content
+
+
+def test_format_comment_prefers_structured_summary_evidence_over_raw_noise():
+    summary = """# Signposter Execution Summary
+**Agent:** worker
+**Exit Code:** 0
+
+## Scoped completion evidence
+
+PASS — scoped report behavior is complete.
+
+## Validation evidence
+
+- `pytest tests/test_report.py -q`
+
+## Safety
+
+No GitHub mutation was performed.
+"""
+    raw = "noisy provider banner\nraw line that should not be selected"
+
+    body = format_comment(
+        summary,
+        "ExatronOmega/signposter",
+        2,
+        summary_path="artifacts/runs/issue-2-worker.summary.md",
+        raw_path="artifacts/runs/issue-2-worker.raw.txt",
+        raw_content=raw,
+    )
+
+    assert "PASS — scoped report behavior is complete." in body
+    assert "pytest tests/test_report.py -q" in body
+    assert "noisy provider banner" not in body
 
 
 def test_format_comment_shows_missing_artifacts():
@@ -180,6 +213,16 @@ def test_make_bounded_excerpt_strips_ansi():
     assert "\x1b" not in excerpt
     assert "Line 1" in excerpt
     assert "Line 2" in excerpt
+
+
+def test_make_bounded_excerpt_uses_clear_omission_marker():
+    raw = "\n".join(f"line {i}" for i in range(25))
+
+    excerpt = _make_bounded_excerpt(raw, max_lines=3, max_chars=100)
+
+    assert "line 0" in excerpt
+    assert "line 3" not in excerpt
+    assert "... (omitted; excerpt limited to 3 lines / 100 chars)" in excerpt
 
 
 def test_format_comment_excerpt_has_no_ansi():
