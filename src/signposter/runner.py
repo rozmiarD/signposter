@@ -1547,12 +1547,15 @@ def execute_plan(
         runs_dir.mkdir(parents=True, exist_ok=True)
         raw_path = runs_dir / f"issue-{item.number}-{profile}.raw.txt"
         summary_path = runs_dir / f"issue-{item.number}-{profile}.summary.md"
+        last_message_path = runs_dir / f"issue-{item.number}-{profile}.last-message.txt"
         invocation = plan_codex_cli_invocation(
             agent=plan.selected_openclaw_agent,
             session_key=session_key,
             model=plan.selected_model,
             reasoning_effort=plan.selected_reasoning_effort,
             prompt_path=prompt_path,
+            working_dir=effective_cwd,
+            output_last_message_path=last_message_path,
             timeout_seconds=openclaw_timeout_settings().execute_timeout,
         )
         result = execute_codex_cli_invocation(

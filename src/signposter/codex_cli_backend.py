@@ -27,6 +27,23 @@ WhichCommand = Callable[[str], str | None]
 
 
 @dataclass(frozen=True)
+class CodexCliExecutionContract:
+    """Stable Signposter-side contract for Codex CLI execution."""
+
+    backend: str
+    prompt_transport: str
+    model_flag: str
+    working_dir_flag: str
+    output_last_message_flag: str
+    metadata_only_fields: tuple[str, ...]
+    raw_artifact: str
+    summary_artifact: str
+    timeout_status: str
+    github_mutation: str
+    unsupported_flags: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class CodexCliInvocation:
     """Planned Codex CLI invocation metadata."""
 
@@ -35,24 +52,41 @@ class CodexCliInvocation:
     model: str
     reasoning_effort: str
     prompt_path: Path
+    working_dir: Path | None = None
+    output_last_message_path: Path | None = None
     timeout_seconds: int = 120
 
     @property
     def command(self) -> list[str]:
-        return [
+        command = [
             "codex",
             "exec",
-            "--agent",
-            self.agent,
-            "--session-key",
-            self.session_key,
             "--model",
             self.model,
-            "--reasoning",
-            self.reasoning_effort,
-            "--prompt-file",
-            str(self.prompt_path),
         ]
+        if self.working_dir is not None:
+            command.extend(["--cd", str(self.working_dir)])
+        if self.output_last_message_path is not None:
+            command.extend(["--output-last-message", str(self.output_last_message_path)])
+        command.append("-")
+        return command
+
+
+def build_codex_cli_execution_contract() -> CodexCliExecutionContract:
+    """Return the bounded Codex CLI execution contract Signposter implements."""
+    return CodexCliExecutionContract(
+        backend="codex-cli",
+        prompt_transport="prompt artifact is read locally and passed to codex exec via stdin",
+        model_flag="--model",
+        working_dir_flag="--cd",
+        output_last_message_flag="--output-last-message",
+        metadata_only_fields=("agent", "session_key", "reasoning_effort"),
+        raw_artifact="local raw stdout/stderr artifact under artifacts/runs/",
+        summary_artifact="bounded local summary artifact under artifacts/runs/",
+        timeout_status="timeout with exit_code -1",
+        github_mutation="none; execution backend never mutates GitHub",
+        unsupported_flags=("--agent", "--session-key", "--reasoning", "--prompt-file"),
+    )
 
 
 @dataclass(frozen=True)
@@ -84,6 +118,8 @@ def plan_codex_cli_invocation(
     model: str,
     reasoning_effort: str,
     prompt_path: str | Path,
+    working_dir: str | Path | None = None,
+    output_last_message_path: str | Path | None = None,
     timeout_seconds: int = 120,
 ) -> CodexCliInvocation:
     """Build the intended Codex CLI invocation without executing it."""
@@ -93,6 +129,10 @@ def plan_codex_cli_invocation(
         model=model,
         reasoning_effort=reasoning_effort,
         prompt_path=Path(prompt_path),
+        working_dir=Path(working_dir) if working_dir is not None else None,
+        output_last_message_path=(
+            Path(output_last_message_path) if output_last_message_path is not None else None
+        ),
         timeout_seconds=timeout_seconds,
     )
 
@@ -167,8 +207,10 @@ def execute_codex_cli_invocation(
         )
 
     try:
+        prompt_text = invocation.prompt_path.read_text(encoding="utf-8")
         proc = run_command(
             invocation.command,
+            input=prompt_text,
             capture_output=True,
             text=True,
             timeout=invocation.timeout_seconds,
@@ -193,6 +235,7 @@ def execute_codex_cli_invocation(
         "\n".join(
             [
                 f"[COMMAND] {' '.join(invocation.command)}",
+                f"[PROMPT] {invocation.prompt_path} passed via stdin",
                 "[STDOUT]",
                 stdout,
                 "[STDERR]",
@@ -245,8 +288,12 @@ def _format_codex_cli_summary(
             f"Agent: {invocation.agent}",
             f"Model: {invocation.model}",
             f"Reasoning: {invocation.reasoning_effort}",
+            "Reasoning Transport: Signposter metadata only",
             f"Session Key: {invocation.session_key}",
             f"Prompt Artifact: {invocation.prompt_path}",
+            "Prompt Transport: stdin",
+            f"Working Directory: {invocation.working_dir or '(current process cwd)'}",
+            f"Last Message Artifact: {invocation.output_last_message_path or '(not requested)'}",
             f"Started (UTC): {started_at.isoformat()}",
             f"Exit Code: {exit_code}",
             f"Status: {status}",
@@ -262,6 +309,7 @@ def _format_codex_cli_summary(
             "Notes:",
             "- Raw output remains local.",
             "- No GitHub mutation was performed.",
+            "- Agent, session key, and reasoning effort are recorded as Signposter metadata.",
         ]
     )
 

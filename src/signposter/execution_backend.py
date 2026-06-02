@@ -71,10 +71,8 @@ def build_backend_command_shape(
         )
     if backend == "codex-cli":
         return (
-            f"codex exec --agent {agent} "
-            f"--session-key {session_key} "
-            f"--model {model} "
-            f"--reasoning {reasoning_effort} "
-            f"--prompt-file {prompt_path}"
+            f"codex exec --model {model} - < {prompt_path} "
+            f"(Signposter metadata: agent={agent}, session_key={session_key}, "
+            f"reasoning={reasoning_effort})"
         )
     raise ValueError(f"unsupported execution backend '{backend}'")
