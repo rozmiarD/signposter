@@ -128,6 +128,45 @@ def test_merge_plan_blocks_on_auto_close_keywords():
         assert "blocked — PR body contains auto-close keywords" in plan.status
 
 
+def test_merge_plan_blocks_ambiguous_issue_linkage():
+    with patch("signposter.merge._run_gh_pr_view") as mock_view, \
+         patch("signposter.merge._fetch_pr_reviews_and_author") as mock_reviews, \
+         patch("signposter.merge.evaluate_review_gate") as mock_gate, \
+         patch("signposter.merge._fetch_pr_checks_for_merge") as mock_checks:
+
+        mock_view.return_value = {
+            "title": "test",
+            "state": "OPEN",
+            "baseRefName": "main",
+            "headRefName": "work/issue-4-xxx",
+            "mergeable": "MERGEABLE",
+            "reviewDecision": "APPROVED",
+            "body": "Related issue: #5",
+            "files": [{"path": "README.md"}],
+            "additions": 5,
+            "deletions": 0,
+        }
+        mock_reviews.return_value = {
+            "pr_author": "ExatronOmega",
+            "review_decision": "APPROVED",
+            "approving_reviewers": ["AlphaExatron"],
+        }
+        mock_gate.return_value = type("G", (), {
+            "gate_pass": True,
+            "opinion": type("O", (), {
+                "verdict": "APPROVE",
+                "confidence": 0.95,
+                "risk": "low",
+            })(),
+        })()
+        mock_checks.return_value = {"status": "pass", "successful": 1, "failing": 0, "pending": 0}
+
+        plan = plan_merge_for_pr("test/repo", 5)
+
+    assert "blocked — associated issue link is ambiguous" in plan.status
+    assert plan.associated_issue is None
+
+
 def test_format_merge_plan_contains_key_sections():
     plan = MergePlan(
         pr_number=5,
