@@ -57,7 +57,7 @@ def build_gate_heuristic_audit() -> GateHeuristicAudit:
             "stale/failover artifact markers block before scoped evidence checks",
             "actual Python exception output requires traceback framing, not the word alone",
             "scoped code/test/no-op paths require validation and safety statements",
-            "human gate requires explicit approval plus validation and no-mutation evidence",
+            "human gate accepts explicit approval/scope/validation fields plus safety evidence",
         ),
         phrase_matchers=(
             "review gate blocks on phrases such as critical blocker and missing evidence",
@@ -361,6 +361,81 @@ def evaluate_ci_gate(
 
 
 
+def _line_value_has_allowed_value(
+    text: str,
+    prefixes: tuple[str, ...],
+    allowed_values: tuple[str, ...],
+) -> bool:
+    for raw_line in text.splitlines():
+        line = raw_line.strip().lower()
+        if ":" not in line:
+            continue
+        prefix, value = line.split(":", 1)
+        if prefix.strip() not in prefixes:
+            continue
+        normalized = value.strip().strip("`*_-. ")
+        if normalized in allowed_values:
+            return True
+    return False
+
+
+def _has_human_approval_evidence(text: str) -> bool:
+    phrase_marker = (
+        "human gate approval" in text
+        or "human gate approved" in text
+        or "manual human gate approval" in text
+    )
+    proceed_marker = (
+        "approved to proceed" in text
+        or "approval is granted" in text
+        or "approved to move" in text
+        or "approved to proceed to pr" in text
+    )
+    structured_marker = _line_value_has_allowed_value(
+        text,
+        (
+            "human approval",
+            "human gate approval",
+            "operator approval",
+        ),
+        ("yes", "approved", "granted"),
+    )
+    return (phrase_marker and proceed_marker) or structured_marker
+
+
+def _has_human_scope_evidence(text: str) -> bool:
+    return (
+        "scope reviewed" in text
+        or _line_value_has_allowed_value(
+            text,
+            ("scope reviewed", "scope match", "scope approval"),
+            ("yes", "approved", "pass", "passed"),
+        )
+    )
+
+
+def _has_human_validation_evidence(text: str) -> bool:
+    return (
+        "validation passed" in text
+        or ("ruff check ." in text and "pytest tests/ -q" in text)
+        or ("targeted validation passed" in text and "full validation passed" in text)
+        or _line_value_has_allowed_value(
+            text,
+            ("validation", "validation status", "local validation"),
+            ("pass", "passed", "yes"),
+        )
+    )
+
+
+def _has_human_safety_evidence(text: str) -> bool:
+    return (
+        "no github mutation" in text
+        and "no openclaw execution" in text
+        and ("no issue close" in text or "no issue was closed" in text)
+        and ("no merge" in text or "no merge was performed" in text)
+    )
+
+
 def evaluate_human_gate(
     exit_code: int,
     summary_text: str,
@@ -404,34 +479,14 @@ def evaluate_human_gate(
                 proposed_command=None,
             )
 
-    approval_marker = (
-        "human gate approval" in text
-        or "human gate approved" in text
-        or "manual human gate approval" in text
-    )
-    approved_to_proceed = (
-        "approved to proceed" in text
-        or "approval is granted" in text
-        or "approved to move" in text
-        or "approved to proceed to pr" in text
-    )
-    scope_reviewed = "scope reviewed" in text
-    validation_passed = (
-        "validation passed" in text
-        or ("ruff check ." in text and "pytest tests/ -q" in text)
-        or ("targeted validation passed" in text and "full validation passed" in text)
-    )
-    safety_recorded = (
-        "no github mutation" in text
-        and "no openclaw execution" in text
-        and ("no issue close" in text or "no issue was closed" in text)
-        and ("no merge" in text or "no merge was performed" in text)
-    )
+    approval_marker = _has_human_approval_evidence(text)
+    scope_reviewed = _has_human_scope_evidence(text)
+    validation_passed = _has_human_validation_evidence(text)
+    safety_recorded = _has_human_safety_evidence(text)
 
     if all(
         [
             approval_marker,
-            approved_to_proceed,
             scope_reviewed,
             validation_passed,
             safety_recorded,
@@ -445,9 +500,24 @@ def evaluate_human_gate(
             proposed_command="signposter complete --repo {repo} --issue {issue} --apply",
         )
 
+    missing = [
+        label
+        for label, present in (
+            ("approval", approval_marker),
+            ("scope", scope_reviewed),
+            ("validation", validation_passed),
+            ("safety", safety_recorded),
+        )
+        if not present
+    ]
+
     return GateDecision(
         decision="needs-work",
-        reason="Human gate approval evidence missing or incomplete.",
+        reason=(
+            "Human gate approval evidence missing or incomplete: "
+            + ", ".join(missing)
+            + "."
+        ),
         confidence="high",
         proposed_transition="state:active (human gate approval required)",
         proposed_command=None,
