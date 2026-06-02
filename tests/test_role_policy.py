@@ -226,6 +226,30 @@ def test_validate_role_agent_profiles_rejects_profile_without_policy_model():
     assert any("does not expose policy model 'openai/gpt-5.3-codex'" in error for error in errors)
 
 
+def test_validate_role_agent_profiles_rejects_profile_without_policy_fallback_model():
+    registry = {
+        "WORKER_LIGHT": RolePolicy(
+            name="WORKER_LIGHT",
+            openclaw_agent="worker_light",
+            model="xai/grok-build-0.1",
+            reasoning_effort="low",
+            use_case="light work",
+            fallback_model="openai/gpt-5.4-mini",
+        )
+    }
+    profiles = {
+        "worker_light": OpenClawAgentProfile(
+            name="worker_light",
+            primary_model="xai/grok-build-0.1",
+            fallback_models=(),
+        )
+    }
+
+    errors = validate_role_agent_profiles(registry, profiles=profiles)
+
+    assert any("does not expose fallback model 'openai/gpt-5.4-mini'" in error for error in errors)
+
+
 def test_format_role_policy_status_reports_profile_presence_for_runtime_profiles():
     registry = {
         "WORKER_CORE": RolePolicy(
@@ -260,3 +284,17 @@ def test_format_role_policy_status_reports_pass_for_active_registry():
     assert "profile_status:" in output
     assert "Validation:" in output
     assert "status:" in output
+
+
+def test_format_role_policy_status_exposes_manual_and_legacy_boundaries():
+    output = format_role_policy_status(
+        {
+            "CRITICAL_OVERRIDE": ACTIVE_ROLE_POLICIES["CRITICAL_OVERRIDE"],
+            "LEGACY_BACKUP": ACTIVE_ROLE_POLICIES["LEGACY_BACKUP"],
+        }
+    )
+
+    assert "CRITICAL_OVERRIDE" in output
+    assert "manual_only: yes" in output
+    assert "LEGACY_BACKUP" in output
+    assert "legacy_fallback: yes" in output
