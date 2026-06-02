@@ -61,13 +61,13 @@ def build_gate_heuristic_audit() -> GateHeuristicAudit:
         ),
         phrase_matchers=(
             "review gate blocks on phrases such as critical blocker and missing evidence",
-            "ci gate blocks on phrases such as critical blocker, execution failed, error:",
+            "ci gate blocks on critical blocker, execution failed, and contextual error:",
             "human gate blocks on phrases such as approval denied and validation failed",
             "positive review fallback still requires multiple positive reviewer phrases",
         ),
         false_positive_risks=(
             "generic blocker words can still block when summaries discuss examples or policy",
-            "ci gate treats bare 'error:' as a blocker even when it may be quoted context",
+            "non-error blocker phrases still need section-aware failure context",
             "test-only disqualifiers include broad traceback wording rather than framed output",
         ),
         false_negative_risks=(
@@ -249,7 +249,6 @@ def evaluate_ci_gate(
         "cannot proceed",
         "missing required evidence",
         "execution failed",
-        "error:",
     ]
     for signal in negative_signals:
         if signal in text:
@@ -260,6 +259,15 @@ def evaluate_ci_gate(
                 proposed_transition="state:active (worker should be re-run)",
                 proposed_command=None,
             )
+    error_signal = _has_contextual_worker_error_signal(text)
+    if error_signal:
+        return GateDecision(
+            decision="needs-work",
+            reason=f"Worker output mentioned failure-context error: '{error_signal}'",
+            confidence="medium",
+            proposed_transition="state:active (worker should be re-run)",
+            proposed_command=None,
+        )
 
     positive_signals = [
         "execution complete",
@@ -537,6 +545,52 @@ def _has_actual_traceback_signal(text: str) -> bool:
         any(marker in t for marker in traceback_markers)
         or any(marker in t for marker in exception_markers)
     )
+
+
+def _has_contextual_worker_error_signal(text: str) -> str | None:
+    """Return a blocking error line only when it looks like a real failure.
+
+    CI-gate summaries often need to discuss literal matcher text such as
+    ``error:``. Treat that as blocking only when the line also carries failure
+    context in an execution/validation section; otherwise the structured
+    scoped-evidence paths decide the gate.
+    """
+    failure_context = (
+        "failed",
+        "failure",
+        "exception",
+        "validation",
+        "execution",
+        "pytest",
+        "ruff",
+        "cannot",
+        "critical",
+    )
+    failure_sections = (
+        "validation evidence",
+        "execution output",
+        "failure",
+        "failures",
+        "errors",
+        "stderr",
+        "raw output",
+    )
+    current_section = ""
+    for line in (text or "").splitlines():
+        lowered = line.strip().lower()
+        if lowered.startswith("#"):
+            current_section = lowered.lstrip("#").strip()
+            continue
+        in_failure_section = any(section in current_section for section in failure_sections)
+        starts_as_failure = lowered.startswith(("error:", "validation error:", "execution error:"))
+        if (
+            "error:" in lowered
+            and (in_failure_section or starts_as_failure)
+            and any(marker in lowered for marker in failure_context)
+        ):
+            return lowered[:160]
+    return None
+
 
 def _has_scoped_worker_test_completion_evidence(text: str) -> bool:
     """Detect conservative scoped test-only worker completion evidence.
