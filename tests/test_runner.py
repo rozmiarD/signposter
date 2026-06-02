@@ -529,16 +529,31 @@ def test_plan_runner_for_issue_basic_structure():
 
     from signposter.runner import plan_runner_for_issue
 
-    fake_item = make_item(42, ["state:active", "gate:ci", "role:worker", "phase:build"])
+    fake_item = LabeledItem(
+        number=42,
+        title="Planner scheduler routing issue",
+        html_url="https://github.com/example/repo/issues/42",
+        labels=[
+            "state:active",
+            "gate:ci",
+            "role:worker",
+            "phase:build",
+            "risk:medium",
+            "area:scheduler",
+        ],
+        item_type="issue",
+    )
 
     with patch("signposter.runner.fetch_issue_by_number", return_value=fake_item):
         plan = plan_runner_for_issue("ExatronOmega/signposter", 42)
 
     assert plan is not None
     assert plan.item.number == 42
+    assert plan.dispatch.proposed_route == "worker"
+    assert plan.dispatch.proposed_gate == "ci"
     assert plan.proposed_profile == "worker"
-    assert plan.selected_openclaw_agent == "codex_worker_light"
-    assert "agent=codex_worker_light" in plan.proposed_command_shape
+    assert plan.selected_openclaw_agent == "codex_worker_core"
+    assert "agent=codex_worker_core" in plan.proposed_command_shape
     assert "issue-42" in plan.proposed_prompt_path
 
 
