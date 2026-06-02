@@ -537,7 +537,38 @@ def test_plan_runner_for_issue_basic_structure():
     assert plan is not None
     assert plan.item.number == 42
     assert plan.proposed_profile == "worker"
+    assert plan.selected_openclaw_agent == "codex_worker_light"
+    assert "agent=codex_worker_light" in plan.proposed_command_shape
     assert "issue-42" in plan.proposed_prompt_path
+
+
+def test_plan_runner_for_issue_uses_codex_core_agent_for_core_task():
+    from unittest.mock import patch
+
+    from signposter.runner import plan_runner_for_issue
+    from signposter.scan import LabeledItem
+
+    fake_item = LabeledItem(
+        number=43,
+        title="Route core scheduler automation",
+        html_url="https://github.com/example/repo/issues/43",
+        labels=[
+            "state:active",
+            "gate:ci",
+            "role:worker",
+            "phase:build",
+            "risk:high",
+            "area:scheduler",
+        ],
+        item_type="issue",
+    )
+
+    with patch("signposter.runner.fetch_issue_by_number", return_value=fake_item):
+        plan = plan_runner_for_issue("ExatronOmega/signposter", 43)
+
+    assert plan is not None
+    assert plan.selected_openclaw_agent == "codex_worker_core"
+    assert "agent=codex_worker_core" in plan.proposed_command_shape
 
 
 def test_plan_runner_for_issue_returns_none_on_missing():

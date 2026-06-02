@@ -6,6 +6,7 @@ from signposter.role_policy import (
     ACTIVE_ROLE_POLICIES,
     OpenClawAgentProfile,
     RolePolicy,
+    execution_agent_for_backend,
     format_role_policy_status,
     get_role_policy,
     validate_role_agent_profiles,
@@ -71,13 +72,24 @@ def test_get_role_policy_returns_expected_core_roles():
     assert get_role_policy("WORKER_CORE").model == "openai/gpt-5.4"
     assert get_role_policy("WORKER_CORE").reasoning_effort == "medium"
     assert get_role_policy("WORKER_CORE").openclaw_agent == "worker_core"
+    assert get_role_policy("WORKER_CORE").codex_cli_agent == "codex_worker_core"
     assert get_role_policy("REVIEWER_LIGHT").model == "xai/grok-build-0.1"
     assert get_role_policy("REVIEWER_LIGHT").openclaw_agent == "reviewer_light"
+    assert get_role_policy("REVIEWER_LIGHT").codex_cli_agent == "codex_reviewer_light"
     assert get_role_policy("REVIEWER_LIGHT").fallback_model == "openai/gpt-5.4-mini"
     assert get_role_policy("WORKER_LIGHT").model == "xai/grok-build-0.1"
     assert get_role_policy("WORKER_LIGHT").openclaw_agent == "worker_light"
+    assert get_role_policy("WORKER_LIGHT").codex_cli_agent == "codex_worker_light"
     assert get_role_policy("WORKER_LIGHT").fallback_model == "openai/gpt-5.4-mini"
     assert get_role_policy("PLANNER_MAIN").openclaw_agent == "planner_main"
+    assert get_role_policy("PLANNER_MAIN").codex_cli_agent == "codex_planner_main"
+
+
+def test_execution_agent_for_backend_separates_codex_from_openclaw():
+    policy = get_role_policy("WORKER_CORE")
+
+    assert execution_agent_for_backend(policy, "codex-cli") == "codex_worker_core"
+    assert execution_agent_for_backend(policy, "openclaw") == "worker_core"
 
 
 def test_critical_override_uses_gpt54_with_manual_high_reasoning():
@@ -242,6 +254,8 @@ def test_format_role_policy_status_reports_pass_for_active_registry():
     assert "WORKER_CODE" in output
     assert "openai/gpt-5.3-codex" in output
     assert "xai/grok-build-0.1" in output
+    assert "openclaw_agent: worker_core" in output
+    assert "codex_cli_agent: codex_worker_core" in output
     assert "fallback_model: openai/gpt-5.4-mini" in output
     assert "profile_status:" in output
     assert "Validation:" in output
