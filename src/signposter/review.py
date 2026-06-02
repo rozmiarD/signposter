@@ -478,6 +478,37 @@ def plan_review_for_pr(
     )
 
 
+def _review_check_blockage_lines(plan: ReviewPlan) -> list[str]:
+    """Return bounded operator diagnostics for PR check states that stop review."""
+    if plan.checks_status == "failing":
+        return [
+            "category: failing-ci",
+            (
+                "reason: "
+                f"{plan.failing_checks} failing check(s), "
+                f"{plan.pending_checks} pending check(s)"
+            ),
+            f"next: inspect failing checks for PR #{plan.pr_number} and rerun review plan",
+        ]
+    if plan.checks_status == "pending":
+        return [
+            "category: waiting-ci",
+            (
+                "reason: "
+                f"{plan.pending_checks} pending check(s), "
+                f"{plan.successful_checks} successful check(s)"
+            ),
+            "next: wait for CI completion and rerun review plan",
+        ]
+    if plan.checks_status == "unknown":
+        return [
+            "category: unknown-ci",
+            "reason: GitHub check rollup is unavailable or ambiguous",
+            "next: inspect PR checks manually if this persists",
+        ]
+    return []
+
+
 def format_review_plan(plan: ReviewPlan) -> str:
     """Compact deterministic output for review planning."""
     lines = [f"Signposter Review Plan — PR #{plan.pr_number}\n"]
@@ -495,6 +526,11 @@ def format_review_plan(plan: ReviewPlan) -> str:
     lines.append(f"  successful: {plan.successful_checks}")
     lines.append(f"  failing: {plan.failing_checks}")
     lines.append(f"  pending: {plan.pending_checks}")
+    check_blockage = _review_check_blockage_lines(plan)
+    if check_blockage:
+        lines.append("\nCheck blockage:")
+        for line in check_blockage:
+            lines.append(f"  {line}")
 
     lines.append("\nScope:")
     lines.append(f"  files changed: {plan.files_changed}")
