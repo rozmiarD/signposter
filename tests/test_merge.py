@@ -419,6 +419,38 @@ def test_merge_apply_refuses_when_plan_not_ready():
         assert "Refusing to merge" in result.get("error", "")
 
 
+def test_merge_apply_already_merged_does_not_call_subprocess():
+    from signposter.merge import apply_merge
+
+    fake_plan = MergePlan(
+        pr_number=5, title="test", state="MERGED", base_branch="main",
+        head_branch="work/issue-4-xxx", mergeable="UNKNOWN",
+        review_decision="APPROVED", checks_status="pass",
+        successful_checks=1, failing_checks=0, pending_checks=0,
+        github_approved=True, approving_reviewers=["AlphaExatron"],
+        has_non_author_approval=True, pr_author="ExatronOmega",
+        reviewer_gate_pass=True, reviewer_verdict="APPROVE",
+        reviewer_confidence=0.95, reviewer_risk="low",
+        associated_issue=4, has_auto_close_keywords=False,
+        files_changed=1, additions=8, deletions=0,
+        risk_level="low", size="small",
+        merge_method="squash", delete_branch_after_merge=True,
+        command_preview="gh pr merge 5 -R test/repo --squash --delete-branch",
+        status="blocked — PR is merged",
+        notes=[],
+    )
+
+    with (
+        patch("signposter.merge.plan_merge_for_pr", return_value=fake_plan),
+        patch("signposter.merge.subprocess.run") as mock_run,
+    ):
+        result = apply_merge("test/repo", 5, apply=True)
+
+    mock_run.assert_not_called()
+    assert result["mode"] == "apply_blocked"
+    assert "blocked — PR is merged" in result.get("error", "")
+
+
 def test_merge_apply_with_apply_calls_gh_correctly(monkeypatch):
     from signposter.merge import apply_merge
 
