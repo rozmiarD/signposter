@@ -391,7 +391,7 @@ def test_write_prompt_artifact_path_generation():
 
 
 def test_build_review_prompt_contains_contract_and_rules():
-    from signposter.review import ReviewPlan, build_review_prompt
+    from signposter.review import REVIEW_PROMPT_LIMITS, ReviewPlan, build_review_prompt
 
     plan = ReviewPlan(
         pr_number=5,
@@ -434,6 +434,8 @@ def test_build_review_prompt_contains_contract_and_rules():
     assert "expected output format:" in prompt
     assert "artifact requirements:" in prompt
     assert "uncertainty handling:" in prompt
+    assert "## Prompt Budget" in prompt
+    assert f"Diff excerpt: max {REVIEW_PROMPT_LIMITS['diff_lines']} lines" in prompt
 
 
 def test_write_prompt_refuses_when_plan_not_ready():
@@ -513,6 +515,49 @@ def test_write_prompt_artifact_writes_file(tmp_path, monkeypatch):
     assert "Automerge eligible" in content
 
 
+def test_write_prompt_artifact_uses_review_diff_budget(tmp_path):
+    from signposter.review import REVIEW_PROMPT_LIMITS, ReviewPlan, write_review_prompt_artifact
+
+    fake_plan = ReviewPlan(
+        pr_number=5,
+        title="docs change",
+        state="OPEN",
+        base_branch="main",
+        head_branch="work/issue-4-xxx",
+        mergeable="MERGEABLE",
+        review_decision=None,
+        checks_status="pass",
+        successful_checks=1,
+        failing_checks=0,
+        pending_checks=0,
+        files_changed=1,
+        additions=8,
+        deletions=0,
+        risk_level="low",
+        size="small",
+        associated_issue=4,
+        branch_matches_convention=True,
+        status="ready",
+        notes=[],
+        reviewer_profile="reviewer",
+        prompt_artifact_path=str(tmp_path / "pr-5-review.md"),
+    )
+
+    seen: dict[str, int] = {}
+
+    def fake_get_pr_diff(repo, pr_number, *, max_lines):
+        seen["max_lines"] = max_lines
+        return "diff --git ..."
+
+    with patch("signposter.review.plan_review_for_pr", return_value=fake_plan), \
+         patch("signposter.review._run_gh_pr_view", return_value={"body": "Related to #4"}), \
+         patch("signposter.review.get_pr_diff", side_effect=fake_get_pr_diff), \
+         patch("signposter.review._fetch_pr_file_paths", return_value=[]):
+        write_review_prompt_artifact("test/repo", 5)
+
+    assert seen["max_lines"] == REVIEW_PROMPT_LIMITS["diff_lines"]
+
+
 def test_get_pr_diff_marks_omitted_budget_lines(monkeypatch):
     from signposter.review import get_pr_diff
 
@@ -569,7 +614,7 @@ def test_build_review_prompt_keeps_structured_contract_with_budget_note():
 
 
 def test_build_review_prompt_compacts_body_and_changed_files():
-    from signposter.review import ReviewPlan, build_review_prompt
+    from signposter.review import REVIEW_PROMPT_LIMITS, ReviewPlan, build_review_prompt
 
     plan = ReviewPlan(
         pr_number=6,
@@ -603,7 +648,8 @@ def test_build_review_prompt_compacts_body_and_changed_files():
     assert "## PR Body (bounded)" in prompt
     assert "...[omitted " in prompt
     assert "## Changed Files Excerpt (from GitHub metadata, bounded)" in prompt
-    assert "...[omitted 6 additional changed files]" in prompt
+    omitted = len(file_paths) - REVIEW_PROMPT_LIMITS["changed_files"]
+    assert f"...[omitted {omitted} additional changed files]" in prompt
 
 
 def test_compact_review_text_respects_budget_with_omission_marker():
