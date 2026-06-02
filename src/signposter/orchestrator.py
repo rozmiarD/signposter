@@ -35,6 +35,7 @@ MUTATION_REQUIRED_ACTIONS = {
     "cleanup",
 }
 APPLYABLE_ACTIONS = MUTATION_REQUIRED_ACTIONS | EXECUTION_REQUIRED_ACTIONS
+EXECUTION_BACKEND_EXPLICIT_EXECUTE_REASON = "Execution backend requires explicit --execute"
 SIGNPOSTER_ENTRYPOINT = (
     "import sys; "
     "from signposter.cli import main; "
@@ -154,7 +155,7 @@ def plan_orchestrator_next(
 
     if would_execute and not allow_execute:
         status = "blocked"
-        stop_reason = "OpenClaw execution requires explicit --execute"
+        stop_reason = EXECUTION_BACKEND_EXPLICIT_EXECUTE_REASON
     elif lifecycle.status == "blocked":
         stop_reason = lifecycle.reason
 
@@ -165,7 +166,7 @@ def plan_orchestrator_next(
         "No lifecycle command was executed.",
         "No GitHub mutation was performed.",
         "No local mutation was performed.",
-        "No OpenClaw execution was performed.",
+        "No execution backend was started.",
     ]
 
     if would_execute and not allow_execute:
@@ -250,7 +251,7 @@ def run_orchestrator_step(
             exit_code=None,
             stdout="",
             stderr="",
-            stop_reason="OpenClaw execution requires explicit --execute",
+            stop_reason=EXECUTION_BACKEND_EXPLICIT_EXECUTE_REASON,
             notes=notes,
         )
 
@@ -397,7 +398,7 @@ def plan_orchestrator_run_next(
             "No lifecycle command was executed.",
             "No GitHub mutation was performed.",
             "No local mutation was performed.",
-            "No OpenClaw execution was performed.",
+            "No execution backend was started.",
         ],
     )
 
@@ -529,7 +530,7 @@ def run_orchestrator_run_next_loop(
         notes=[
             "Scheduler-driven bounded run-next loop.",
             "Default mode is dry-run; use --apply to execute allow-listed steps.",
-            "OpenClaw execution still requires explicit --execute.",
+            "Execution backend still requires explicit --execute.",
         ],
         stop_category=stop_category,
         stop_tolerated=stop_tolerated,
@@ -553,7 +554,7 @@ def _run_next_loop_stop_category(
         return "failed-step"
     if last_step.status == "blocked" or stop_reason in {
         "dry-run; rerun with --apply to execute this step",
-        "OpenClaw execution requires explicit --execute",
+        EXECUTION_BACKEND_EXPLICIT_EXECUTE_REASON,
     }:
         return "blocked-lifecycle"
     return None
@@ -632,7 +633,7 @@ def format_orchestrator_next(result: OrchestratorNext) -> str:
         f"  action: {result.action}",
         f"  command: {result.command}",
         f"  would mutate: {'yes' if result.would_mutate else 'no'}",
-        f"  would execute OpenClaw: {'yes' if result.would_execute else 'no'}",
+        f"  would execute backend: {'yes' if result.would_execute else 'no'}",
     ]
 
     if result.stop_reason:
@@ -662,7 +663,7 @@ def format_orchestrator_step(result: OrchestratorStep) -> str:
         f"  action: {result.next.action}",
         f"  command: {result.next.command}",
         f"  would mutate: {'yes' if result.next.would_mutate else 'no'}",
-        f"  would execute OpenClaw: {'yes' if result.next.would_execute else 'no'}",
+        f"  would execute backend: {'yes' if result.next.would_execute else 'no'}",
         "",
         "Execution:",
         f"  applied: {'yes' if result.applied else 'no'}",
@@ -677,6 +678,15 @@ def format_orchestrator_step(result: OrchestratorStep) -> str:
             lines.append(f"  raw artifact: {result.raw_artifact_path}")
         if result.summary_artifact_path:
             lines.append(f"  summary artifact: {result.summary_artifact_path}")
+        lines.extend(
+            [
+                "",
+                "Takeover guidance:",
+                "  inspect raw and summary artifacts before replacing output",
+                "  resume the existing worktree if the partial state is usable",
+                "  otherwise write a bounded manual artifact fallback",
+            ]
+        )
     if result.fallback_commands:
         lines.extend(["", "Fallback next commands:"])
         lines.extend(f"  {command}" for command in result.fallback_commands)
@@ -1012,7 +1022,7 @@ def run_orchestrator_autonomy_smoke(
         "Read-only autonomy smoke.",
         "No GitHub mutation was performed.",
         "No local mutation was performed.",
-        "No OpenClaw execution was performed.",
+        "No execution backend was started.",
     ]
 
     planner_next: dict[str, object]
@@ -1143,8 +1153,8 @@ _ARTIFACT_PATTERNS = (
     re.compile(r"Summary:\s*(?P<path>\S+)"),
     re.compile(r"summary artifact:\s*(?P<path>\S+)"),
 )
-_DIAGNOSIS_STATUS_RE = re.compile(r"\*\*Execution Status:\*\*\s*(?P<value>[^\n]+)")
-_DIAGNOSIS_REASON_RE = re.compile(r"\*\*Execution Reason:\*\*\s*(?P<value>[^\n]+)")
+_DIAGNOSIS_STATUS_RE = re.compile(r"\*\*(?:Execution )?Status:\*\*\s*(?P<value>[^\n]+)")
+_DIAGNOSIS_REASON_RE = re.compile(r"\*\*(?:Execution )?Reason:\*\*\s*(?P<value>[^\n]+)")
 
 
 def _extract_execute_diagnosis(
@@ -1347,7 +1357,7 @@ def _loop_stop_category(
         return "failed-step"
     if last_step.status == "blocked" or stop_reason in {
         "dry-run; rerun with --apply to execute this step",
-        "OpenClaw execution requires explicit --execute",
+        EXECUTION_BACKEND_EXPLICIT_EXECUTE_REASON,
     }:
         return "blocked-lifecycle"
     return None
