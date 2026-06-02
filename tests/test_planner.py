@@ -2296,6 +2296,112 @@ def test_build_planner_advance_plan_from_status_promotes_downstream_task(
     assert result["requires_llm_analysis"] is False
 
 
+def test_build_planner_advance_plan_from_status_blocks_incomplete_multi_dependency(
+    tmp_path: Path,
+) -> None:
+    manifest_path = tmp_path / "seed-manifest.json"
+    status = {
+        "repo": "ExatronOmega/signposter",
+        "tasks": [
+            {
+                "key": "H049-003",
+                "github_issue": 210,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/210",
+                "state": "merged",
+                "depends_on": [],
+                "labels": [],
+            },
+            {
+                "key": "H049-004",
+                "github_issue": 211,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/211",
+                "state": "open",
+                "depends_on": [],
+                "labels": [],
+            },
+            {
+                "key": "H049-005",
+                "github_issue": 212,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/212",
+                "state": "open",
+                "depends_on": ["H049-003", "H049-004"],
+                "labels": [],
+            },
+        ],
+    }
+
+    result = build_planner_advance_plan_from_status(
+        status,
+        issue=210,
+        manifest_path=str(manifest_path),
+    )
+
+    assert result["status"] == "blocked"
+    assert result["targets"] == []
+    assert result["planned_github_mutations"] == []
+    assert result["planned_manifest_mutations"] == []
+    assert result["requires_llm_analysis"] is False
+    assert "no downstream task is currently promotable" in result["reasons"]
+    assert "H049-005 waits for dependencies: H049-004" in result["reasons"]
+
+
+def test_build_planner_advance_plan_from_status_promotes_after_all_dependencies_done(
+    tmp_path: Path,
+) -> None:
+    manifest_path = tmp_path / "seed-manifest.json"
+    status = {
+        "repo": "ExatronOmega/signposter",
+        "tasks": [
+            {
+                "key": "H049-003",
+                "github_issue": 210,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/210",
+                "state": "merged",
+                "depends_on": [],
+                "labels": [],
+            },
+            {
+                "key": "H049-004",
+                "github_issue": 211,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/211",
+                "state": "done",
+                "depends_on": [],
+                "labels": [],
+            },
+            {
+                "key": "H049-005",
+                "github_issue": 212,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/212",
+                "state": "open",
+                "depends_on": ["H049-003", "H049-004"],
+                "labels": [],
+            },
+        ],
+    }
+
+    result = build_planner_advance_plan_from_status(
+        status,
+        issue=210,
+        manifest_path=str(manifest_path),
+    )
+
+    assert result["status"] == "ready"
+    assert result["targets"] == [
+        {
+            "key": "H049-005",
+            "github_issue": 212,
+            "github_url": "https://github.com/ExatronOmega/signposter/issues/212",
+            "state": "open",
+            "labels_to_add": ["state:ready"],
+        }
+    ]
+    assert result["planned_github_mutations"] == [
+        "gh issue edit 212 -R ExatronOmega/signposter --add-label state:ready"
+    ]
+    assert result["planned_manifest_mutations"] == []
+    assert result["requires_llm_analysis"] is False
+
+
 def test_build_planner_advance_plan_from_status_blocks_open_source_task(
     tmp_path: Path,
 ) -> None:
