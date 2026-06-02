@@ -94,3 +94,69 @@ def test_format_codex_subagent_dispatch_contract_is_read_only(tmp_path) -> None:
     assert "takeover:" in output
     assert "No GitHub mutation was performed." in output
     assert "No Codex CLI execution was performed." in output
+
+
+def test_cli_subagent_plan_codex_renders_read_only_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path,
+) -> None:
+    from signposter.cli import main
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "signposter",
+            "subagent",
+            "plan-codex",
+            "--role",
+            "WORKER_CODE",
+            "--scope",
+            "bounded dry-run",
+            "--prompt",
+            str(tmp_path / "prompt.md"),
+            "--working-dir",
+            str(tmp_path),
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    output = capsys.readouterr().out
+    assert exc_info.value.code == 0
+    assert "Signposter Codex Subagent Dispatch Contract" in output
+    assert "agent: codex_worker_code" in output
+    assert "No Codex CLI execution was performed." in output
+
+
+def test_cli_subagent_plan_codex_blocks_unknown_role(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path,
+) -> None:
+    from signposter.cli import main
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "signposter",
+            "subagent",
+            "plan-codex",
+            "--role",
+            "MISSING",
+            "--scope",
+            "bounded dry-run",
+            "--prompt",
+            str(tmp_path / "prompt.md"),
+            "--working-dir",
+            str(tmp_path),
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr()
+    assert exc_info.value.code == 2
+    assert "Unknown Signposter role: MISSING" in captured.err

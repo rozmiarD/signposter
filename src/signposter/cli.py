@@ -29,6 +29,10 @@ from signposter.bug_ledger import (
     plan_update_bug,
 )
 from signposter.claim import cli_main as claim_cli_main
+from signposter.codex_subagent import (
+    format_codex_subagent_dispatch_contract,
+    plan_codex_subagent_dispatch,
+)
 from signposter.control_status import (
     build_control_plane_status,
     format_control_plane_status,
@@ -144,7 +148,12 @@ from signposter.review import (
     validate_review_artifact,
     write_review_prompt_artifact,
 )
-from signposter.role_policy import format_role_policy_status, validate_role_registry
+from signposter.role_policy import (
+    format_role_policy_status,
+    get_role_policy,
+    validate_role_registry,
+)
+from signposter.role_routing import RoleSelection, resolve_role_execution
 from signposter.role_smoke import (
     build_role_smoke_matrix,
     build_role_smoke_plan,
@@ -418,6 +427,51 @@ def main() -> None:
         help="Backend to mark as selected default for this read-only report",
     )
     backend_status_parser.set_defaults(func=run_backend_status)
+
+    subagent_parser = subparsers.add_parser(
+        "subagent",
+        help="Plan bounded local subagent dispatch contracts",
+    )
+    subagent_subparsers = subagent_parser.add_subparsers(dest="subagent_command")
+    plan_codex_parser = subagent_subparsers.add_parser(
+        "plan-codex",
+        help="Render a read-only Codex CLI subagent dispatch contract",
+    )
+    plan_codex_parser.add_argument("--role", required=True, help="Signposter role name")
+    plan_codex_parser.add_argument("--scope", required=True, help="Bounded task scope")
+    plan_codex_parser.add_argument("--prompt", required=True, help="Prompt artifact path")
+    plan_codex_parser.add_argument(
+        "--working-dir",
+        required=True,
+        help="Subagent working directory",
+    )
+    plan_codex_parser.add_argument(
+        "--raw",
+        default="artifacts/runs/subagent.raw.txt",
+        help="Planned raw artifact path",
+    )
+    plan_codex_parser.add_argument(
+        "--summary",
+        default="artifacts/runs/subagent.summary.md",
+        help="Planned summary artifact path",
+    )
+    plan_codex_parser.add_argument(
+        "--last-message",
+        default="artifacts/runs/subagent.last-message.txt",
+        help="Planned Codex CLI last-message artifact path",
+    )
+    plan_codex_parser.add_argument(
+        "--session-key",
+        default="signposter-subagent-dry-run",
+        help="Planned Signposter session key metadata",
+    )
+    plan_codex_parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=120,
+        help="Bounded execution timeout for the future dispatch",
+    )
+    plan_codex_parser.set_defaults(func=run_subagent_plan_codex)
 
     # planner subcommand group — HARDENING-029A
     planner_parser = subparsers.add_parser(
@@ -1535,6 +1589,51 @@ def run_backend_status(args: argparse.Namespace) -> int:
     """Render read-only backend health and fallback visibility."""
     report = build_backend_status_report(default_backend=getattr(args, "default", None))
     print(format_backend_status_report(report))
+    return 0
+
+
+def run_subagent_plan_codex(args: argparse.Namespace) -> int:
+    """Render a read-only Codex CLI subagent dispatch contract."""
+    try:
+        policy = get_role_policy(args.role)
+    except KeyError:
+        print(f"Unknown Signposter role: {args.role}", file=sys.stderr)
+        return 2
+
+    selection = RoleSelection(
+        policy=policy,
+        reason="explicit subagent dry-run role selection",
+        stage_kind="subagent",
+    )
+    role_execution = resolve_role_execution(selection, backend="codex-cli")
+    try:
+        contract = plan_codex_subagent_dispatch(
+            task_scope=args.scope,
+            prompt_artifact=args.prompt,
+            working_dir=args.working_dir,
+            raw_artifact=args.raw,
+            summary_artifact=args.summary,
+            last_message_artifact=args.last_message,
+            role_execution=role_execution,
+            session_key=args.session_key,
+            timeout_seconds=args.timeout_seconds,
+        )
+    except ValueError as exc:
+        print("Signposter Codex Subagent Dispatch Contract")
+        print("")
+        print("Status:")
+        print("  blocked")
+        print("")
+        print("Reason:")
+        print(f"  {exc}")
+        print("")
+        print("Notes:")
+        print("  No GitHub mutation was performed.")
+        print("  No OpenClaw execution was performed.")
+        print("  No Codex CLI execution was performed.")
+        return 1
+
+    print(format_codex_subagent_dispatch_contract(contract))
     return 0
 
 
