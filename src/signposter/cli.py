@@ -1,7 +1,4 @@
-"""Signposter Command Line Interface.
-
-Currently in bootstrap phase. Only the `doctor` command is implemented.
-"""
+"""Signposter Command Line Interface."""
 
 from __future__ import annotations
 
@@ -197,6 +194,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         prog="signposter",
         description="Signposter — Local GitHub/OpenClaw workflow dispatcher (bootstrap phase)",
+        epilog=(
+            "Operator status: use `signposter control-plane status --repo OWNER/REPO` "
+            "for the compact read-only workflow view. Bare `signposter` remains "
+            "help-only and performs no GitHub or local workflow reads."
+        ),
     )
     subparsers = parser.add_subparsers(dest="command")
 
