@@ -9,13 +9,19 @@ from signposter.role_policy import RolePolicy, execution_agent_for_backend, get_
 from signposter.scan import LabeledItem
 
 CORE_AREAS = {
+    "backend",
+    "core",
+    "execution",
     "scheduler",
     "planner",
     "runner",
+    "role",
+    "routing",
     "merge",
     "review",
     "gate",
     "integration",
+    "subagent",
     "workflow",
     "safety",
 }
@@ -23,11 +29,18 @@ CORE_AREAS = {
 DOC_HINTS = ("docs", "readme", "markdown")
 TEST_HINTS = ("test", "tests", "pytest")
 CORE_PATH_HINTS = (
+    "src/signposter/backend_status",
+    "src/signposter/codex_cli",
+    "src/signposter/codex_subagent",
+    "src/signposter/execution_backend",
     "src/signposter/merge",
     "src/signposter/review",
     "src/signposter/gate",
     "src/signposter/integration",
     "src/signposter/planner",
+    "src/signposter/role_policy",
+    "src/signposter/role_routing",
+    "src/signposter/role_smoke",
     "src/signposter/runner",
     "src/signposter/scheduler",
     "src/signposter/worktree",
@@ -134,17 +147,17 @@ def select_role_for_issue(
             stage_kind="issue",
         )
 
-    if _is_docs_task(item, area) or _is_test_task(item, area):
-        return RoleSelection(
-            policy=get_role_policy("WORKER_LIGHT"),
-            reason="docs/test-focused build task can use the cheaper light worker role",
-            stage_kind="issue",
-        )
-
     if risk == "high" or _is_core_area(area):
         return RoleSelection(
             policy=get_role_policy("WORKER_CORE"),
             reason="core or high-risk build task needs the stronger worker-core policy",
+            stage_kind="issue",
+        )
+
+    if _is_docs_task(item, area) or _is_test_task(item, area):
+        return RoleSelection(
+            policy=get_role_policy("WORKER_LIGHT"),
+            reason="docs/test-focused build task can use the cheaper light worker role",
             stage_kind="issue",
         )
 
