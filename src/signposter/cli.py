@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -3115,10 +3116,36 @@ def run_control_plane_status(args: argparse.Namespace) -> int:
         planner_run=planner_run,
         scheduler_next=scheduler_next,
         orchestrator_next=orchestrator_next,
+        refresh_command=_control_plane_refresh_command(args),
         bugs=bugs,
     )
     print(format_control_plane_status(result))
     return 0 if result.status in {"ready", "completed"} else 1
+
+
+def _control_plane_refresh_command(args: argparse.Namespace) -> str:
+    command = [
+        "signposter",
+        "control-plane",
+        "status",
+        "--repo",
+        str(getattr(args, "repo", "")),
+    ]
+    manifest = getattr(args, "manifest", None)
+    if manifest is not None:
+        command.extend(["--manifest", str(manifest)])
+    if getattr(args, "sync_github", False):
+        command.append("--sync-github")
+    limit = getattr(args, "limit", 50)
+    if limit != 50:
+        command.extend(["--limit", str(limit)])
+    ledger_path = getattr(args, "ledger_path", "artifacts/automation/bug-ledger.json")
+    if ledger_path != "artifacts/automation/bug-ledger.json":
+        command.extend(["--ledger-path", str(ledger_path)])
+    bug_limit = getattr(args, "bug_limit", 5)
+    if bug_limit != 5:
+        command.extend(["--bug-limit", str(bug_limit)])
+    return " ".join(shlex.quote(part) for part in command)
 
 
 def _register_control_plane_subcommands(
