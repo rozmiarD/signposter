@@ -310,7 +310,7 @@ def main() -> None:
     run_parser = subparsers.add_parser(
         "run",
         help="Runner planner (supports --claim, --write-prompt, --execute)",
-        description="Plan execution and optionally execute OpenClaw locally.",
+        description="Plan execution and optionally execute the selected backend locally.",
     )
     run_parser.add_argument("--repo", required=True)
     run_parser.add_argument(
@@ -327,7 +327,7 @@ def main() -> None:
     run_parser.add_argument(
         "--write-prompt",
         action="store_true",
-        help="Generate and write the local prompt artifact (does not run OpenClaw)",
+        help="Generate and write the local prompt artifact (does not execute a backend)",
     )
     run_parser.add_argument(
         "--claim",
@@ -337,12 +337,12 @@ def main() -> None:
     run_parser.add_argument(
         "--execute",
         action="store_true",
-        help="Run OpenClaw agent locally for already-active item (explicit)",
+        help="Run the selected execution backend locally for an already-active item (explicit)",
     )
     run_parser.add_argument(
         "--backend",
         choices=["openclaw", "codex-cli"],
-        help="Execution backend to plan for; default is openclaw",
+        help="Execution backend to plan for; default is codex-cli",
     )
     run_parser.add_argument(
         "--issue",
@@ -767,7 +767,7 @@ def main() -> None:
     review_parser = subparsers.add_parser(
         "review",
         help="Reviewer-agent PR review planning (dry-run only)",
-        description="Plan OpenClaw reviewer inspection of a pull request.",
+        description="Plan reviewer inspection of a pull request.",
     )
     review_subparsers = review_parser.add_subparsers(dest="review_command")
 
@@ -785,7 +785,7 @@ def main() -> None:
     review_plan_parser.add_argument(
         "--backend",
         choices=["openclaw", "codex-cli"],
-        help="Execution backend to plan for; default is openclaw",
+        help="Execution backend to plan for; default is codex-cli",
     )
     review_plan_parser.set_defaults(func=run_review_plan)
 
@@ -821,10 +821,7 @@ def main() -> None:
     execute_parser.add_argument(
         "--backend",
         choices=["openclaw", "codex-cli"],
-        help=(
-            "Execution backend to execute; codex-cli execution is blocked "
-            "until adapter support lands"
-        ),
+        help="Execution backend to execute; default is codex-cli",
     )
     execute_parser.set_defaults(func=run_review_execute)
 

@@ -36,39 +36,46 @@ def make_dispatch(**kwargs) -> DispatchDecision:
 def test_select_runner_profile_worker_build():
     d = make_dispatch(role="worker", phase="build")
     runner, profile = _select_runner_and_profile(d)
-    assert runner == "openclaw"
+    assert runner == "codex-cli"
     assert profile == "worker"
 
 
 def test_select_runner_profile_reviewer_review():
     d = make_dispatch(role="reviewer", phase="review")
     runner, profile = _select_runner_and_profile(d)
-    assert runner == "openclaw"
+    assert runner == "codex-cli"
     assert profile == "reviewer"
 
 
 def test_select_runner_profile_planner_plan():
     d = make_dispatch(role="planner", phase="plan")
     runner, profile = _select_runner_and_profile(d)
-    assert runner == "openclaw"
+    assert runner == "codex-cli"
     assert profile == "planner"
 
 
 def test_select_runner_profile_gatekeeper():
     d = make_dispatch(role="gatekeeper")
     runner, profile = _select_runner_and_profile(d)
-    assert runner == "openclaw"
+    assert runner == "codex-cli"
     assert profile == "gatekeeper"
 
 
 def test_select_runner_profile_default():
     d = make_dispatch(role="unknown", phase="unknown")
     runner, profile = _select_runner_and_profile(d)
+    assert runner == "codex-cli"
+    assert profile == "worker"
+
+
+def test_select_runner_profile_accepts_explicit_legacy_openclaw_backend():
+    d = make_dispatch(role="worker", phase="build")
+    runner, profile = _select_runner_and_profile(d, backend="openclaw")
     assert runner == "openclaw"
     assert profile == "worker"
 
 
-def test_select_runner_profile_accepts_codex_cli_backend():
+def test_select_runner_profile_accepts_explicit_codex_cli_backend():
     d = make_dispatch(role="worker", phase="build")
     runner, profile = _select_runner_and_profile(d, backend="codex-cli")
     assert runner == "codex-cli"
@@ -165,7 +172,8 @@ def test_active_prompt_runner_plan_uses_refreshed_session_namespace(tmp_path, mo
         plans = plan_active_runner_from_prompts("test/repo")
 
     assert len(plans) == 1
-    assert "--session-key signposter-v2-issue-42-worker" in plans[0].proposed_command_shape
+    assert "session_key=signposter-v2-issue-42-worker" in plans[0].proposed_command_shape
+    assert "--session-key" not in plans[0].proposed_command_shape
     assert "signposter-issue-42-worker" not in plans[0].proposed_command_shape
 
 
@@ -1450,7 +1458,13 @@ def test_cli_main_worktree_execute_propagates_preflight_failure(capsys, tmp_path
             "path": worktree_path,
             "exists": True,
         }
-        exit_code = cli_main("test/repo", issue=70, execute=True, worktree=True)
+        exit_code = cli_main(
+            "test/repo",
+            issue=70,
+            execute=True,
+            worktree=True,
+            backend="openclaw",
+        )
 
     out = capsys.readouterr().out
     assert exit_code == 1

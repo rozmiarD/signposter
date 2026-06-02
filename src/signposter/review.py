@@ -75,7 +75,7 @@ class ReviewPlan:
     prompt_artifact_path: str
     proposed_runner: str = "openclaw"
     proposed_command_shape: str = ""
-    backend_reason: str = "default Signposter execution backend"
+    backend_reason: str = "default Codex CLI execution backend"
     backend_execution_supported: bool = True
     backend_notes: tuple[str, ...] = ()
     selected_role_name: str = "REVIEWER_LIGHT"

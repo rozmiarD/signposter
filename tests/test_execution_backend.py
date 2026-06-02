@@ -8,12 +8,12 @@ from signposter.execution_backend import (
 )
 
 
-def test_resolve_execution_backend_defaults_to_openclaw() -> None:
+def test_resolve_execution_backend_defaults_to_codex_cli() -> None:
     plan = resolve_execution_backend(env={})
 
-    assert plan.backend == "openclaw"
+    assert plan.backend == "codex-cli"
     assert plan.execution_supported is True
-    assert plan.reason == "default Signposter execution backend"
+    assert plan.reason == "default Codex CLI execution backend"
 
 
 def test_resolve_execution_backend_accepts_explicit_codex_cli() -> None:
@@ -24,15 +24,24 @@ def test_resolve_execution_backend_accepts_explicit_codex_cli() -> None:
     assert "adapter is available" in " ".join(plan.notes)
 
 
+def test_resolve_execution_backend_accepts_explicit_legacy_openclaw() -> None:
+    plan = resolve_execution_backend("openclaw", env={})
+
+    assert plan.backend == "openclaw"
+    assert plan.execution_supported is True
+    assert plan.reason == "explicit OpenClaw legacy backend selected"
+    assert "legacy compatibility" in " ".join(plan.notes)
+
+
 def test_resolve_execution_backend_rejects_unknown_backend() -> None:
     with pytest.raises(ValueError, match="unsupported execution backend"):
         resolve_execution_backend("unknown", env={})
 
 
-def test_resolve_execution_backend_reads_environment_default() -> None:
-    plan = resolve_execution_backend(env={"SIGNPOSTER_EXECUTION_BACKEND": "codex-cli"})
+def test_resolve_execution_backend_reads_environment_override() -> None:
+    plan = resolve_execution_backend(env={"SIGNPOSTER_EXECUTION_BACKEND": "openclaw"})
 
-    assert plan.backend == "codex-cli"
+    assert plan.backend == "openclaw"
 
 
 def test_build_backend_command_shape_for_codex_cli_is_plan_only() -> None:

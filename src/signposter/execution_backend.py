@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-DEFAULT_EXECUTION_BACKEND = "openclaw"
+DEFAULT_EXECUTION_BACKEND = "codex-cli"
 EXECUTION_BACKEND_ENV = "SIGNPOSTER_EXECUTION_BACKEND"
 ALLOWED_EXECUTION_BACKENDS = frozenset({"openclaw", "codex-cli"})
 
@@ -27,7 +27,9 @@ def resolve_execution_backend(
 ) -> ExecutionBackendPlan:
     """Resolve and validate the requested execution backend."""
     source = env if env is not None else os.environ
-    requested = (backend or source.get(EXECUTION_BACKEND_ENV) or DEFAULT_EXECUTION_BACKEND).strip()
+    explicit_backend = backend is not None
+    env_backend = source.get(EXECUTION_BACKEND_ENV)
+    requested = (backend or env_backend or DEFAULT_EXECUTION_BACKEND).strip()
     normalized = requested.lower()
     if normalized not in ALLOWED_EXECUTION_BACKENDS:
         allowed = ", ".join(sorted(ALLOWED_EXECUTION_BACKENDS))
@@ -36,13 +38,22 @@ def resolve_execution_backend(
     if normalized == "openclaw":
         return ExecutionBackendPlan(
             backend="openclaw",
-            reason="default Signposter execution backend",
+            reason=(
+                "explicit OpenClaw legacy backend selected"
+                if explicit_backend or env_backend
+                else "OpenClaw legacy backend selected"
+            ),
             execution_supported=True,
+            notes=("OpenClaw is legacy compatibility and is not the default backend.",),
         )
 
     return ExecutionBackendPlan(
         backend="codex-cli",
-        reason="explicit Codex CLI backend selected for planning",
+        reason=(
+            "explicit Codex CLI backend selected for planning"
+            if explicit_backend or env_backend
+            else "default Codex CLI execution backend"
+        ),
         execution_supported=True,
         notes=(
             "Codex CLI adapter is available for explicit --execute runs.",

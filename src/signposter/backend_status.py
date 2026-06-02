@@ -53,7 +53,7 @@ def build_backend_status_report(
     return BackendStatusReport(
         default_backend=selected or DEFAULT_EXECUTION_BACKEND,
         backends=(openclaw, codex),
-        fallback_order=("openclaw", "codex-cli"),
+        fallback_order=("codex-cli", "openclaw"),
         source_modules=(
             "signposter.execution_backend: backend resolution and command shape",
             "signposter.codex_cli_backend: Codex CLI execution adapter",
