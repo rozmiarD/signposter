@@ -170,6 +170,37 @@ def _fallback_runner_plan(plan: RunnerPlan) -> RunnerPlan | None:
     )
 
 
+def _format_dirty_tree_refusal(
+    *,
+    context: str,
+    cwd: str,
+    dirty_paths: list[str],
+) -> list[str]:
+    shown = ", ".join(dirty_paths[:5])
+    extra = "..." if len(dirty_paths) > 5 else ""
+    return [
+        f"Refusing {context}: working tree has uncommitted changes.",
+        f"  cwd: {cwd}",
+        f"  dirty paths: {shown}{extra}",
+        "  next: commit or stash the changes, use an isolated worktree, "
+        "or rerun with --allow-dirty after verifying the changes belong to this task.",
+    ]
+
+
+def _dirty_tree_result(*, cwd: str, dirty_paths: list[str]) -> dict:
+    return {
+        "exit_code": 1,
+        "raw_path": None,
+        "summary_path": None,
+        "error": "dirty working tree",
+        "success": False,
+        "diagnosis_status": "dirty-tree",
+        "dirty_cwd": cwd,
+        "dirty_paths": tuple(dirty_paths),
+        "allow_dirty_hint": "--allow-dirty",
+    }
+
+
 def openclaw_session_namespace(env: dict[str, str] | None = None) -> str:
     """Return Signposter's OpenClaw session namespace.
 
@@ -1382,12 +1413,12 @@ def cli_main(
                         if not allow_dirty:
                             dirty = find_uncommitted_repo_changes(cwd=worktree_path)
                             if dirty:
-                                shown = ", ".join(dirty[:3])
-                                print(
-                                    "Refusing worktree execution: "
-                                    "worktree has uncommitted changes: "
-                                    f"{shown}"
-                                )
+                                for line in _format_dirty_tree_refusal(
+                                    context="worktree execution",
+                                    cwd=worktree_path,
+                                    dirty_paths=dirty,
+                                ):
+                                    print(line)
                                 return 1
 
                         result = execute_plan(
@@ -1593,19 +1624,13 @@ def execute_plan(
     if profile == "worker" and not allow_dirty:
         dirty_paths = find_uncommitted_repo_changes(cwd=effective_cwd)
         if dirty_paths:
-            shown = ", ".join(dirty_paths[:5])
-            extra = "..." if len(dirty_paths) > 5 else ""
-            print(
-                f"Refusing worker execution: working tree has uncommitted changes. "
-                f"Commit/stash first or run in isolated worktree. "
-                f"Dirty paths: {shown}{extra}"
-            )
-            return {
-                "exit_code": 1,
-                "raw_path": None,
-                "summary_path": None,
-                "error": "dirty working tree",
-            }
+            for line in _format_dirty_tree_refusal(
+                context="worker execution",
+                cwd=effective_cwd,
+                dirty_paths=dirty_paths,
+            ):
+                print(line)
+            return _dirty_tree_result(cwd=effective_cwd, dirty_paths=dirty_paths)
 
     if plan.proposed_runner == "codex-cli":
         runs_dir = Path("artifacts/runs")
