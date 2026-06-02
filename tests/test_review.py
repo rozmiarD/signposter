@@ -1665,7 +1665,16 @@ def test_failed_gh_review_includes_stderr_in_result():
 
     with patch("signposter.review.plan_review_submit") as mock_plan:
         from signposter.review import ReviewSubmitPlan
-        fake_plan = ReviewSubmitPlan(5, "approve", "body text", True, "good", "ready", "gh ...", [])
+        fake_plan = ReviewSubmitPlan(
+            5,
+            "approve",
+            "Signposter reviewer gate: APPROVE\n\nBody text.",
+            True,
+            "good",
+            "ready",
+            "gh ...",
+            [],
+        )
         mock_plan.return_value = fake_plan
 
         class FakeProc:

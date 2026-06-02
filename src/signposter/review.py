@@ -24,6 +24,7 @@ from signposter.codex_cli_backend import (
     execute_codex_cli_invocation,
     plan_codex_cli_invocation,
 )
+from signposter.comments import ensure_github_comment_body
 from signposter.execution_backend import (
     build_backend_command_shape,
     resolve_execution_backend,
@@ -1799,7 +1800,7 @@ Reviewer { 'approved' if (opinion.verdict or '').upper() == 'APPROVE' else 'revi
 
 No merge or issue close is implied by this review.
 """
-    return body.strip()
+    return ensure_github_comment_body(body.strip())
 
 
 def plan_review_submit(
@@ -1971,6 +1972,14 @@ def submit_review(
             "mode": "apply_blocked",
             "plan": plan,
             "error": "Empty review body",
+        }
+    try:
+        ensure_github_comment_body(plan.body)
+    except ValueError as e:
+        return {
+            "mode": "apply_blocked",
+            "plan": plan,
+            "error": str(e),
         }
 
     reviewer_token = _get_reviewer_token()

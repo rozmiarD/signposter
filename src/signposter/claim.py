@@ -9,7 +9,7 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass
 
-from signposter.comments import format_claim_comment
+from signposter.comments import ensure_github_comment_body, format_claim_comment
 from signposter.dependencies import is_dependency_blocked
 from signposter.dispatch import DispatchDecision, run_dry_run
 from signposter.labels import check_labels
@@ -71,6 +71,13 @@ def perform_claim_mutation(plan: ClaimPlan, repo: str, *, dry_run: bool = True) 
     item = plan.item
     commands: list[str] = []
 
+    comment_body = format_claim_comment(
+        route=plan.dispatch.proposed_route,
+        gate=plan.dispatch.proposed_gate,
+        lease_owner=plan.lease_owner,
+    )
+    ensure_github_comment_body(comment_body)
+
     # 1. Edit labels: remove state:ready, add state:active + gate label
     add_labels = ",".join(plan.labels_to_add)
     remove_labels = ",".join(plan.labels_to_remove)
@@ -87,12 +94,6 @@ def perform_claim_mutation(plan: ClaimPlan, repo: str, *, dry_run: bool = True) 
         subprocess.run(edit_cmd, check=True, capture_output=True, text=True)
 
     # 2. Add comment
-    comment_body = format_claim_comment(
-        route=plan.dispatch.proposed_route,
-        gate=plan.dispatch.proposed_gate,
-        lease_owner=plan.lease_owner,
-    )
-
     comment_cmd = [
         "gh", "issue", "comment", str(item.number),
         "-R", repo,
