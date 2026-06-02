@@ -211,6 +211,32 @@ def test_integration_apply_refuses_when_plan_not_ready():
     assert "Refusing integration apply" in result.get("error", "")
 
 
+def test_integration_apply_already_integrated_does_not_mutate():
+    from signposter.integration import apply_integration
+
+    fake_plan = IntegrationPlan(
+        pr_number=5, pr_title="test", pr_state="MERGED",
+        merge_commit="abc123", base_branch="main", head_branch="work/issue-4-xxx",
+        associated_issue=4, issue_state="CLOSED",
+        current_workflow_state="state:merged",
+        proposed_workflow_state="state:merged",
+        close_issue=True, close_reason="completed",
+        main_ci_status="pass",
+        status="completed",
+        notes=[],
+    )
+
+    with (
+        patch("signposter.integration.plan_integration_for_pr", return_value=fake_plan),
+        patch("signposter.integration.subprocess.run") as mock_run,
+    ):
+        result = apply_integration("test/repo", 5, apply=True)
+
+    mock_run.assert_not_called()
+    assert result["mode"] == "apply_blocked"
+    assert "completed" in result.get("error", "")
+
+
 def test_integration_apply_refuses_when_not_state_done():
     from signposter.integration import apply_integration
 

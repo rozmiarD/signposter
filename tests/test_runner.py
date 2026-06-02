@@ -702,6 +702,35 @@ def test_cli_main_explicit_issue_refuses_execute_on_done_and_failed(capsys):
         assert "requires state:active" in output
 
 
+def test_cli_main_done_issue_claim_execute_does_not_mutate_or_execute(capsys):
+    """state:done is terminal for run: no claim mutation and no backend execution."""
+    from unittest.mock import patch
+
+    from signposter.runner import cli_main
+
+    fake_item = make_item(107, ["state:done", "role:worker", "phase:build"])
+
+    with (
+        patch("signposter.runner.fetch_issue_by_number", return_value=fake_item),
+        patch("signposter.runner.perform_claim_mutation") as mock_claim,
+        patch("signposter.runner.execute_plan") as mock_execute,
+    ):
+        exit_code = cli_main(
+            "ExatronOmega/signposter",
+            issue=107,
+            claim=True,
+            execute=True,
+        )
+
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    mock_claim.assert_not_called()
+    mock_execute.assert_not_called()
+    assert "already done. Skipping claim" in output
+    assert "Refusing to execute issue #107: state=done" in output
+
+
 def test_cli_main_explicit_issue_claim_refreshes_before_execute(capsys):
     from unittest.mock import patch
 
