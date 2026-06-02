@@ -355,6 +355,56 @@ def test_integration_apply_failed_mutation_includes_stderr(monkeypatch):
     assert "rate limit" in str(result.get("errors", []))
 
 
+def test_integration_apply_stops_after_label_transition_failure(monkeypatch):
+    from signposter.integration import apply_integration
+
+    class Proc:
+        def __init__(self, returncode=0, stderr=""):
+            self.returncode = returncode
+            self.stdout = ""
+            self.stderr = stderr
+
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd[:3] == ["gh", "issue", "edit"]:
+            return Proc(returncode=1, stderr="label mutation rejected")
+        raise AssertionError(f"unexpected mutation after label failure: {cmd}")
+
+    with patch("signposter.integration.plan_integration_for_pr") as mock_plan, \
+         patch("signposter.integration.check_labels") as mock_check:
+        monkeypatch.setattr("subprocess.run", fake_run)
+        mock_check.return_value.missing = []
+        mock_check.return_value.error = None
+
+        mock_plan.return_value = IntegrationPlan(
+            pr_number=5, pr_title="test", pr_state="MERGED",
+            merge_commit="abc123", base_branch="main", head_branch="work/issue-4-xxx",
+            associated_issue=4, issue_state="OPEN",
+            current_workflow_state="state:done",
+            proposed_workflow_state="state:merged",
+            close_issue=True, close_reason="completed",
+            main_ci_status="pass",
+            status="ready",
+            notes=[],
+        )
+
+        result = apply_integration("test/repo", 5, apply=True)
+
+    assert result.get("success") is False
+    assert result.get("results") == []
+    assert "label transition failed" in str(result.get("errors", []))
+    assert calls == [
+        [
+            "gh", "issue", "edit", "4",
+            "-R", "test/repo",
+            "--remove-label", "state:done",
+            "--add-label", "state:merged",
+        ]
+    ]
+
+
 def test_integration_apply_dry_run_blocks_when_main_ci_unknown():
     from signposter.integration import IntegrationPlan, format_integration_apply_dry_run
 
@@ -823,3 +873,90 @@ No unrelated files were changed.
     output = format_noop_integration_plan(plan)
     assert "Verified preconditions:" in output
     assert "worktree absent: no" in output
+
+
+def test_noop_integration_apply_dry_run_does_not_mutate(monkeypatch):
+    from signposter.integration import NoopIntegrationPlan, apply_noop_integration
+
+    plan = NoopIntegrationPlan(
+        issue_number=12,
+        issue_title="noop",
+        issue_state="OPEN",
+        current_workflow_state="state:done",
+        proposed_workflow_state="state:merged",
+        close_issue=True,
+        close_reason="completed",
+        summary_path="artifacts/runs/issue-12-gate.summary.md",
+        gate_decision="pass",
+        gate_reason="ok",
+        worktree_path="../signposter-work/12",
+        worktree_exists=False,
+        local_branch_exists=False,
+        associated_pr_detected=False,
+        status="ready",
+        notes=[],
+    )
+
+    with patch(
+        "signposter.integration.plan_noop_integration_for_issue",
+        return_value=plan,
+    ), patch("signposter.integration.subprocess.run") as mock_run:
+        result = apply_noop_integration("test/repo", 12, apply=False)
+
+    mock_run.assert_not_called()
+    assert result["mode"] == "dry_run"
+    assert result["plan"].status == "ready"
+
+
+def test_noop_integration_apply_stops_after_label_transition_failure(monkeypatch):
+    from signposter.integration import NoopIntegrationPlan, apply_noop_integration
+
+    plan = NoopIntegrationPlan(
+        issue_number=12,
+        issue_title="noop",
+        issue_state="OPEN",
+        current_workflow_state="state:done",
+        proposed_workflow_state="state:merged",
+        close_issue=True,
+        close_reason="completed",
+        summary_path="artifacts/runs/issue-12-gate.summary.md",
+        gate_decision="pass",
+        gate_reason="ok",
+        worktree_path="../signposter-work/12",
+        worktree_exists=False,
+        local_branch_exists=False,
+        associated_pr_detected=False,
+        status="ready",
+        notes=[],
+    )
+
+    class Proc:
+        returncode = 1
+        stdout = ""
+        stderr = "label mutation rejected"
+
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd[:3] == ["gh", "issue", "edit"]:
+            return Proc()
+        raise AssertionError(f"unexpected mutation after label failure: {cmd}")
+
+    with patch(
+        "signposter.integration.plan_noop_integration_for_issue",
+        return_value=plan,
+    ):
+        monkeypatch.setattr("subprocess.run", fake_run)
+        result = apply_noop_integration("test/repo", 12, apply=True)
+
+    assert result["success"] is False
+    assert "label transition failed" in str(result.get("errors", []))
+    assert calls == [
+        [
+            "gh", "issue", "edit", "12",
+            "-R", "test/repo",
+            "--add-label", "state:merged",
+            "--remove-label", "state:done",
+        ]
+    ]
