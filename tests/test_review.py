@@ -136,6 +136,8 @@ def test_plan_review_accepts_codex_cli_backend_for_dry_run():
 
     assert plan.proposed_runner == "codex-cli"
     assert plan.backend_execution_supported is True
+    assert plan.selected_openclaw_agent == "codex_reviewer_light"
+    assert "agent=codex_reviewer_light" in plan.proposed_command_shape
     assert "codex exec" in plan.proposed_command_shape
 
 
