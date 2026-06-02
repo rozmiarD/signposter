@@ -4238,6 +4238,24 @@ def test_build_planner_side_task_plan_ready() -> None:
     assert result["planned_github_mutations"] == []
 
 
+def test_build_planner_side_task_plan_does_not_mutate_input_manifest() -> None:
+    manifest = _side_task_plan_manifest()
+    before = json.loads(json.dumps(manifest))
+
+    build_planner_side_task_plan(
+        manifest=manifest,
+        manifest_path="/tmp/manifest.json",
+        key="H049-S003",
+        title="Fix discovered scheduler edge",
+        reason="planner advance exposed a dependency edge",
+        depends_on=["H049-010"],
+        parent=210,
+        return_to=211,
+    )
+
+    assert manifest == before
+
+
 def test_build_planner_side_task_plan_blocks_without_return_to() -> None:
     result = build_planner_side_task_plan(
         manifest=_side_task_plan_manifest(),
@@ -4253,6 +4271,25 @@ def test_build_planner_side_task_plan_blocks_without_return_to() -> None:
     assert result["status"] == "blocked"
     assert "return_to issue is required" in result["errors"]
     assert result["planned_manifest_mutations"] == []
+
+
+def test_build_planner_side_task_plan_blocks_missing_label_fields() -> None:
+    result = build_planner_side_task_plan(
+        manifest=_side_task_plan_manifest(),
+        manifest_path="/tmp/manifest.json",
+        key="H049-S003",
+        title="Fix discovered scheduler edge",
+        reason="planner advance exposed a dependency edge",
+        depends_on=["H049-010"],
+        parent=210,
+        return_to=211,
+        phase="",
+        gate=" ",
+    )
+
+    assert result["status"] == "blocked"
+    assert "phase is required" in result["errors"]
+    assert "gate is required" in result["errors"]
 
 
 def test_build_planner_side_task_plan_blocks_duplicate_key_and_unknown_dependency() -> None:

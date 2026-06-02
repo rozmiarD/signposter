@@ -2070,7 +2070,7 @@ def build_planner_side_task_plan(
     mainline: str | None = None,
 ) -> dict[str, Any]:
     """Build a read-only side-task insertion plan from an existing manifest."""
-    manifest = _refresh_seed_manifest_dependency_metadata(dict(manifest))
+    manifest = _refresh_seed_manifest_dependency_metadata(_copy_json_object(manifest))
     issues = manifest.get("issues", [])
     task_keys = {str(issue.get("key", "")) for issue in issues}
     errors: list[str] = []
@@ -2091,6 +2091,15 @@ def build_planner_side_task_plan(
         errors.append("side-task reason is required")
     if not depends_on:
         errors.append("depends_on must include at least one existing task key")
+    for field_name, field_value in {
+        "phase": phase,
+        "risk": risk,
+        "role": role,
+        "area": area,
+        "gate": gate,
+    }.items():
+        if not field_value.strip():
+            errors.append(f"{field_name} is required")
 
     unknown_dependencies = [
         dependency for dependency in depends_on if dependency not in task_keys
@@ -2260,6 +2269,10 @@ def _find_manifest_task_by_github_issue(
         if issue.get("github_issue") == github_issue:
             return issue
     return None
+
+
+def _copy_json_object(value: dict[str, Any]) -> dict[str, Any]:
+    return json.loads(json.dumps(value))
 
 
 def _mainline_from_task_key(key: str) -> str | None:
