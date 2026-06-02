@@ -5,11 +5,11 @@ Pure dry-run planning only. No GitHub mutations, no merges, no issue closes.
 
 from __future__ import annotations
 
-import re
 import subprocess
 from dataclasses import dataclass
 from typing import Any
 
+from signposter.comments import contains_auto_close_keyword
 from signposter.pr_linkage import detect_pr_issue_linkage
 from signposter.review import (
     ReviewGateResult,
@@ -60,19 +60,8 @@ class MergePlan:
     notes: list[str]
 
 
-AUTO_CLOSE_PATTERNS = [
-    r"(?i)\b(closes?|fixes?|resolves?)\s+#\d+",
-    r"(?i)\b(closes?|fixes?|resolves?)\s+github\.com/[^/]+/[^/]+#\d+",
-]
-
-
 def _has_auto_close_keywords(body: str | None) -> bool:
-    if not body:
-        return False
-    for pattern in AUTO_CLOSE_PATTERNS:
-        if re.search(pattern, body):
-            return True
-    return False
+    return contains_auto_close_keyword(body)
 
 
 def _extract_issue_from_branch_or_body(head_branch: str, body: str | None) -> int | None:

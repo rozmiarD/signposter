@@ -11,6 +11,7 @@ def _handoff_plan(
     workflow_state: str = "done",
     current_branch: str = "work/issue-4-test-task",
     worktree_exists: bool = True,
+    suggested_commit_message: str = "docs: test-task",
 ) -> HandoffPlan:
     return HandoffPlan(
         issue_number=4,
@@ -24,7 +25,7 @@ def _handoff_plan(
         status_lines=["M README.md"] if has_changes else [],
         changed_files=changed_files or [],
         has_changes=has_changes,
-        suggested_commit_message="docs: test-task",
+        suggested_commit_message=suggested_commit_message,
         suggested_next_commands=["git commit ...", "git push ..."],
         status="ready" if has_changes else "blocked — no changes found in worktree",
         notes=["No commit, push, PR, merge, or issue close was performed."],
@@ -65,6 +66,24 @@ def test_pr_plan_ready_for_clean_branch_with_committed_changes(monkeypatch):
     assert plan.changed_files == ["README.md"]
     assert "Related issue: #4" in plan.suggested_pr_body
     assert "Closes" not in plan.suggested_pr_body
+
+
+def test_pr_plan_blocks_auto_close_keyword_in_suggested_metadata(monkeypatch):
+    monkeypatch.setattr(
+        "signposter.pr.plan_handoff_for_issue",
+        lambda repo, issue: _handoff_plan(
+            has_changes=False,
+            suggested_commit_message="fix: closes #4",
+        ),
+    )
+    monkeypatch.setattr(
+        "signposter.pr._get_branch_changed_files",
+        lambda worktree, base, source: ["README.md"],
+    )
+
+    plan = plan_pr_for_issue("test/repo", 4)
+
+    assert plan.status == "blocked — suggested PR metadata contains auto-close keyword"
 
 
 def test_pr_plan_blocks_when_not_state_done(monkeypatch):

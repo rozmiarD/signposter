@@ -9,8 +9,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from signposter.comments import contains_auto_close_keyword
+
 PLAN_VERSION = "planner.v0.1"
-AUTO_CLOSE_RE = re.compile(r"\b(closes|fixes|resolves)\s+#\d+", re.IGNORECASE)
 
 WORKER_ISSUE_PREFERRED_MIN_LINES = 60
 WORKER_ISSUE_PREFERRED_MAX_LINES = 120
@@ -153,7 +154,7 @@ def validate_planner_plan(plan: dict[str, Any]) -> list[str]:
         searchable = " ".join(
             str(issue.get(field, "")) for field in ["title", "body", "acceptance"]
         )
-        if AUTO_CLOSE_RE.search(searchable):
+        if contains_auto_close_keyword(searchable):
             errors.append(f"{key}: contains auto-close keyword")
 
     for issue in issues:

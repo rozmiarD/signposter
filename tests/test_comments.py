@@ -3,6 +3,7 @@
 from signposter.comments import (
     TRANSITION_COMMENT_MAX_CHARS,
     audit_github_comment_body,
+    contains_auto_close_keyword,
     ensure_github_comment_body,
     format_claim_comment,
     format_complete_comment,
@@ -101,6 +102,28 @@ def test_comment_audit_blocks_auto_close_issue_variant():
 
     assert not audit.valid
     assert "auto-close keyword" in "; ".join(audit.errors)
+
+
+def test_comment_audit_blocks_auto_close_past_tense_and_urls():
+    samples = [
+        "Signposter report\n\nClosed #123",
+        "Signposter report\n\nFixed issue #123",
+        "Signposter report\n\nResolve https://github.com/acme/project/issues/123",
+        "Signposter report\n\nFixes github.com/acme/project#123",
+    ]
+
+    for sample in samples:
+        assert contains_auto_close_keyword(sample) is True
+        audit = audit_github_comment_body(sample)
+        assert not audit.valid
+        assert "auto-close keyword" in "; ".join(audit.errors)
+
+
+def test_comment_audit_allows_related_issue_reference():
+    body = "Signposter report\n\nRelated issue: #123"
+
+    assert contains_auto_close_keyword(body) is False
+    assert audit_github_comment_body(body).valid
 
 
 def test_comment_audit_blocks_obvious_secret_material():
