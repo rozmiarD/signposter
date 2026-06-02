@@ -1245,6 +1245,10 @@ class ReviewArtifactValidation:
     errors: list[str]
     opinion: ReviewerOpinion
     notes: list[str]
+    raw_path: str | None = None
+    raw_exists: bool = False
+    raw_stale_signal: str | None = None
+    guidance: list[str] | None = None
 
 
 def parse_reviewer_opinion(text: str) -> ReviewerOpinion:
@@ -1348,6 +1352,13 @@ def validate_review_artifact(
     ]
 
     if not resolved_summary_path:
+        raw_path = _review_raw_path_for_summary(summary_path)
+        raw_exists = raw_path is not None and Path(raw_path).exists()
+        raw_stale_signal = (
+            find_stale_or_failover_signal(Path(raw_path).read_text(encoding="utf-8"))
+            if raw_path and raw_exists
+            else None
+        )
         return ReviewArtifactValidation(
             pr_number=pr_number,
             summary_path=summary_path,
@@ -1355,6 +1366,13 @@ def validate_review_artifact(
             errors=[f"summary artifact missing: {summary_path}"],
             opinion=ReviewerOpinion(None, None, None, None, None, None, None, [], None, ""),
             notes=notes,
+            raw_path=raw_path,
+            raw_exists=raw_exists,
+            raw_stale_signal=raw_stale_signal,
+            guidance=[
+                "write a parser-compatible reviewer summary before review gate",
+                "keep raw reviewer output local for diagnostic evidence",
+            ],
         )
 
     with open(resolved_summary_path, encoding="utf-8") as f:
@@ -1362,9 +1380,18 @@ def validate_review_artifact(
     opinion = parse_reviewer_opinion(text)
     errors: list[str] = []
     stale_signal = find_stale_or_failover_signal(text)
+    raw_path = _review_raw_path_for_summary(resolved_summary_path)
+    raw_exists = raw_path is not None and Path(raw_path).exists()
+    raw_stale_signal = (
+        find_stale_or_failover_signal(Path(raw_path).read_text(encoding="utf-8"))
+        if raw_path and raw_exists
+        else None
+    )
 
     if stale_signal:
         errors.append(f"Artifact contains unsafe execution marker: {stale_signal}")
+    if raw_stale_signal:
+        errors.append(f"Raw artifact contains unsafe execution marker: {raw_stale_signal}")
     if opinion.verdict not in ("APPROVE", "NEEDS_CHANGES", "BLOCK"):
         errors.append("Verdict must be APPROVE, NEEDS_CHANGES, or BLOCK")
     if opinion.confidence is None:
@@ -1389,7 +1416,43 @@ def validate_review_artifact(
         errors=errors,
         opinion=opinion,
         notes=notes,
+        raw_path=raw_path,
+        raw_exists=raw_exists,
+        raw_stale_signal=raw_stale_signal,
+        guidance=_review_artifact_guidance(
+            errors=errors,
+            raw_exists=raw_exists,
+        ),
     )
+
+
+def _review_raw_path_for_summary(summary_path: str) -> str | None:
+    path = Path(summary_path)
+    raw_name = (
+        path.name.removesuffix(".summary.md") + ".raw.txt"
+        if path.name.endswith(".summary.md")
+        else f"pr-{path.stem}-reviewer.raw.txt"
+    )
+    raw_path = path.with_name(raw_name)
+    if raw_path.is_absolute():
+        return str(raw_path)
+    resolved = _resolve_existing_artifact_path(str(raw_path))
+    return resolved or str(raw_path)
+
+
+def _review_artifact_guidance(*, errors: list[str], raw_exists: bool) -> list[str]:
+    guidance: list[str] = []
+    if errors:
+        guidance.append("repair reviewer artifact before review gate or submit")
+    if any("unsafe execution marker" in error.lower() for error in errors):
+        guidance.append(
+            "preserve unsafe backend output separately and provide clean reviewer evidence"
+        )
+    if not raw_exists:
+        guidance.append("raw reviewer artifact not found; keep raw local for backend runs")
+    if not guidance:
+        guidance.append("reviewer artifact contract is ready for review gate")
+    return guidance
 
 
 def format_review_artifact_validation(result: ReviewArtifactValidation) -> str:
@@ -1410,10 +1473,24 @@ def format_review_artifact_validation(result: ReviewArtifactValidation) -> str:
     lines.append("")
     lines.append("Status:")
     lines.append(f"  {result.status}")
+    if result.raw_path:
+        lines.append("")
+        lines.append("Raw artifact:")
+        lines.append(f"  path: {result.raw_path}")
+        lines.append(f"  exists: {'yes' if result.raw_exists else 'no'}")
+    if result.raw_stale_signal:
+        lines.append("")
+        lines.append("Raw unsafe marker:")
+        lines.append(f"  {result.raw_stale_signal}")
     if result.errors:
         lines.append("")
         lines.append("Errors:")
         lines.extend(f"  - {error}" for error in result.errors)
+    guidance = result.guidance or []
+    if guidance:
+        lines.append("")
+        lines.append("Guidance:")
+        lines.extend(f"  - {item}" for item in guidance)
     lines.append("")
     lines.append("Notes:")
     lines.extend(f"  {note}" for note in result.notes)
@@ -1493,6 +1570,28 @@ def evaluate_review_gate(
             notes=notes,
         )
 
+    artifact_validation = validate_review_artifact(
+        pr_number,
+        summary_path=resolved_summary_path,
+    )
+    unsafe_artifact_errors = [
+        error for error in artifact_validation.errors
+        if "unsafe execution marker" in error.lower()
+    ]
+    if unsafe_artifact_errors:
+        reason = _review_artifact_gate_reason(unsafe_artifact_errors[0])
+        return ReviewGateResult(
+            pr_number=pr_number,
+            status=f"blocked — reviewer artifact preflight: {reason}",
+            reason=reason,
+            opinion=artifact_validation.opinion,
+            gate_pass=False,
+            merge_eligible=False,
+            automerge_eligible=False,
+            summary_path=resolved_summary_path,
+            notes=notes,
+        )
+
     with open(resolved_summary_path, encoding="utf-8") as f:
         text = f.read()
 
@@ -1568,7 +1667,23 @@ def evaluate_review_gate(
         automerge_eligible=automerge_ok,
         summary_path=resolved_summary_path,
         notes=notes,
-    )
+        )
+
+
+def _review_artifact_gate_reason(error: str) -> str:
+    summary_prefix = "Artifact contains unsafe execution marker: "
+    raw_prefix = "Raw artifact contains unsafe execution marker: "
+    if error.startswith(summary_prefix):
+        return (
+            "reviewer artifact contains stale/failover signal: "
+            f"{error.removeprefix(summary_prefix)}"
+        )
+    if error.startswith(raw_prefix):
+        return (
+            "reviewer raw artifact contains stale/failover signal: "
+            f"{error.removeprefix(raw_prefix)}"
+        )
+    return f"reviewer artifact preflight: {error}"
 
 
 def format_review_gate(result: ReviewGateResult) -> str:
