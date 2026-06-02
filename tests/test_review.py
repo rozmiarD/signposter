@@ -365,7 +365,13 @@ def test_build_review_prompt_contains_contract_and_rules():
     assert "blocks automerge" in prompt.lower()
     assert "MUST NOT claim that you submitted a GitHub review" in prompt
     assert "## Selected Role Policy" in prompt
+    assert "backend:" in prompt
+    assert "backend reason:" in prompt
     assert "selected reasoning effort" in prompt
+    assert "## Prompt Contract" in prompt
+    assert "expected output format:" in prompt
+    assert "artifact requirements:" in prompt
+    assert "uncertainty handling:" in prompt
 
 
 def test_write_prompt_refuses_when_plan_not_ready():
