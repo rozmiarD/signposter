@@ -1974,7 +1974,7 @@ def submit_review(
             "error": "Empty review body",
         }
     try:
-        ensure_github_comment_body(plan.body)
+        review_body = ensure_github_comment_body(plan.body)
     except ValueError as e:
         return {
             "mode": "apply_blocked",
@@ -1987,7 +1987,7 @@ def submit_review(
     # Write a temporary body file for safe quoting
     import tempfile
     with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as tf:
-        tf.write(plan.body)
+        tf.write(review_body)
         body_file = tf.name
 
     try:

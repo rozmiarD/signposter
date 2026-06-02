@@ -1335,6 +1335,29 @@ def test_format_review_gate_contains_safety_notes():
     assert "merge eligible: yes" in output
 
 
+def test_build_review_body_redacts_secret_like_finding():
+    from signposter.review import ReviewerOpinion, ReviewGateResult, build_review_body
+
+    token = "sk-" + ("A" * 30)
+    op = ReviewerOpinion(
+        verdict="APPROVE", confidence=0.95, risk="low",
+        scope_match="yes", ci_considered="yes",
+        merge_recommendation="yes", automerge_eligible="no",
+        findings=[f"Output included {token}."], reasoning=None, raw_text=""
+    )
+    gate = ReviewGateResult(
+        pr_number=5, status="pass", reason="good",
+        opinion=op, gate_pass=True, merge_eligible=True, automerge_eligible=False,
+        summary_path="artifacts/runs/pr-5-reviewer.summary.md",
+        notes=[]
+    )
+
+    body = build_review_body(op, gate)
+
+    assert token not in body
+    assert "[REDACTED:openai-token]" in body
+
+
 def test_validate_review_artifact_blocks_unsafe_marker(tmp_path):
     from signposter.review import validate_review_artifact
 
