@@ -1974,7 +1974,7 @@ def test_build_planner_next_from_status_respects_closed_dependencies(
         manifest,
         {
             10: "closed",
-            11: "open",
+            11: "ready",
             12: "open",
             13: "open",
             14: "open",
@@ -2023,6 +2023,61 @@ def test_build_planner_next_from_status_waits_for_open_dependency(
     assert result["next"] is None
     assert result["blocked"][0]["key"] == "WATCH-002"
     assert result["waiting"][0]["key"] == "WATCH-003"
+
+
+def test_planner_root_ready_waiting_and_dependency_ready_consistency(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+
+    assert "state:ready" in seed_plan["issues"][0]["labels"]
+    assert "state:ready" not in seed_plan["issues"][1]["labels"]
+
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+
+    root_open_status = build_planner_status(
+        manifest,
+        {10: "open", 11: "open", 12: "open", 13: "open", 14: "open"},
+    )
+    root_result = build_planner_next_from_status(root_open_status)
+
+    assert root_result["status"] == "ready"
+    assert root_result["next"]["key"] == "WATCH-001"
+    assert root_result["waiting"][0]["key"] == "WATCH-002"
+    assert root_result["waiting"][0]["missing_dependencies"] == ["WATCH-001"]
+
+    missing_ready_status = build_planner_status(
+        manifest,
+        {10: "done", 11: "open", 12: "open", 13: "open", 14: "open"},
+    )
+    missing_ready_result = build_planner_next_from_status(missing_ready_status)
+
+    assert missing_ready_result["status"] == "blocked"
+    assert missing_ready_result["next"] is None
+    assert missing_ready_result["blocked"][0]["key"] == "WATCH-002"
+    assert missing_ready_result["blocked"][0]["reconcile_issues"] == [10]
+
+    dependency_ready_status = build_planner_status(
+        manifest,
+        {10: "done", 11: "ready", 12: "open", 13: "open", 14: "open"},
+    )
+    dependency_ready_result = build_planner_next_from_status(dependency_ready_status)
+
+    assert dependency_ready_result["status"] == "ready"
+    assert dependency_ready_result["next"]["key"] == "WATCH-002"
+    assert dependency_ready_result["next"]["state"] == "ready"
 
 
 def test_format_planner_next_from_status_contains_safety_notes(
@@ -2280,7 +2335,10 @@ def test_build_planner_run_plan_from_status_reports_advance_candidate(
     )
 
     assert result["status"] == "ready"
-    assert result["next"]["next"]["key"] == "WATCH-002"
+    assert result["next"]["status"] == "blocked"
+    assert result["next"]["reason"] == (
+        "dependency-ready open task is missing GitHub label state:ready"
+    )
     assert result["advance_candidates"] == [
         {
             "issue": 10,
