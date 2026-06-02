@@ -164,6 +164,30 @@ def test_validate_worker_summary_artifact_blocks_incomplete_summary(tmp_path):
     assert "validation evidence" in result.missing
 
 
+def test_validate_worker_summary_artifact_requires_schema_fields(tmp_path):
+    path = tmp_path / "issue-72-worker.summary.md"
+    path.write_text(
+        "# Signposter Execution Summary\n"
+        "**Exit Code:** 0\n"
+        "**Acceptance:** pass\n"
+        "## Validation evidence\n"
+        "Targeted validation passed\n"
+        "Full validation passed\n"
+        "## Safety\n"
+        "No GitHub mutation was performed.\n"
+        "No unrelated files were changed.\n",
+        encoding="utf-8",
+    )
+
+    result = validate_worker_summary_artifact(72, runs_dir=tmp_path)
+
+    assert result.status == "blocked"
+    assert "repository" in result.missing
+    assert "agent" in result.missing
+    assert "dirty guard" in result.missing
+    assert "gate recommendation" in result.missing
+
+
 def test_validate_worker_summary_artifact_blocks_unsafe_marker(tmp_path):
     plan = plan_worker_summary(repo="test/repo", issue=72, runs_dir=tmp_path)
     path = tmp_path / "issue-72-worker.summary.md"
