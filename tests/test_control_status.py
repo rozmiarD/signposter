@@ -22,6 +22,8 @@ def test_control_plane_status_formats_empty_read_only_view() -> None:
     assert result.status == "ready"
     assert "Signposter Control Plane Status" in output
     assert "Agreement:\n  status: not evaluated" in output
+    assert "Refresh:\n  mode: single-snapshot" in output
+    assert "auto-refresh: off" in output
     assert "manifest: not provided" in output
     assert "Scheduler:\n  status: not evaluated" in output
     assert "Orchestrator:\n  status: not evaluated" in output
@@ -87,6 +89,10 @@ def test_control_plane_status_formats_active_sources() -> None:
         planner_run=planner,
         scheduler_next=scheduler,
         orchestrator_next=orchestrator,
+        refresh_command=(
+            "signposter control-plane status --repo ExatronOmega/signposter "
+            "--manifest /tmp/manifest.json --sync-github"
+        ),
         bugs=(bug,),
     )
 
@@ -98,6 +104,10 @@ def test_control_plane_status_formats_active_sources() -> None:
     assert "planner issue: #157" in output
     assert "scheduler issue: #157" in output
     assert "active issues: none" in output
+    assert (
+        "command: signposter control-plane status --repo ExatronOmega/signposter "
+        "--manifest /tmp/manifest.json --sync-github"
+    ) in output
     assert "counts: total=5 ready=1 active=0 merged=4 blocked=0" in output
     assert "next: H045E (#157, state=ready)" in output
     assert "next: #157 — H045E" in output
@@ -367,6 +377,10 @@ def test_control_plane_status_cli_combines_sources(
     output = capsys.readouterr().out
     assert exc_info.value.code in (None, 0)
     assert "Signposter Control Plane Status" in output
+    assert "Refresh:" in output
+    assert "command: signposter control-plane status --repo ExatronOmega/signposter" in output
+    assert f"--manifest {manifest}" in output
+    assert "--sync-github" in output
     assert "Planner:" in output
     assert "Scheduler:" in output
     assert "Orchestrator:" in output

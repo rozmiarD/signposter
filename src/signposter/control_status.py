@@ -18,6 +18,7 @@ class ControlPlaneStatus:
     scheduler: SchedulerNext | None
     orchestrator: OrchestratorNext | None
     agreement: dict[str, Any]
+    refresh: dict[str, Any]
     bugs: tuple[BugLedgerEntry, ...]
     notes: tuple[str, ...]
 
@@ -28,6 +29,7 @@ def build_control_plane_status(
     planner_run: dict[str, Any] | None = None,
     scheduler_next: SchedulerNext | None = None,
     orchestrator_next: OrchestratorNext | None = None,
+    refresh_command: str | None = None,
     bugs: tuple[BugLedgerEntry, ...] = (),
 ) -> ControlPlaneStatus:
     """Build a bounded status object from existing source-of-truth results."""
@@ -62,6 +64,15 @@ def build_control_plane_status(
         scheduler=scheduler_next,
         orchestrator=orchestrator_next,
         agreement=agreement,
+        refresh={
+            "mode": "single-snapshot",
+            "auto_refresh": "off",
+            "command": refresh_command,
+            "reason": (
+                "explicit reruns keep GitHub reads bounded and avoid hidden "
+                "workflow polling"
+            ),
+        },
         bugs=bugs,
         notes=(
             "Read-only control-plane status.",
@@ -212,6 +223,18 @@ def format_control_plane_status(result: ControlPlaneStatus) -> str:
             f"  orchestrator issue: {_format_issue_ref(agreement.get('orchestrator_issue'))}",
             f"  active issues: {_format_issue_refs(agreement.get('active_issues'))}",
             f"  reason: {agreement.get('reason', 'unknown')}",
+        ]
+    )
+
+    refresh = result.refresh
+    lines.extend(
+        [
+            "",
+            "Refresh:",
+            f"  mode: {refresh.get('mode', 'unknown')}",
+            f"  auto-refresh: {refresh.get('auto_refresh', 'off')}",
+            f"  command: {refresh.get('command') or 'rerun the same explicit status command'}",
+            f"  reason: {refresh.get('reason', 'unknown')}",
         ]
     )
 
