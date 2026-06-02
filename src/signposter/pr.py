@@ -10,6 +10,7 @@ import shlex
 import subprocess
 from dataclasses import dataclass
 
+from signposter.comments import contains_auto_close_keyword
 from signposter.handoff import HandoffPlan, plan_handoff_for_issue
 
 
@@ -200,6 +201,8 @@ def plan_pr_for_issue(
         status = "blocked — worktree has uncommitted changes; run handoff commit/push first"
     elif not changed_files:
         status = f"blocked — no committed changes detected against {base_branch}"
+    elif contains_auto_close_keyword(pr_title) or contains_auto_close_keyword(pr_body):
+        status = "blocked — suggested PR metadata contains auto-close keyword"
     else:
         status = "ready"
 
