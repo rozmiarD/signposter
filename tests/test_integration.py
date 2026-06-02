@@ -11,7 +11,8 @@ from signposter.integration import (
 
 def test_integration_plan_ready_for_merged_pr():
     with patch("signposter.integration._fetch_pr_merge_details") as mock_pr, \
-         patch("signposter.integration.fetch_issue_by_number") as mock_issue:
+         patch("signposter.integration.fetch_issue_by_number") as mock_issue, \
+         patch("signposter.integration._fetch_main_ci_status") as mock_ci:
 
         mock_pr.return_value = {
             "number": 5,
@@ -27,6 +28,7 @@ def test_integration_plan_ready_for_merged_pr():
             labels = ["state:done", "area:docs"]
 
         mock_issue.return_value = FakeIssue()
+        mock_ci.return_value = "pass"
 
         with patch("signposter.integration.fetch_issue_context") as mock_ctx:
             mock_ctx.return_value = {"state": "OPEN"}
@@ -42,6 +44,7 @@ def test_integration_plan_ready_for_merged_pr():
         assert plan.proposed_workflow_state == "state:merged"
         assert plan.close_issue is True
         assert plan.close_reason == "completed"
+        mock_ci.assert_called_once_with("test/repo", "abc123def456")
 
 
 def test_integration_plan_blocks_when_pr_not_merged():
@@ -372,6 +375,32 @@ def test_fetch_main_ci_status_passes_on_latest_success(monkeypatch):
     monkeypatch.setattr("subprocess.run", lambda *a, **k: FakeProc())
 
     assert _fetch_main_ci_status("test/repo") == "pass"
+
+
+def test_fetch_main_ci_status_filters_by_commit_when_provided(monkeypatch):
+    from signposter.integration import _fetch_main_ci_status
+
+    captured: dict[str, list[str]] = {}
+
+    class FakeProc:
+        returncode = 0
+        stdout = (
+            '[{"status":"completed","conclusion":"success",'
+            '"workflowName":"CI","headBranch":"main","headSha":"abc123"}]'
+        )
+        stderr = ""
+
+    def fake_run(args, **kwargs):
+        captured["args"] = args
+        return FakeProc()
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    assert _fetch_main_ci_status("test/repo", "abc123") == "pass"
+    assert "--branch" in captured["args"]
+    assert "--commit" in captured["args"]
+    assert captured["args"][captured["args"].index("--branch") + 1] == "main"
+    assert captured["args"][captured["args"].index("--commit") + 1] == "abc123"
 
 
 def test_fetch_main_ci_status_failing_on_latest_failure(monkeypatch):

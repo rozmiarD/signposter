@@ -118,32 +118,40 @@ def _fetch_pr_merge_details(repo: str, pr_number: int) -> dict[str, Any]:
     )
 
 
-def _fetch_main_ci_status(repo: str) -> str:
-    """Return latest main CI status using gh run list.
+def _fetch_main_ci_status(repo: str, commit_sha: str | None = None) -> str:
+    """Return main CI status using gh run list.
+
+    When a merge commit is known, select the run by branch and commit SHA. This
+    avoids accepting an older green main run after a PR merge while the new push
+    run is still queued or missing from the Actions API.
 
     Conservative mapping:
-    - pass: latest main CI run is completed with success
+    - pass: selected main CI run is completed with success
     - failing: latest main CI run completed with a non-success conclusion
     - pending: latest main CI run is queued/in_progress/waiting/etc.
     - unknown: gh failed, no runs found, or payload shape is unexpected
     """
+    command = [
+        "gh",
+        "run",
+        "list",
+        "-R",
+        repo,
+        "--branch",
+        "main",
+        "--workflow",
+        "CI",
+        "--limit",
+        "1",
+        "--json",
+        "status,conclusion,workflowName,headBranch,headSha,databaseId",
+    ]
+    if commit_sha:
+        command[7:7] = ["--commit", commit_sha]
+
     try:
         result = subprocess.run(
-            [
-                "gh",
-                "run",
-                "list",
-                "-R",
-                repo,
-                "--branch",
-                "main",
-                "--workflow",
-                "CI",
-                "--limit",
-                "1",
-                "--json",
-                "status,conclusion,workflowName,headBranch,headSha,databaseId",
-            ],
+            command,
             capture_output=True,
             text=True,
             timeout=30,
@@ -243,7 +251,7 @@ def plan_integration_for_pr(repo: str, pr_number: int) -> IntegrationPlan:
             pass
 
     # Main CI status — required before integration apply can close the issue.
-    main_ci_status = _fetch_main_ci_status(repo)
+    main_ci_status = _fetch_main_ci_status(repo, merge_commit)
 
     # Eligibility
     status = "ready"
