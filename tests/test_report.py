@@ -11,6 +11,7 @@ from unittest.mock import patch
 import pytest
 
 from signposter.report import (
+    REPORT_COMMENT_MAX_CHARS,
     _make_bounded_excerpt,
     derive_raw_path,
     find_report_artifact_safety_signal,
@@ -108,6 +109,61 @@ No GitHub mutation was performed.
     assert "PASS — scoped report behavior is complete." in body
     assert "pytest tests/test_report.py -q" in body
     assert "noisy provider banner" not in body
+
+
+def test_format_comment_body_is_bounded_for_huge_summary_and_raw():
+    huge_validation = "\n".join(f"- validation evidence line {i}" for i in range(500))
+    summary = f"""# Signposter Execution Summary
+**Agent:** worker
+**Exit Code:** 0
+
+## Scoped completion evidence
+
+PASS — report body guard implemented.
+
+## Validation evidence
+
+{huge_validation}
+"""
+    raw = "\n".join(f"raw execution line {i}" for i in range(2000))
+
+    body = format_comment(
+        summary,
+        "ExatronOmega/signposter",
+        243,
+        summary_path="artifacts/runs/issue-243-worker.summary.md",
+        raw_path="artifacts/runs/issue-243-worker.raw.txt",
+        raw_content=raw,
+    )
+
+    assert len(body) <= REPORT_COMMENT_MAX_CHARS
+    assert "Signposter Runner Report" in body
+    assert "Key Evidence Excerpt (bounded)" in body
+    assert "omitted; excerpt limited" in body
+    assert "raw execution line 1999" not in body
+
+
+def test_format_comment_bounds_oversized_metadata():
+    huge_value = "x" * (REPORT_COMMENT_MAX_CHARS * 2)
+    summary = f"""# Signposter Execution Summary
+**Agent:** worker {huge_value}
+**Exit Code:** 0
+"""
+
+    body = format_comment(
+        summary,
+        "ExatronOmega/signposter",
+        243,
+        summary_path=f"artifacts/runs/{huge_value}/issue-243-worker.summary.md",
+        raw_path=f"artifacts/runs/{huge_value}/issue-243-worker.raw.txt",
+        prompt_path=f"artifacts/prompts/{huge_value}/issue-243.md",
+        raw_content=huge_value,
+    )
+
+    assert len(body) <= REPORT_COMMENT_MAX_CHARS
+    assert "Signposter Runner Report" in body
+    assert "... (truncated)" in body
+    assert huge_value not in body
 
 
 def test_format_comment_shows_missing_artifacts():
