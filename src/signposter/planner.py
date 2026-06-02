@@ -1524,8 +1524,14 @@ def build_planner_advance_plan_from_status(
         for task in tasks
         if source_key in task.get("depends_on", [])
     ]
+    completed = {
+        task["key"]
+        for task in tasks
+        if str(task.get("state", "")).lower() in COMPLETED_PLANNER_STATES
+    }
 
     targets = []
+    blocked_downstream = []
     planned_github_mutations = []
     for task in downstream:
         github_issue = task.get("github_issue")
@@ -1536,6 +1542,19 @@ def build_planner_advance_plan_from_status(
         if state not in {"open", "unknown"}:
             continue
         if "state:ready" in labels:
+            continue
+        missing_dependencies = [
+            dependency
+            for dependency in task.get("depends_on", [])
+            if dependency not in completed
+        ]
+        if missing_dependencies:
+            blocked_downstream.append(
+                {
+                    "key": task["key"],
+                    "missing_dependencies": missing_dependencies,
+                }
+            )
             continue
 
         target = {
@@ -1562,6 +1581,11 @@ def build_planner_advance_plan_from_status(
         reasons.append("one or more downstream tasks can be promoted")
     elif downstream:
         reasons.append("no downstream task is currently promotable")
+        if blocked_downstream:
+            reasons.append("one or more downstream tasks are waiting for dependencies")
+            for blocked in blocked_downstream[:3]:
+                missing = ", ".join(blocked["missing_dependencies"])
+                reasons.append(f"{blocked['key']} waits for dependencies: {missing}")
     else:
         reasons.append("source task has no downstream dependents")
 
