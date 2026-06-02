@@ -494,6 +494,43 @@ def test_orchestrator_step_blocks_execute_without_flag() -> None:
     assert result.stop_reason == "Execution backend requires explicit --execute"
 
 
+def test_orchestrator_step_apply_blocks_takeover_until_manual_recovery(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    issue = LabeledItem(
+        number=46,
+        title="Issue 46",
+        html_url="https://github.com/example/repo/issues/46",
+        labels=["state:active"],
+        item_type="issue",
+        updated_at="2026-05-20T00:00:00Z",
+    )
+    run_command = Mock()
+
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=issue),
+    ):
+        result = run_orchestrator_step(
+            "ExatronOmega/signposter",
+            issue=46,
+            apply=True,
+            execute=True,
+            run_command=run_command,
+        )
+
+    assert result.status == "blocked"
+    assert result.applied is False
+    assert result.stop_reason == (
+        "takeover plan requires explicit manual recovery before apply: "
+        "resume-existing-worktree"
+    )
+    assert any("Takeover apply guard stopped before running" in note for note in result.notes)
+    run_command.assert_not_called()
+
+
 def test_orchestrator_loop_stops_after_dry_run_step() -> None:
     lifecycle_next = _next(
         workflow_state="state:ready",
