@@ -61,6 +61,10 @@ def test_control_plane_status_formats_active_sources() -> None:
         reason="selected",
         skipped=[],
         notes=[],
+        active_notes=[
+            "#156: worktree=missing, prompt=present, summary=missing, "
+            "activity_age=stale(3d), category=stale-active, resume=needs inspection"
+        ],
         active_counts={"resumable": 1},
     )
     orchestrator = SimpleNamespace(
@@ -91,8 +95,40 @@ def test_control_plane_status_formats_active_sources() -> None:
     assert "counts: total=5 ready=1 active=0 merged=4 blocked=0" in output
     assert "next: H045E (#157, state=ready)" in output
     assert "next: #157 — H045E" in output
+    assert "active diagnostics:" in output
+    assert "#156: worktree=missing, prompt=present, summary=missing" in output
     assert "action: claim-issue" in output
     assert "BUG-0001 [runtime-blocker] issue=#156" in output
+
+
+def test_control_plane_status_surfaces_active_issue_stuck_diagnostics() -> None:
+    scheduler = SchedulerNext(
+        repo="ExatronOmega/signposter",
+        status="ready",
+        issue=None,
+        reason="no ready issue",
+        skipped=["#2: state:active"],
+        notes=[],
+        active_notes=[
+            "#2: worktree=missing, prompt=missing, summary=missing, "
+            "activity_age=stale(4d), category=stale-active, resume=needs inspection"
+        ],
+        active_counts={"stale-active": 1},
+    )
+
+    result = build_control_plane_status(
+        repo="ExatronOmega/signposter",
+        scheduler_next=scheduler,
+    )
+
+    output = format_control_plane_status(result)
+
+    assert result.status == "ready"
+    assert "active: stale-active=1" in output
+    assert "active diagnostics:" in output
+    assert "#2: worktree=missing, prompt=missing, summary=missing" in output
+    assert "category=stale-active" in output
+    assert "resume=needs inspection" in output
 
 
 def test_control_plane_status_surfaces_blocked_state() -> None:
