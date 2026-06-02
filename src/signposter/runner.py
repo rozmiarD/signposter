@@ -49,6 +49,10 @@ PROMPT_COMPACTION_LIMITS = {
     "issue_body_chars": 3200,
     "comments_lines": 16,
     "comments_chars": 1200,
+    "worker_issue_body_lines": 32,
+    "worker_issue_body_chars": 2200,
+    "worker_comments_lines": 8,
+    "worker_comments_chars": 700,
     "scan_lines": 60,
     "scan_chars": 3600,
     "claim_lines": 40,
@@ -667,6 +671,24 @@ def _compact_comments(text: str | None) -> str:
     )
 
 
+def _compact_worker_issue_body(text: str | None) -> str:
+    return _compact_prompt_text(
+        text,
+        max_lines=PROMPT_COMPACTION_LIMITS["worker_issue_body_lines"],
+        max_chars=PROMPT_COMPACTION_LIMITS["worker_issue_body_chars"],
+        empty_fallback="Issue body: empty",
+    )
+
+
+def _compact_worker_comments(text: str | None) -> str:
+    return _compact_prompt_text(
+        text,
+        max_lines=PROMPT_COMPACTION_LIMITS["worker_comments_lines"],
+        max_chars=PROMPT_COMPACTION_LIMITS["worker_comments_chars"],
+        empty_fallback="(no comments)",
+    )
+
+
 def _compact_evidence_text(
     text: str | None,
     *,
@@ -818,7 +840,9 @@ def render_prompt(
         labels = [lbl["name"] for lbl in issue_context.get("labels", [])]
         labels_str = ", ".join(labels) if labels else "(none)"
         body = issue_context.get("body") or ""
-        body_text = _compact_issue_body(body)
+        body_text = (
+            _compact_worker_issue_body(body) if d.role == "worker" else _compact_issue_body(body)
+        )
         state = issue_context.get("state", "unknown")
         comments = issue_context.get("comments", [])
         comments_text = ""
@@ -829,14 +853,27 @@ def render_prompt(
                 author = c.get("author", {}).get("login", "unknown")
                 body_snip = (c.get("body", "") or "").strip()
                 comments_lines.append(f"- @{author}: {body_snip}")
-            comments_text = _compact_comments("\n".join(comments_lines))
+            comments_joined = "\n".join(comments_lines)
+            comments_text = (
+                _compact_worker_comments(comments_joined)
+                if d.role == "worker"
+                else _compact_comments(comments_joined)
+            )
         else:
             comments_text = "(no comments)"
         issue_state = state
     else:
         labels_str = ", ".join(item.labels) if item.labels else "(none)"
-        body_text = _compact_issue_body("Issue body: not embedded (context fetch failed)")
-        comments_text = _compact_comments("(not embedded)")
+        body_text = (
+            _compact_worker_issue_body("Issue body: not embedded (context fetch failed)")
+            if d.role == "worker"
+            else _compact_issue_body("Issue body: not embedded (context fetch failed)")
+        )
+        comments_text = (
+            _compact_worker_comments("(not embedded)")
+            if d.role == "worker"
+            else _compact_comments("(not embedded)")
+        )
         issue_state = d.state or "unknown"
 
     role_profile = _get_role_profile(d.role)
