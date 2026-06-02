@@ -136,10 +136,12 @@ def test_cleanup_plan_blocked_when_missing_state_merged_label():
 def test_cleanup_apply_dry_run_does_not_call_subprocess():
     """dry-run apply does not call subprocess."""
     plan = _make_plan()
-    with patch("signposter.cleanup.plan_cleanup_for_pr", return_value=plan):
+    with patch("signposter.cleanup.plan_cleanup_for_pr", return_value=plan), \
+         patch("signposter.cleanup.subprocess.run") as mock_run:
         result = apply_cleanup("ExatronOmega/signposter", 5, apply=False)
-        assert result["mode"] == "dry_run"
-        assert "DRY RUN" in format_cleanup_apply_dry_run(plan)
+    mock_run.assert_not_called()
+    assert result["mode"] == "dry_run"
+    assert "DRY RUN" in format_cleanup_apply_dry_run(plan)
 
 
 def test_cleanup_apply_refuses_when_plan_not_ready():

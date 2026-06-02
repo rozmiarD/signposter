@@ -244,6 +244,33 @@ def test_report_main_blocks_stale_artifact_before_github_comment(mock_post, tmp_
     mock_post.assert_not_called()
 
 
+@patch("signposter.report.post_comment")
+def test_report_main_dry_run_passes_dry_run_to_post_comment(
+    mock_post,
+    tmp_path: Path,
+    capsys,
+):
+    summary = tmp_path / "issue-72-worker.summary.md"
+    summary.write_text(
+        "# Signposter Execution Summary\n"
+        "**Exit Code:** 0\n"
+        "\n"
+        "## Scoped completion evidence\n"
+        "\n"
+        "PASS - report dry-run test.\n",
+        encoding="utf-8",
+    )
+    mock_post.return_value = ["gh issue comment 72 -R test/repo --body ... # dry-run"]
+
+    exit_code = report_main("test/repo", 72, summary, apply=False)
+
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "=== Signposter Report (dry-run mode)" in out
+    assert "=== Dry-run: No GitHub mutation performed ===" in out
+    assert mock_post.call_args.kwargs["dry_run"] is True
+
+
 # --- ANSI sanitization tests (HARDENING-002) ---
 
 
