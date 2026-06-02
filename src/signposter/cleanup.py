@@ -154,11 +154,22 @@ def plan_cleanup_for_pr(repo: str, pr_number: int) -> CleanupPlan:
         )
     elif not has_state_merged_label:
         status = f"blocked — issue #{associated_issue} does not have label state:merged"
-    elif not worktree_exists:
-        # Worktree already gone → no-op completed (not a failure)
+    elif not worktree_exists and not local_branch_exists:
+        # Worktree and local branch already gone -> no-op completed (not a failure)
         status = "completed"
         notes = [
             "Worktree already absent.",
+            "Local branch already absent.",
+            "No local worktree was removed.",
+            "No local branch was deleted.",
+            "No GitHub mutation was performed.",
+        ]
+    elif not worktree_exists:
+        # Worktree already gone, but branch remains. Cleanup can finish locally.
+        status = "ready"
+        notes = [
+            "Worktree already absent.",
+            "Local branch is still present and can be deleted.",
             "No local worktree was removed.",
             "No local branch was deleted.",
             "No GitHub mutation was performed.",
@@ -274,6 +285,8 @@ def apply_cleanup(
         return {
             "mode": "dry_run",
             "plan": plan,
+            "would_execute": plan.status == "ready",
+            "already_completed": plan.status == "completed",
         }
 
     if _needs_post_integration_refresh(plan):
@@ -289,12 +302,12 @@ def apply_cleanup(
             "error": f"Refusing cleanup apply: plan status is '{plan.status}'",
         }
 
-    if not plan.worktree_exists:
+    if not plan.worktree_exists and not plan.local_branch_exists:
         # Should not happen if plan was ready, but defensive
         return {
             "mode": "apply_blocked",
             "plan": plan,
-            "error": "Worktree does not exist (plan status inconsistency)",
+            "error": "Worktree and local branch do not exist (plan status inconsistency)",
         }
 
     results: list[str] = []
@@ -304,16 +317,19 @@ def apply_cleanup(
     branch = plan.local_branch
 
     # 1. Remove worktree first (must succeed before touching branch)
-    try:
-        cmd = ["git", "worktree", "remove", "--force", worktree_path]
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        if proc.returncode != 0:
-            stderr = (proc.stderr or "").strip()[:400]
-            errors.append(f"git worktree remove failed: {stderr}")
-        else:
-            results.append(f"removed worktree: {worktree_path}")
-    except Exception as e:
-        errors.append(f"worktree removal error: {str(e)[:200]}")
+    if plan.worktree_exists:
+        try:
+            cmd = ["git", "worktree", "remove", "--force", worktree_path]
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            if proc.returncode != 0:
+                stderr = (proc.stderr or "").strip()[:400]
+                errors.append(f"git worktree remove failed: {stderr}")
+            else:
+                results.append(f"removed worktree: {worktree_path}")
+        except Exception as e:
+            errors.append(f"worktree removal error: {str(e)[:200]}")
+    else:
+        results.append("worktree already absent")
 
     if errors:
         # Fail fast — do not attempt branch deletion

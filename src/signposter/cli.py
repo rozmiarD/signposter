@@ -2527,8 +2527,9 @@ def run_cleanup_apply(args: argparse.Namespace) -> int:
         result = apply_cleanup(repo, pr, apply=do_apply)
 
         if result.get("mode") == "dry_run":
-            print(format_cleanup_apply_dry_run(result.get("plan")))
-            return 0
+            plan = result.get("plan")
+            print(format_cleanup_apply_dry_run(plan))
+            return 0 if plan and plan.status in ("ready", "completed") else 1
         elif result.get("mode") == "apply":
             print(format_cleanup_apply_result(result))
             success = result.get("success", False)
