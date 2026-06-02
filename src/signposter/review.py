@@ -1308,6 +1308,47 @@ class ReviewArtifactValidation:
     guidance: list[str] | None = None
 
 
+_REVIEW_VALID_RISKS = ("low", "medium", "high")
+_REVIEW_VALID_YES_NO = ("yes", "no")
+
+
+def _normalized_review_value(value: str | None) -> str | None:
+    return value.strip().lower() if value is not None else None
+
+
+def _format_review_field_value(value: str | None) -> str:
+    return value if value is not None else "missing"
+
+
+def _review_confidence_contract_error(
+    confidence: float | None,
+    *,
+    threshold: float | None = None,
+) -> str | None:
+    if confidence is None:
+        return "Confidence must be present and parseable"
+    if confidence < 0 or confidence > 1:
+        return "Confidence must be between 0 and 1"
+    if threshold is not None and confidence < threshold:
+        return f"Confidence below threshold ({confidence} < {threshold})"
+    return None
+
+
+def _review_enum_contract_error(
+    field: str,
+    value: str | None,
+    allowed: tuple[str, ...],
+) -> str | None:
+    normalized = _normalized_review_value(value)
+    if normalized in allowed:
+        return None
+    if len(allowed) == 2:
+        choices = f"{allowed[0]} or {allowed[1]}"
+    else:
+        choices = ", ".join(allowed[:-1]) + f", or {allowed[-1]}"
+    return f"{field} must be {choices}"
+
+
 def parse_reviewer_opinion(text: str) -> ReviewerOpinion:
     """Parse the structured reviewer contract from raw or summary text.
 
@@ -1451,20 +1492,22 @@ def validate_review_artifact(
         errors.append(f"Raw artifact contains unsafe execution marker: {raw_stale_signal}")
     if opinion.verdict not in ("APPROVE", "NEEDS_CHANGES", "BLOCK"):
         errors.append("Verdict must be APPROVE, NEEDS_CHANGES, or BLOCK")
-    if opinion.confidence is None:
-        errors.append("Confidence must be present and parseable")
-    elif opinion.confidence < confidence_threshold:
-        errors.append(f"Confidence below threshold ({opinion.confidence} < {confidence_threshold})")
-    if opinion.risk not in ("low", "medium", "high"):
-        errors.append("Risk must be low, medium, or high")
-    if opinion.scope_match not in ("yes", "no"):
-        errors.append("Scope match must be yes or no")
-    if opinion.ci_considered not in ("yes", "no"):
-        errors.append("CI considered must be yes or no")
-    if opinion.merge_recommendation not in ("yes", "no"):
-        errors.append("Merge recommendation must be yes or no")
-    if opinion.automerge_eligible not in ("yes", "no"):
-        errors.append("Automerge eligible must be yes or no")
+    confidence_error = _review_confidence_contract_error(
+        opinion.confidence,
+        threshold=confidence_threshold,
+    )
+    if confidence_error:
+        errors.append(confidence_error)
+    for field, value, allowed in (
+        ("Risk", opinion.risk, _REVIEW_VALID_RISKS),
+        ("Scope match", opinion.scope_match, _REVIEW_VALID_YES_NO),
+        ("CI considered", opinion.ci_considered, _REVIEW_VALID_YES_NO),
+        ("Merge recommendation", opinion.merge_recommendation, _REVIEW_VALID_YES_NO),
+        ("Automerge eligible", opinion.automerge_eligible, _REVIEW_VALID_YES_NO),
+    ):
+        field_error = _review_enum_contract_error(field, value, allowed)
+        if field_error:
+            errors.append(field_error)
     errors.extend(
         f"Missing reviewer summary schema field: {field}"
         for field in _missing_reviewer_summary_schema_fields(text)
@@ -1705,32 +1748,76 @@ def evaluate_review_gate(
     # Conservative gate logic
     gate_pass = False
     reason = ""
+    risk = _normalized_review_value(opinion.risk)
+    scope_match = _normalized_review_value(opinion.scope_match)
+    ci_considered = _normalized_review_value(opinion.ci_considered)
+    merge_recommendation = _normalized_review_value(opinion.merge_recommendation)
+    automerge_eligible = _normalized_review_value(opinion.automerge_eligible)
+
     risk_allowed = (
-        opinion.risk in ("low", "LOW")
-        or (allow_medium_risk and opinion.risk in ("medium", "MEDIUM"))
-        or (allow_high_risk and opinion.risk in ("high", "HIGH"))
+        risk == "low"
+        or (allow_medium_risk and risk == "medium")
+        or (allow_high_risk and risk == "high")
     )
 
     if opinion.verdict != "APPROVE":
         reason = f"reviewer verdict is {opinion.verdict or 'unknown'}"
-    elif opinion.confidence is None or opinion.confidence < 0.85:
+    elif confidence_error := _review_confidence_contract_error(opinion.confidence):
+        reason = confidence_error.replace("Confidence", "reviewer confidence", 1)
+    elif opinion.confidence is not None and opinion.confidence < 0.85:
         reason = f"confidence below threshold (got {opinion.confidence})"
+    elif risk_error := _review_enum_contract_error(
+        "reviewer risk",
+        opinion.risk,
+        _REVIEW_VALID_RISKS,
+    ):
+        reason = f"{risk_error} (got {_format_review_field_value(opinion.risk)})"
     elif not risk_allowed:
-        reason = f"reviewer risk is {opinion.risk or 'unknown'}"
-    elif opinion.scope_match not in ("yes", "YES"):
+        reason = f"reviewer risk is {risk or 'unknown'}"
+    elif scope_error := _review_enum_contract_error(
+        "scope match",
+        opinion.scope_match,
+        _REVIEW_VALID_YES_NO,
+    ):
+        reason = f"{scope_error} (got {_format_review_field_value(opinion.scope_match)})"
+    elif scope_match != "yes":
         reason = "scope match is no"
-    elif opinion.ci_considered not in ("yes", "YES"):
+    elif ci_error := _review_enum_contract_error(
+        "CI considered",
+        opinion.ci_considered,
+        _REVIEW_VALID_YES_NO,
+    ):
+        reason = f"{ci_error} (got {_format_review_field_value(opinion.ci_considered)})"
+    elif ci_considered != "yes":
         reason = "CI was not considered"
-    elif opinion.merge_recommendation not in ("yes", "YES"):
+    elif merge_error := _review_enum_contract_error(
+        "merge recommendation",
+        opinion.merge_recommendation,
+        _REVIEW_VALID_YES_NO,
+    ):
+        reason = (
+            f"{merge_error} "
+            f"(got {_format_review_field_value(opinion.merge_recommendation)})"
+        )
+    elif merge_recommendation != "yes":
         reason = "merge recommendation is no"
+    elif automerge_error := _review_enum_contract_error(
+        "automerge eligible",
+        opinion.automerge_eligible,
+        _REVIEW_VALID_YES_NO,
+    ):
+        reason = (
+            f"{automerge_error} "
+            f"(got {_format_review_field_value(opinion.automerge_eligible)})"
+        )
     else:
         gate_pass = True
-        if opinion.risk in ("high", "HIGH"):
+        if risk == "high":
             reason = (
                 "reviewer approved with high confidence, high risk explicitly allowed, "
                 "green CI, and matching scope"
             )
-        elif opinion.risk in ("medium", "MEDIUM"):
+        elif risk == "medium":
             reason = (
                 "reviewer approved with high confidence, medium risk explicitly allowed, "
                 "green CI, and matching scope"
@@ -1741,7 +1828,7 @@ def evaluate_review_gate(
                 "and matching scope"
             )
 
-    automerge_ok = gate_pass and opinion.automerge_eligible in ("yes", "YES")
+    automerge_ok = gate_pass and automerge_eligible == "yes"
 
     status = "pass" if gate_pass else f"blocked — {reason}"
 
