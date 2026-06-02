@@ -97,6 +97,80 @@ def test_evaluate_ci_gate_needs_work_when_worker_output_unclear():
     assert decision.confidence == "low"
 
 
+def test_evaluate_ci_gate_allows_literal_error_example_with_structured_evidence():
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+# Signposter Execution Summary
+
+**Repository:** ExatronOmega/signposter
+**Issue:** #250
+**Agent:** human/operator
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+## Scoped completion evidence
+
+PASS - scoped code task completed.
+
+## Files changed
+
+- `src/signposter/gate.py`
+- `tests/test_gate.py`
+
+## Implemented behavior / verified behavior
+
+- The audit output mentions the literal matcher text `error:` as policy context.
+
+## Validation evidence
+
+Targeted validation passed:
+
+- `ruff check src/signposter/gate.py tests/test_gate.py`
+
+Full validation passed:
+
+- `ruff check .`
+- `pytest tests/ -q`
+
+Manual CLI smoke passed:
+
+- `signposter gate --audit-heuristics`
+
+## Safety
+
+No GitHub mutation was performed by the implemented code.
+No OpenClaw execution was performed by the implemented code.
+No issue was closed by the implemented code.
+No merge was performed by the implemented code.
+No unrelated files were changed.
+"""
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "pass"
+
+
+def test_evaluate_ci_gate_blocks_contextual_validation_error():
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+## Validation evidence
+
+Validation error: pytest failed on tests/test_gate.py
+"""
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "needs-work"
+    assert "failure-context error" in decision.reason
+
+
 def test_gate_heuristic_audit_maps_gate_surfaces_and_risks():
     audit = build_gate_heuristic_audit()
     output = format_gate_heuristic_audit(audit)
