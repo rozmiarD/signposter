@@ -186,7 +186,7 @@ def post_comment(
 
     Returns the list of gh commands that were (or would be) executed.
     """
-    ensure_github_comment_body(body)
+    body = ensure_github_comment_body(body)
 
     cmd = [
         "gh",

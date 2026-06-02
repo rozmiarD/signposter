@@ -220,16 +220,31 @@ def test_post_comment_rejects_unsafe_body_before_subprocess(mock_run):
     mock_run.assert_not_called()
 
 
-def test_format_comment_rejects_secret_in_excerpt():
+@patch("signposter.report.subprocess.run")
+def test_post_comment_redacts_secret_body_before_subprocess(mock_run):
+    mock_run.return_value = type("obj", (object,), {"returncode": 0, "stdout": "", "stderr": ""})()
+    token = "github_pat_" + ("A" * 30)
+
+    post_comment("ExatronOmega/signposter", 2, f"Signposter report\n\n{token}", dry_run=False)
+
+    sent_cmd = mock_run.call_args.args[0]
+    body = sent_cmd[sent_cmd.index("--body") + 1]
+    assert token not in body
+    assert "[REDACTED:github-token]" in body
+
+
+def test_format_comment_redacts_secret_in_excerpt():
     summary = "**Agent:** worker\n**Exit Code:** 0"
     token = "github_pat_" + ("A" * 30)
 
-    with pytest.raises(ValueError, match="possible GitHub token"):
-        format_comment(
-            summary,
-            "ExatronOmega/signposter",
-            42,
-            summary_path="artifacts/runs/issue-42.summary.md",
-            raw_path="artifacts/runs/issue-42.raw.txt",
-            raw_content=f"Signposter output\n{token}",
-        )
+    body = format_comment(
+        summary,
+        "ExatronOmega/signposter",
+        42,
+        summary_path="artifacts/runs/issue-42.summary.md",
+        raw_path="artifacts/runs/issue-42.raw.txt",
+        raw_content=f"Signposter output\n{token}",
+    )
+
+    assert token not in body
+    assert "[REDACTED:github-token]" in body
