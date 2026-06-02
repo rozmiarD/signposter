@@ -1,6 +1,7 @@
 """Unit tests for compact Signposter GitHub comment formatters."""
 
 from signposter.comments import (
+    audit_github_comment_body,
     format_claim_comment,
     format_complete_comment,
     format_fail_comment,
@@ -54,3 +55,47 @@ def test_format_fail_comment_with_gates_removed():
     assert "**Signposter:** marked task as failed." in comment
     assert "`state:active → state:failed`" in comment
     assert "removed gate:*" in comment
+
+
+def test_comment_audit_accepts_transition_comments():
+    comments = [
+        format_claim_comment(route="worker", gate="ci"),
+        format_release_comment(),
+        format_complete_comment(),
+        format_fail_comment(removed_gates=True),
+    ]
+
+    for comment in comments:
+        audit = audit_github_comment_body(comment)
+        assert audit.valid
+        assert audit.errors == ()
+        assert audit.char_count == len(comment)
+
+
+def test_comment_audit_blocks_auto_close_keywords():
+    audit = audit_github_comment_body("Signposter report\n\nCloses #123")
+
+    assert not audit.valid
+    assert "auto-close keyword" in "; ".join(audit.errors)
+
+
+def test_comment_audit_blocks_auto_close_issue_variant():
+    audit = audit_github_comment_body("Signposter report\n\nResolves issue #123")
+
+    assert not audit.valid
+    assert "auto-close keyword" in "; ".join(audit.errors)
+
+
+def test_comment_audit_blocks_obvious_secret_material():
+    token = "github_pat_" + ("A" * 30)
+    audit = audit_github_comment_body(f"Signposter report\n\nToken: {token}")
+
+    assert not audit.valid
+    assert "possible GitHub token" in "; ".join(audit.errors)
+
+
+def test_comment_audit_blocks_unbounded_comment():
+    audit = audit_github_comment_body("Signposter\n" + ("x" * 7000))
+
+    assert not audit.valid
+    assert "exceeds" in "; ".join(audit.errors)

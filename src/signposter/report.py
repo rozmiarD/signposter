@@ -13,6 +13,7 @@ import subprocess
 from pathlib import Path
 
 from signposter.artifact_safety import find_stale_or_failover_signal
+from signposter.comments import ensure_github_comment_body
 
 # Regex to strip ANSI escape sequences (colors, cursor moves, etc.)
 _ANSI_ESCAPE_RE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
@@ -127,7 +128,7 @@ def format_comment(
         "Full execution logs remain local only._"
     )
 
-    return "\n".join(lines)
+    return ensure_github_comment_body("\n".join(lines))
 
 
 def _make_bounded_excerpt(text: str, max_lines: int = 20, max_chars: int = 1500) -> str:
@@ -185,6 +186,8 @@ def post_comment(
 
     Returns the list of gh commands that were (or would be) executed.
     """
+    ensure_github_comment_body(body)
+
     cmd = [
         "gh",
         "issue",

@@ -10,6 +10,7 @@ import subprocess
 from dataclasses import dataclass
 
 from signposter.comments import (
+    ensure_github_comment_body,
     format_complete_comment,
     format_fail_comment,
     format_release_comment,
@@ -235,6 +236,19 @@ def perform_transition_mutation(
     commands: list[str] = []
     issue_num = str(plan.issue_number)
 
+    # Build and audit the comment before any label mutation, so a bad comment
+    # cannot leave the issue in a partially advanced state.
+    if plan.action == "release":
+        comment_body = format_release_comment()
+    elif plan.action == "complete":
+        comment_body = format_complete_comment()
+    elif plan.action == "fail":
+        removed_gates = any(lbl.startswith("gate:") for lbl in plan.labels_to_remove)
+        comment_body = format_fail_comment(removed_gates=removed_gates)
+    else:
+        comment_body = f"**Signposter:** performed transition to `{plan.new_state}`."
+    ensure_github_comment_body(comment_body)
+
     # Build label edit command
     add_labels = ",".join(plan.labels_to_add)
     remove_labels = ",".join(plan.labels_to_remove)
@@ -251,16 +265,6 @@ def perform_transition_mutation(
         subprocess.run(edit_cmd, check=True, capture_output=True, text=True)
 
     # Build comment command using plan data for gate removal awareness
-    if plan.action == "release":
-        comment_body = format_release_comment()
-    elif plan.action == "complete":
-        comment_body = format_complete_comment()
-    elif plan.action == "fail":
-        removed_gates = any(lbl.startswith("gate:") for lbl in plan.labels_to_remove)
-        comment_body = format_fail_comment(removed_gates=removed_gates)
-    else:
-        comment_body = f"**Signposter:** performed transition to `{plan.new_state}`."
-
     comment_cmd = [
         "gh", "issue", "comment", issue_num,
         "-R", repo,

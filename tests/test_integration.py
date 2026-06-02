@@ -225,6 +225,50 @@ def test_integration_apply_with_apply_calls_expected_commands(monkeypatch):
     assert any("issue close" in c and "completed" in c for c in calls)
 
 
+def test_integration_apply_audits_comment_before_label_mutation(monkeypatch):
+    from signposter.integration import apply_integration
+
+    class FakeProc:
+        returncode = 0
+        stdout = "success"
+        stderr = ""
+
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(" ".join(cmd))
+        return FakeProc()
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    with patch("signposter.integration.plan_integration_for_pr") as mock_plan, \
+         patch("signposter.integration.check_labels") as mock_check, \
+         patch("signposter.integration._build_integration_comment") as mock_comment:
+        mock_check.return_value.missing = []
+        mock_check.return_value.error = None
+        mock_comment.side_effect = ValueError(
+            "unsafe GitHub comment body: comment body contains an auto-close keyword"
+        )
+
+        fake_plan = IntegrationPlan(
+            pr_number=5, pr_title="test", pr_state="MERGED",
+            merge_commit="abc123", base_branch="main", head_branch="work/issue-4-xxx",
+            associated_issue=4, issue_state="OPEN",
+            current_workflow_state="state:done",
+            proposed_workflow_state="state:merged",
+            close_issue=True, close_reason="completed",
+            main_ci_status="pass",
+            status="ready", notes=[],
+        )
+        mock_plan.return_value = fake_plan
+
+        result = apply_integration("test/repo", 5, apply=True)
+
+    assert result["mode"] == "apply_blocked"
+    assert "auto-close keyword" in result["error"]
+    assert calls == []
+
+
 def test_integration_apply_failed_mutation_includes_stderr(monkeypatch):
     from signposter.integration import apply_integration
 
@@ -628,4 +672,3 @@ No unrelated files were changed.
     plan = plan_noop_integration_for_issue("test/repo", 12)
 
     assert "worktree still exists" in plan.status
-

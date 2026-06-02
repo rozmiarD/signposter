@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from signposter.transitions import (
     plan_complete,
     plan_fail,
@@ -78,6 +80,34 @@ def test_perform_transition_mutation_returns_commands():
     assert "gh issue comment 42" in commands[1]
     assert "**Signposter:** released task back to queue." in commands[1]
     assert "`state:active → state:ready`" in commands[1]
+
+
+def test_transition_apply_audits_comment_before_label_mutation(monkeypatch):
+    """Unsafe transition comments must block before label mutation."""
+    from signposter.transitions import perform_transition_mutation, plan_complete
+
+    labels = ["state:active", "gate:ci", "phase:build"]
+    plan = plan_complete(labels, 42)
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        raise AssertionError("subprocess must not run")
+
+    monkeypatch.setattr("signposter.transitions.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        "signposter.transitions._required_label_preflight",
+        lambda repo: (True, [], None),
+    )
+    monkeypatch.setattr(
+        "signposter.transitions.format_complete_comment",
+        lambda: "Signposter complete\n\nFixes #42",
+    )
+
+    with pytest.raises(ValueError, match="auto-close keyword"):
+        perform_transition_mutation(plan, "ExatronOmega/signposter", dry_run=False)
+
+    assert calls == []
 
 
 def test_perform_transition_mutation_fail_comment_includes_removed_gate():
