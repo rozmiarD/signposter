@@ -2052,6 +2052,223 @@ def format_planner_impact(result: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def build_planner_side_task_plan(
+    *,
+    manifest: dict[str, Any],
+    manifest_path: str,
+    key: str,
+    title: str,
+    reason: str,
+    depends_on: list[str],
+    parent: int | None,
+    return_to: int | None,
+    phase: str = "build",
+    risk: str = "medium",
+    role: str = "worker",
+    area: str = "scheduler",
+    gate: str = "ci",
+    mainline: str | None = None,
+) -> dict[str, Any]:
+    """Build a read-only side-task insertion plan from an existing manifest."""
+    manifest = _refresh_seed_manifest_dependency_metadata(dict(manifest))
+    issues = manifest.get("issues", [])
+    task_keys = {str(issue.get("key", "")) for issue in issues}
+    errors: list[str] = []
+
+    key = key.strip()
+    title = title.strip()
+    reason = reason.strip()
+    depends_on = [dependency.strip() for dependency in depends_on if dependency.strip()]
+
+    if not key:
+        errors.append("side-task key is required")
+    elif key in task_keys:
+        errors.append(f"side-task key already exists in manifest: {key}")
+
+    if not title:
+        errors.append("side-task title is required")
+    if not reason:
+        errors.append("side-task reason is required")
+    if not depends_on:
+        errors.append("depends_on must include at least one existing task key")
+
+    unknown_dependencies = [
+        dependency for dependency in depends_on if dependency not in task_keys
+    ]
+    for dependency in unknown_dependencies:
+        errors.append(f"unknown dependency: {dependency}")
+
+    parent_task = None
+    if parent is None:
+        errors.append("parent issue is required")
+    else:
+        parent_task = _find_manifest_task_by_github_issue(issues, parent)
+        if parent_task is None:
+            errors.append(f"parent issue #{parent} is not present in the manifest")
+
+    return_task = None
+    if return_to is None:
+        errors.append("return_to issue is required")
+    else:
+        return_task = _find_manifest_task_by_github_issue(issues, return_to)
+        if return_task is None:
+            errors.append(f"return_to issue #{return_to} is not present in the manifest")
+
+    labels = [
+        f"phase:{phase.strip()}",
+        f"risk:{risk.strip()}",
+        f"role:{role.strip()}",
+        f"area:{area.strip()}",
+    ]
+    inferred_mainline = (
+        mainline
+        or (return_task or {}).get("mainline")
+        or (parent_task or {}).get("mainline")
+        or _mainline_from_task_key(str((return_task or parent_task or {}).get("key", "")))
+    )
+    planned_task = {
+        "key": key,
+        "title": title,
+        "labels": labels,
+        "depends_on": depends_on,
+        "mainline": inferred_mainline,
+        "parent": parent,
+        "return_to": return_to,
+        "side_task": True,
+        "gate": gate.strip(),
+        "github_issue": None,
+        "github_url": "",
+    }
+
+    if errors:
+        return {
+            "status": "blocked",
+            "manifest_path": manifest_path,
+            "planned_task": planned_task,
+            "planned_manifest_mutations": [],
+            "planned_github_mutations": [],
+            "requires_llm_analysis": False,
+            "errors": errors,
+            "reasons": [
+                "side-task insertion planning stopped before mutation preview",
+                "side-task planning used zero LLM tokens",
+            ],
+        }
+
+    return {
+        "status": "ready",
+        "manifest_path": manifest_path,
+        "planned_task": planned_task,
+        "planned_manifest_mutations": [
+            f"append side-task {key} to {manifest_path}",
+            "set side_task: true",
+            f"set parent: #{parent}",
+            f"set return_to: #{return_to}",
+            f"set depends_on: {', '.join(depends_on)}",
+        ],
+        "planned_github_mutations": [],
+        "requires_llm_analysis": False,
+        "errors": [],
+        "reasons": [
+            f"parent issue #{parent} is present in the manifest",
+            f"return target issue #{return_to} is present in the manifest",
+            "all dependency keys are present in the manifest",
+            "side-task plan used zero LLM tokens",
+        ],
+    }
+
+
+def format_planner_side_task_plan(result: dict[str, Any]) -> str:
+    """Format a read-only side-task insertion plan."""
+    task = result.get("planned_task", {})
+    status = str(result.get("status", "unknown"))
+    deps = ", ".join(task.get("depends_on", [])) or "none"
+    labels = ", ".join(task.get("labels", [])) or "none"
+    parent = f"#{task.get('parent')}" if task.get("parent") is not None else "none"
+    return_to = (
+        f"#{task.get('return_to')}" if task.get("return_to") is not None else "none"
+    )
+    lines = [
+        "Signposter Planner Side-Task Plan",
+        "",
+        "Status:",
+        f"  {status}",
+        "",
+        "Manifest:",
+        f"  {result.get('manifest_path', '')}",
+        "",
+        "Side task:",
+        f"  key: {task.get('key', '')}",
+        f"  title: {task.get('title', '')}",
+        "  side-task: yes",
+        f"  parent: {parent}",
+        f"  return-to: {return_to}",
+        f"  mainline: {task.get('mainline') or 'none'}",
+        f"  depends on: {deps}",
+        f"  labels: {labels}",
+        f"  gate: {task.get('gate') or 'none'}",
+        "",
+        "Planned manifest mutations:",
+    ]
+
+    manifest_mutations = result.get("planned_manifest_mutations", [])
+    if manifest_mutations:
+        lines.append("  Preview only; these changes were not written.")
+        lines.extend(f"  - {mutation}" for mutation in manifest_mutations)
+    else:
+        lines.append("  none")
+
+    lines.extend(["", "Planned GitHub mutations:"])
+    github_mutations = result.get("planned_github_mutations", [])
+    if github_mutations:
+        lines.append("  Preview only; these commands were not executed.")
+        lines.extend(f"  {mutation}" for mutation in github_mutations)
+    else:
+        lines.append("  none")
+
+    if result.get("errors"):
+        lines.extend(["", "Errors:"])
+        lines.extend(f"  - {error}" for error in result["errors"])
+
+    if result.get("reasons"):
+        lines.extend(["", "Reasons:"])
+        lines.extend(f"  - {reason}" for reason in result["reasons"])
+
+    lines.extend(
+        [
+            "",
+            "Requires:",
+            f"  LLM analysis: {str(result.get('requires_llm_analysis', False)).lower()}",
+            "",
+            "Notes:",
+            "  Dry-run only; no side task was inserted.",
+            "  No GitHub mutation was performed.",
+            "  No GitHub issue was created.",
+            "  No manifest mutation was performed.",
+            "  No OpenClaw execution was performed.",
+            "  No LLM analysis was performed.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _find_manifest_task_by_github_issue(
+    issues: list[dict[str, Any]],
+    github_issue: int,
+) -> dict[str, Any] | None:
+    for issue in issues:
+        if issue.get("github_issue") == github_issue:
+            return issue
+    return None
+
+
+def _mainline_from_task_key(key: str) -> str | None:
+    if "-" not in key:
+        return None
+    prefix = key.split("-", 1)[0].strip()
+    return prefix or None
+
+
 def build_planner_next_from_status(status: dict[str, Any]) -> dict[str, Any]:
     """Choose the next dependency-ready task from a planner status summary."""
     tasks = status.get("tasks", [])
