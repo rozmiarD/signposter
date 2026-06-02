@@ -12,6 +12,35 @@ from signposter.review import (
 )
 
 
+def _review_plan_for_format(**overrides: object) -> ReviewPlan:
+    values = {
+        "pr_number": 5,
+        "title": "code change",
+        "state": "OPEN",
+        "base_branch": "main",
+        "head_branch": "work/issue-4-xxx",
+        "mergeable": "MERGEABLE",
+        "review_decision": None,
+        "checks_status": "pass",
+        "successful_checks": 1,
+        "failing_checks": 0,
+        "pending_checks": 0,
+        "files_changed": 1,
+        "additions": 8,
+        "deletions": 0,
+        "risk_level": "low",
+        "size": "small",
+        "associated_issue": 4,
+        "branch_matches_convention": True,
+        "status": "ready",
+        "notes": ["No review was executed."],
+        "reviewer_profile": "reviewer",
+        "prompt_artifact_path": "artifacts/prompts/pr-5-review.md",
+    }
+    values.update(overrides)
+    return ReviewPlan(**values)
+
+
 def test_plan_review_blocks_on_closed_pr():
     with patch("signposter.review._run_gh_pr_view") as mock_gh:
         mock_gh.return_value = {
@@ -67,29 +96,9 @@ def test_plan_review_ready_for_good_docs_pr():
 
 
 def test_format_review_plan_contains_key_sections():
-    plan = ReviewPlan(
-        pr_number=5,
+    plan = _review_plan_for_format(
         title="docs change",
-        state="OPEN",
-        base_branch="main",
-        head_branch="work/issue-4-xxx",
-        mergeable="MERGEABLE",
-        review_decision=None,
-        checks_status="pass",
-        successful_checks=1,
-        failing_checks=0,
-        pending_checks=0,
-        files_changed=1,
-        additions=8,
-        deletions=0,
-        risk_level="low",
-        size="small",
-        associated_issue=4,
-        branch_matches_convention=True,
-        status="ready",
         notes=["No review was executed.", "No merge was performed."],
-        reviewer_profile="reviewer",
-        prompt_artifact_path="artifacts/prompts/pr-5-review.md",
     )
 
     output = format_review_plan(plan)
@@ -104,6 +113,57 @@ def test_format_review_plan_contains_key_sections():
     assert "reasoning:" in output
     assert "backend:" in output
     assert "execute ready:" in output
+
+
+def test_format_review_plan_surfaces_failing_ci_blockage():
+    plan = _review_plan_for_format(
+        checks_status="failing",
+        successful_checks=2,
+        failing_checks=1,
+        pending_checks=0,
+        status="blocked — checks are failing",
+    )
+
+    output = format_review_plan(plan)
+
+    assert "Check blockage:" in output
+    assert "category: failing-ci" in output
+    assert "reason: 1 failing check(s), 0 pending check(s)" in output
+    assert "next: inspect failing checks for PR #5 and rerun review plan" in output
+
+
+def test_format_review_plan_surfaces_pending_ci_blockage():
+    plan = _review_plan_for_format(
+        checks_status="pending",
+        successful_checks=1,
+        failing_checks=0,
+        pending_checks=2,
+        status="pending — checks are still running",
+    )
+
+    output = format_review_plan(plan)
+
+    assert "Check blockage:" in output
+    assert "category: waiting-ci" in output
+    assert "reason: 2 pending check(s), 1 successful check(s)" in output
+    assert "next: wait for CI completion and rerun review plan" in output
+
+
+def test_format_review_plan_surfaces_unknown_ci_blockage():
+    plan = _review_plan_for_format(
+        checks_status="unknown",
+        successful_checks=0,
+        failing_checks=0,
+        pending_checks=0,
+        status="blocked — checks status is unknown",
+    )
+
+    output = format_review_plan(plan)
+
+    assert "Check blockage:" in output
+    assert "category: unknown-ci" in output
+    assert "reason: GitHub check rollup is unavailable or ambiguous" in output
+    assert "next: inspect PR checks manually if this persists" in output
 
 
 def test_plan_review_accepts_codex_cli_backend_for_dry_run():
