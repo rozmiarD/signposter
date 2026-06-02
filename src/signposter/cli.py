@@ -66,6 +66,7 @@ from signposter.integration import (
     format_noop_integration_apply_dry_run,
     format_noop_integration_plan,
     format_noop_integration_preconditions,
+    integration_apply_status,
     plan_integration_for_pr,
     plan_noop_integration_for_issue,
 )
@@ -2437,7 +2438,7 @@ def run_integration_apply(args: argparse.Namespace) -> int:
 
         if result.get("mode") == "dry_run":
             print(format_integration_apply_dry_run(plan, repo))
-            return 0
+            return 0 if plan and integration_apply_status(plan, repo) == "ready" else 1
         elif result.get("mode") == "apply":
             success = result.get("success", False)
             print(f"Signposter Integration Apply — PR #{pr}")

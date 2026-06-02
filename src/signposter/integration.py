@@ -379,7 +379,7 @@ No local worktree cleanup was performed.
     return ensure_github_comment_body(comment.strip())
 
 
-def _integration_apply_status(plan: IntegrationPlan, repo: str | None = None) -> str:
+def integration_apply_status(plan: IntegrationPlan, repo: str | None = None) -> str:
     """Return effective readiness for integration apply.
 
     Also runs the centralized label preflight (H023C) when repo is provided.
@@ -410,6 +410,11 @@ def _integration_apply_status(plan: IntegrationPlan, repo: str | None = None) ->
     return "ready"
 
 
+def _integration_apply_status(plan: IntegrationPlan, repo: str | None = None) -> str:
+    """Backward-compatible alias for integration apply readiness."""
+    return integration_apply_status(plan, repo)
+
+
 def _label_preflight(repo: str) -> tuple[bool, list[str], str | None]:
     """
     Centralized required-label preflight for integration apply.
@@ -437,9 +442,12 @@ def apply_integration(
     plan = plan_integration_for_pr(repo, pr_number)
 
     if not apply:
+        apply_status = integration_apply_status(plan)
         return {
             "mode": "dry_run",
             "plan": plan,
+            "apply_status": apply_status,
+            "would_execute": apply_status == "ready",
         }
 
     # Mutation path - very strictly guarded
@@ -587,7 +595,7 @@ def apply_integration(
 
 def format_integration_apply_dry_run(plan: IntegrationPlan, repo: str | None = None) -> str:
     """Dry-run output for integration apply."""
-    apply_status = _integration_apply_status(plan, repo)
+    apply_status = integration_apply_status(plan, repo)
 
     lines = [f"Signposter Integration Apply Plan — PR #{plan.pr_number}\n"]
 
