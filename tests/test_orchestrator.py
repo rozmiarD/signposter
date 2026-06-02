@@ -1435,7 +1435,14 @@ def test_format_orchestrator_run_next_loop_contains_limits_and_steps() -> None:
 
     assert "Signposter Orchestrator Run Next Loop" in out
     assert "cycles requested: 1" in out
+    assert "Guard audit:" in out
+    assert "max cycles: enforced" in out
+    assert "max tasks: enforced" in out
+    assert "apply required: yes" in out
+    assert "execute required for backend: yes" in out
     assert "1. issue #57: execute-worker -> blocked" in out
+    assert "stop category: blocked-lifecycle" in out
+    assert "stop tolerated: no" in out
     assert "category: blocked-lifecycle" in out
     assert "tolerated: no" in out
 
