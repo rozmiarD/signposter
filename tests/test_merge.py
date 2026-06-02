@@ -173,6 +173,112 @@ def test_format_merge_plan_contains_key_sections():
     assert "AlphaExatron" in output or "non-author approval" in output
 
 
+def test_format_merge_plan_surfaces_failing_ci_blockage():
+    plan = MergePlan(
+        pr_number=5,
+        title="ci failure",
+        state="OPEN",
+        base_branch="main",
+        head_branch="work/issue-4-xxx",
+        mergeable="MERGEABLE",
+        review_decision="APPROVED",
+        checks_status="failing",
+        successful_checks=2,
+        failing_checks=1,
+        pending_checks=0,
+        github_approved=True,
+        approving_reviewers=["AlphaExatron"],
+        has_non_author_approval=True,
+        pr_author="ExatronOmega",
+        reviewer_gate_pass=True,
+        reviewer_verdict="APPROVE",
+        reviewer_confidence=0.95,
+        reviewer_risk="low",
+        associated_issue=4,
+        has_auto_close_keywords=False,
+        files_changed=1,
+        additions=8,
+        deletions=0,
+        risk_level="low",
+        size="small",
+        merge_method="squash",
+        delete_branch_after_merge=True,
+        command_preview="gh pr merge 5 ... --squash --delete-branch",
+        status="blocked — checks are failing",
+        notes=["No merge was performed."],
+    )
+
+    output = format_merge_plan(plan)
+
+    assert "Check blockage:" in output
+    assert "category: failing-ci" in output
+    assert "reason: 1 failing check(s), 0 pending check(s)" in output
+    assert "next: inspect failing checks for PR #5 and rerun merge plan" in output
+
+
+def test_format_merge_plan_surfaces_pending_ci_blockage():
+    plan = MergePlan(
+        pr_number=5,
+        title="ci pending",
+        state="OPEN",
+        base_branch="main",
+        head_branch="work/issue-4-xxx",
+        mergeable="MERGEABLE",
+        review_decision="APPROVED",
+        checks_status="pending",
+        successful_checks=1,
+        failing_checks=0,
+        pending_checks=2,
+        github_approved=True,
+        approving_reviewers=["AlphaExatron"],
+        has_non_author_approval=True,
+        pr_author="ExatronOmega",
+        reviewer_gate_pass=True,
+        reviewer_verdict="APPROVE",
+        reviewer_confidence=0.95,
+        reviewer_risk="low",
+        associated_issue=4,
+        has_auto_close_keywords=False,
+        files_changed=1,
+        additions=8,
+        deletions=0,
+        risk_level="low",
+        size="small",
+        merge_method="squash",
+        delete_branch_after_merge=True,
+        command_preview="gh pr merge 5 ... --squash --delete-branch",
+        status="pending — checks are still running",
+        notes=["No merge was performed."],
+    )
+
+    output = format_merge_plan(plan)
+
+    assert "category: waiting-ci" in output
+    assert "reason: 2 pending check(s), 1 successful check(s)" in output
+    assert "next: wait for CI completion and rerun merge plan" in output
+
+
+def test_fetch_pr_checks_for_merge_treats_timed_out_as_failing(monkeypatch):
+    from signposter.merge import _fetch_pr_checks_for_merge
+
+    def fake_view(repo, pr, fields):
+        assert fields == ["statusCheckRollup"]
+        return {
+            "statusCheckRollup": [
+                {"status": "COMPLETED", "conclusion": "TIMED_OUT", "name": "test"}
+            ]
+        }
+
+    monkeypatch.setattr("signposter.merge._run_gh_pr_view", fake_view)
+
+    assert _fetch_pr_checks_for_merge("test/repo", 5) == {
+        "status": "failing",
+        "successful": 0,
+        "failing": 1,
+        "pending": 0,
+    }
+
+
 # =============================================================================
 # HARDENING-020 tests: guarded merge apply
 # =============================================================================
