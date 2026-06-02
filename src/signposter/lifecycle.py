@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from signposter.cleanup import _local_branch_exists, _worktree_exists
+from signposter.comments import contains_auto_close_keyword
 from signposter.labels import check_labels
 from signposter.pr_linkage import PrIssueLinkage, detect_pr_issue_linkage
 from signposter.review import _run_gh_pr_view
@@ -214,16 +215,7 @@ def _contains_auto_close_keyword(text: str) -> bool:
     This prevents false positives from words like "close" appearing
     in normal prose ("integration/close policy", "close the loop", etc).
     """
-    if not text:
-        return False
-
-    # Match keyword followed by optional "issue" and then #number or number
-    pattern = re.compile(
-        r"\b(?:close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved)"
-        r"(?:s|d)?(?:\s+issue)?\s*#?\d+",
-        re.IGNORECASE,
-    )
-    return bool(pattern.search(text))
+    return contains_auto_close_keyword(text)
 
 
 def _detect_link_source(

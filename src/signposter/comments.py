@@ -13,7 +13,12 @@ DEFAULT_MAX_COMMENT_CHARS = 6000
 TRANSITION_COMMENT_MAX_CHARS = 240
 _ANSI_ESCAPE_RE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 _AUTO_CLOSE_KEYWORD_RE = re.compile(
-    r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s*(?:issue\s+)?#\d+\b",
+    r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s*"
+    r"(?:"
+    r"(?:issue\s+)?#\d+\b"
+    r"|(?:https?://)?github\.com/[^/\s]+/[^/\s]+/(?:issues|pull)/\d+\b"
+    r"|(?:https?://)?github\.com/[^#\s]+/[^#\s]+#\d+\b"
+    r")",
     re.IGNORECASE,
 )
 _SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
@@ -43,6 +48,13 @@ class CommentAuditResult:
     char_count: int
 
 
+def contains_auto_close_keyword(body: str | None) -> bool:
+    """Return True when text contains an issue-closing GitHub keyword."""
+    if not body:
+        return False
+    return bool(_AUTO_CLOSE_KEYWORD_RE.search(body))
+
+
 def audit_github_comment_body(
     body: str,
     *,
@@ -67,7 +79,7 @@ def audit_github_comment_body(
     if _ANSI_ESCAPE_RE.search(text):
         errors.append("comment body contains ANSI escape sequences")
 
-    if not allow_auto_close_keywords and _AUTO_CLOSE_KEYWORD_RE.search(text):
+    if not allow_auto_close_keywords and contains_auto_close_keyword(text):
         errors.append("comment body contains an auto-close keyword")
 
     for label, pattern in _SECRET_PATTERNS:

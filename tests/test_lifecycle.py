@@ -13,6 +13,7 @@ from signposter.lifecycle import (
     LifecycleStatus,
     LifecycleWatchRequest,
     LifecycleWatchSnapshot,
+    _contains_auto_close_keyword,
     collect_lifecycle_watch_data,
     format_lifecycle_status,
     format_lifecycle_status_summary,
@@ -436,6 +437,13 @@ def test_related_issue_does_not_set_auto_close_keyword():
     s = _make_complete_status(linkage_source="pr-body-related-issue", auto_close_keyword=False)
     out = format_lifecycle_status(s)
     assert "auto-close keyword: no" in out
+
+
+def test_lifecycle_auto_close_detector_uses_shared_variants():
+    assert _contains_auto_close_keyword("Closed #123") is True
+    assert _contains_auto_close_keyword("Fixed issue #123") is True
+    assert _contains_auto_close_keyword("Resolve https://github.com/acme/repo/issues/123")
+    assert _contains_auto_close_keyword("Related issue: #123") is False
 
 
 def test_cli_rejects_both_issue_and_pr():
