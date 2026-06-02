@@ -1933,6 +1933,19 @@ def build_planner_impact_from_status(
             f"signposter planner advance --manifest {manifest_path} "
             f"--issue {issue} --dry-run"
         )
+    llm_reconcile = {
+        "allowed": decision == "requires_reconcile",
+        "default": "disabled",
+        "boundary": (
+            "optional only for requires_reconcile impact decisions after "
+            "deterministic graph evidence is shown"
+        ),
+        "reason": (
+            "impact is ambiguous enough for optional reconcile"
+            if decision == "requires_reconcile"
+            else "deterministic decision is available"
+        ),
+    }
 
     return {
         "status": "ready",
@@ -1949,6 +1962,7 @@ def build_planner_impact_from_status(
         "blocked_downstream_tasks": blocked_downstream_tasks,
         "advanceable_downstream_tasks": advanceable_downstream_tasks,
         "requires_llm_analysis": decision == "requires_reconcile",
+        "llm_reconcile": llm_reconcile,
         "suggested_command": suggested_command,
         "reasons": reasons,
     }
@@ -1998,6 +2012,19 @@ def format_planner_impact(result: dict[str, Any]) -> str:
             f"  LLM analysis: {str(result.get('requires_llm_analysis', False)).lower()}",
         ]
     )
+
+    llm_reconcile = result.get("llm_reconcile")
+    if llm_reconcile:
+        lines.extend(
+            [
+                "",
+                "LLM reconcile:",
+                f"  allowed: {str(llm_reconcile.get('allowed', False)).lower()}",
+                f"  default: {llm_reconcile.get('default', 'disabled')}",
+                f"  boundary: {llm_reconcile.get('boundary', 'not specified')}",
+                f"  reason: {llm_reconcile.get('reason', 'not specified')}",
+            ]
+        )
 
     if result.get("suggested_command"):
         lines.extend(
