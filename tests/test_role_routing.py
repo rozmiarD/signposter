@@ -68,6 +68,32 @@ def test_core_issue_routes_to_worker_core():
     assert selection.policy.name == "WORKER_CORE"
 
 
+def test_area_core_issue_routes_to_worker_core():
+    item = make_item(
+        14,
+        ["state:ready", "phase:build", "role:worker", "risk:medium", "area:core"],
+        "Audit model router policy boundaries",
+    )
+
+    selection = select_role_for_issue(item, classify_candidate(item))
+
+    assert selection.policy.name == "WORKER_CORE"
+    assert "core or high-risk" in selection.reason
+
+
+def test_high_risk_test_issue_does_not_use_worker_light():
+    item = make_item(
+        15,
+        ["state:ready", "phase:build", "role:worker", "risk:high", "area:tests"],
+        "tests: cover merge safety boundaries",
+    )
+
+    selection = select_role_for_issue(item, classify_candidate(item))
+
+    assert selection.policy.name == "WORKER_CORE"
+    assert selection.policy.reasoning_effort == "medium"
+
+
 def test_role_execution_selection_resolves_codex_cli_metadata():
     item = make_item(
         5,
@@ -116,6 +142,16 @@ def test_core_review_routes_to_reviewer_core():
         risk_level="medium",
         size="medium",
         file_paths=["src/signposter/merge.py", "tests/test_merge.py"],
+    )
+
+    assert selection.policy.name == "REVIEWER_CORE"
+
+
+def test_role_policy_review_routes_to_reviewer_core():
+    selection = select_role_for_review(
+        risk_level="medium",
+        size="medium",
+        file_paths=["src/signposter/role_policy.py", "tests/test_role_policy.py"],
     )
 
     assert selection.policy.name == "REVIEWER_CORE"
