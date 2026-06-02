@@ -386,12 +386,14 @@ def _fetch_pr_checks_for_merge(repo: str, pr: int) -> dict[str, Any]:
 
         if conclusion in ("SUCCESS", "NEUTRAL", "SKIPPED"):
             successful += 1
-        elif conclusion in ("FAILURE", "ERROR", "CANCELLED"):
+        elif conclusion in ("FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED"):
             failing += 1
-        elif status in ("QUEUED", "IN_PROGRESS", "PENDING"):
+        elif status in ("QUEUED", "IN_PROGRESS", "PENDING", "REQUESTED", "WAITING"):
             pending += 1
         elif state in ("PENDING", "QUEUED", "IN_PROGRESS"):
             pending += 1
+        elif state in ("FAILURE", "ERROR", "CANCELLED"):
+            failing += 1
         elif state == "SUCCESS":
             successful += 1
 
@@ -412,6 +414,37 @@ def _fetch_pr_checks_for_merge(repo: str, pr: int) -> dict[str, Any]:
     }
 
 
+def _merge_check_blockage_lines(plan: MergePlan) -> list[str]:
+    """Return bounded operator diagnostics for PR check states that stop merge."""
+    if plan.checks_status == "failing":
+        return [
+            "category: failing-ci",
+            (
+                "reason: "
+                f"{plan.failing_checks} failing check(s), "
+                f"{plan.pending_checks} pending check(s)"
+            ),
+            f"next: inspect failing checks for PR #{plan.pr_number} and rerun merge plan",
+        ]
+    if plan.checks_status == "pending":
+        return [
+            "category: waiting-ci",
+            (
+                "reason: "
+                f"{plan.pending_checks} pending check(s), "
+                f"{plan.successful_checks} successful check(s)"
+            ),
+            "next: wait for CI completion and rerun merge plan",
+        ]
+    if plan.checks_status == "unknown":
+        return [
+            "category: unknown-ci",
+            "reason: GitHub check rollup is unavailable or ambiguous",
+            "next: inspect PR checks manually if this persists",
+        ]
+    return []
+
+
 def format_merge_plan(plan: MergePlan) -> str:
     """Compact deterministic merge planning output."""
     lines = [f"Signposter Merge Plan — PR #{plan.pr_number}\n"]
@@ -429,6 +462,11 @@ def format_merge_plan(plan: MergePlan) -> str:
     lines.append(f"  successful: {plan.successful_checks}")
     lines.append(f"  failing: {plan.failing_checks}")
     lines.append(f"  pending: {plan.pending_checks}")
+    check_blockage = _merge_check_blockage_lines(plan)
+    if check_blockage:
+        lines.append("\nCheck blockage:")
+        for line in check_blockage:
+            lines.append(f"  {line}")
 
     lines.append("\nReviewer gate:")
     lines.append(f"  status: {'pass' if plan.reviewer_gate_pass else 'blocked'}")
@@ -476,47 +514,6 @@ def format_merge_plan(plan: MergePlan) -> str:
             lines.append(f"  {n}")
 
     return "\n".join(lines)
-
-
-def _fetch_pr_checks_for_merge(repo: str, pr: int) -> dict[str, Any]:
-    """Minimal wrapper around existing check logic from review.py."""
-    from signposter.review import _normalize_check_rollup
-
-    data = _run_gh_pr_view(repo, pr, ["statusCheckRollup"])
-    checks = _normalize_check_rollup(data.get("statusCheckRollup", []))
-
-    successful = failing = pending = 0
-    for c in checks:
-        status = (c.get("status") or "").upper()
-        conclusion = (c.get("conclusion") or "").upper()
-        state = (c.get("state") or "").upper()
-
-        if conclusion in ("SUCCESS", "NEUTRAL", "SKIPPED"):
-            successful += 1
-        elif conclusion in ("FAILURE", "ERROR", "CANCELLED"):
-            failing += 1
-        elif status in ("QUEUED", "IN_PROGRESS", "PENDING"):
-            pending += 1
-        elif state in ("PENDING", "QUEUED", "IN_PROGRESS"):
-            pending += 1
-        elif state == "SUCCESS":
-            successful += 1
-
-    if failing > 0:
-        cstatus = "failing"
-    elif pending > 0:
-        cstatus = "pending"
-    elif successful > 0:
-        cstatus = "pass"
-    else:
-        cstatus = "unknown"
-
-    return {
-        "status": cstatus,
-        "successful": successful,
-        "failing": failing,
-        "pending": pending,
-    }
 
 
 # =============================================================================
