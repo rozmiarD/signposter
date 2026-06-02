@@ -779,7 +779,7 @@ def test_cli_main_explicit_issue_claim_refreshes_before_execute(capsys):
 # --- HARDENING-006: worker isolation / dirty tree guard ---
 
 
-def test_execute_plan_refuses_worker_on_dirty_tree():
+def test_execute_plan_refuses_worker_on_dirty_tree(capsys):
     """Worker profile must refuse execution when there are blocking dirty changes."""
     from unittest.mock import patch
 
@@ -795,6 +795,16 @@ def test_execute_plan_refuses_worker_on_dirty_tree():
 
     assert result["exit_code"] == 1
     assert result.get("error") == "dirty working tree"
+    assert result.get("success") is False
+    assert result.get("diagnosis_status") == "dirty-tree"
+    assert result.get("dirty_cwd") == "."
+    assert result.get("dirty_paths") == ("README.md", "src/foo.py")
+    assert result.get("allow_dirty_hint") == "--allow-dirty"
+    out = capsys.readouterr().out
+    assert "Refusing worker execution: working tree has uncommitted changes." in out
+    assert "cwd: ." in out
+    assert "dirty paths: README.md, src/foo.py" in out
+    assert "rerun with --allow-dirty" in out
 
 
 def test_execute_plan_allows_worker_when_clean(monkeypatch):
@@ -1486,6 +1496,44 @@ def test_execute_worktree_refuses_non_worker_profile(capsys, monkeypatch):
     # The guard may or may not trigger depending on plan construction;
     # we mainly verify no crash and that worktree path was considered.
     assert exit_code in (0, 1)
+
+
+def test_execute_worktree_refuses_dirty_worktree_before_backend(capsys, tmp_path):
+    """Worktree execution must stop before backend execution when the worktree is dirty."""
+    from unittest.mock import patch
+
+    from signposter.runner import cli_main
+
+    fake_item = make_item(73, ["state:active", "phase:build", "role:worker"])
+    worktree_path = str(tmp_path / "signposter-work" / "73")
+    tmp_path.joinpath("signposter-work", "73").mkdir(parents=True)
+
+    with patch("signposter.runner.fetch_issue_by_number", return_value=fake_item), \
+         patch("signposter.runner.get_worktree_status_for_issue") as mock_ws, \
+         patch(
+             "signposter.runner.find_uncommitted_repo_changes",
+             return_value=["src/signposter/runner.py"],
+         ), \
+         patch("signposter.runner.execute_plan") as mock_execute:
+        mock_ws.return_value = {
+            "status": "available",
+            "path": worktree_path,
+            "exists": True,
+        }
+        exit_code = cli_main(
+            "test/repo",
+            issue=73,
+            execute=True,
+            worktree=True,
+        )
+
+    out = capsys.readouterr().out
+    assert exit_code == 1
+    assert "Refusing worktree execution: working tree has uncommitted changes." in out
+    assert f"cwd: {worktree_path}" in out
+    assert "dirty paths: src/signposter/runner.py" in out
+    assert "rerun with --allow-dirty" in out
+    mock_execute.assert_not_called()
 
 
 def test_execute_worktree_uses_correct_cwd_and_writes_artifacts_to_main(monkeypatch, tmp_path):
