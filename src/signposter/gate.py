@@ -23,6 +23,111 @@ class GateDecision:
     proposed_command: str | None
 
 
+@dataclass(frozen=True)
+class GateHeuristicAudit:
+    """Read-only map of gate evidence heuristics and known risk areas."""
+
+    status: str
+    gate_surfaces: tuple[str, ...]
+    structural_evidence: tuple[str, ...]
+    phrase_matchers: tuple[str, ...]
+    false_positive_risks: tuple[str, ...]
+    false_negative_risks: tuple[str, ...]
+    recommendations: tuple[str, ...]
+    notes: tuple[str, ...]
+
+
+def build_gate_heuristic_audit() -> GateHeuristicAudit:
+    """Return a compact static audit of current gate heuristics.
+
+    This deliberately does not evaluate a specific issue or artifact. It gives
+    operators a deterministic map of where Signposter uses structured evidence
+    versus phrase matching so follow-up hardening can be scoped precisely.
+    """
+    return GateHeuristicAudit(
+        status="ready",
+        gate_surfaces=(
+            "review gate: evaluate_gate uses positive/negative reviewer phrases",
+            "ci gate: evaluate_ci_gate uses worker artifact preflight plus scoped evidence",
+            "human gate: evaluate_human_gate requires approval, scope, validation, safety",
+            "no-op completion: evaluated as a structured CI-gate evidence path",
+        ),
+        structural_evidence=(
+            "worker summary schema is validated before CI-gate evaluation",
+            "stale/failover artifact markers block before scoped evidence checks",
+            "actual Python exception output requires traceback framing, not the word alone",
+            "scoped code/test/no-op paths require validation and safety statements",
+            "human gate requires explicit approval plus validation and no-mutation evidence",
+        ),
+        phrase_matchers=(
+            "review gate blocks on phrases such as critical blocker and missing evidence",
+            "ci gate blocks on phrases such as critical blocker, execution failed, error:",
+            "human gate blocks on phrases such as approval denied and validation failed",
+            "positive review fallback still requires multiple positive reviewer phrases",
+        ),
+        false_positive_risks=(
+            "generic blocker words can still block when summaries discuss examples or policy",
+            "ci gate treats bare 'error:' as a blocker even when it may be quoted context",
+            "test-only disqualifiers include broad traceback wording rather than framed output",
+        ),
+        false_negative_risks=(
+            "well-formed but semantically weak manual summaries can pass schema preflight",
+            "phrase-based review positives may miss valid approvals with different wording",
+            "structured scoped evidence is strong but still text-based rather than section parsed",
+        ),
+        recommendations=(
+            "prefer section-aware parsing for safety/result/failure sections",
+            "keep actual Python exception detection framed around traceback structure",
+            "move broad phrase blockers behind explicit failure-context checks",
+            "preserve conservative default when evidence is unclear",
+        ),
+        notes=(
+            "Read-only heuristic audit.",
+            "No GitHub mutation was performed.",
+            "No OpenClaw execution was performed.",
+            "No issue was closed.",
+        ),
+    )
+
+
+def format_gate_heuristic_audit(audit: GateHeuristicAudit) -> str:
+    """Render a deterministic gate heuristic audit."""
+    lines = [
+        "Signposter Gate Heuristic Audit",
+        "",
+        "Status:",
+        f"  {audit.status}",
+        "",
+        "Gate surfaces:",
+    ]
+    _append_audit_lines(lines, audit.gate_surfaces)
+    lines.extend(["", "Structural evidence:"])
+    _append_audit_lines(lines, audit.structural_evidence)
+    lines.extend(["", "Phrase matchers:"])
+    _append_audit_lines(lines, audit.phrase_matchers)
+    lines.extend(["", "False-positive risks:"])
+    _append_audit_lines(lines, audit.false_positive_risks)
+    lines.extend(["", "False-negative risks:"])
+    _append_audit_lines(lines, audit.false_negative_risks)
+    lines.extend(["", "Recommendations:"])
+    _append_audit_lines(lines, audit.recommendations)
+    lines.extend(["", "Notes:"])
+    _append_audit_lines(lines, audit.notes, prefix="  ")
+    return "\n".join(lines)
+
+
+def _append_audit_lines(
+    lines: list[str],
+    values: tuple[str, ...],
+    *,
+    prefix: str = "  - ",
+) -> None:
+    if not values:
+        lines.append(f"{prefix}none")
+        return
+    lines.extend(f"{prefix}{value}" for value in values)
+
+
 def evaluate_gate(
     exit_code: int,
     summary_text: str,

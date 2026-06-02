@@ -5,14 +5,17 @@ Pure tests using string fixtures — no network, no real files.
 
 from __future__ import annotations
 
+import argparse
 from unittest.mock import patch
 
 import pytest
 
 from signposter.gate import (
     _is_already_integrated_issue,
+    build_gate_heuristic_audit,
     evaluate_gate,
     evaluate_gate_for_complete,
+    format_gate_heuristic_audit,
     format_gate_report,
     run_gate_dry_run,
 )
@@ -92,6 +95,56 @@ def test_evaluate_ci_gate_needs_work_when_worker_output_unclear():
     decision = evaluate_ci_gate(0, "**Exit Code:** 0\nGeneric output only.")
     assert decision.decision == "needs-work"
     assert decision.confidence == "low"
+
+
+def test_gate_heuristic_audit_maps_gate_surfaces_and_risks():
+    audit = build_gate_heuristic_audit()
+    output = format_gate_heuristic_audit(audit)
+
+    assert audit.status == "ready"
+    assert any("ci gate" in item for item in audit.gate_surfaces)
+    assert any("review gate" in item for item in audit.gate_surfaces)
+    assert any("human gate" in item for item in audit.gate_surfaces)
+    assert any("no-op" in item for item in audit.gate_surfaces)
+    assert "False-positive risks:" in output
+    assert "False-negative risks:" in output
+    assert "No GitHub mutation was performed." in output
+    assert "No OpenClaw execution was performed." in output
+
+
+def test_cli_gate_audit_heuristics_does_not_require_repo_or_issue(capsys):
+    from signposter.cli import run_gate
+
+    result = run_gate(
+        argparse.Namespace(
+            audit_heuristics=True,
+            repo=None,
+            issue=None,
+            summary=None,
+        )
+    )
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert "Signposter Gate Heuristic Audit" in output
+    assert "Status:\n  ready" in output
+
+
+def test_cli_gate_requires_repo_and_issue_without_audit(capsys):
+    from signposter.cli import run_gate
+
+    result = run_gate(
+        argparse.Namespace(
+            audit_heuristics=False,
+            repo=None,
+            issue=None,
+            summary=None,
+        )
+    )
+    captured = capsys.readouterr()
+
+    assert result == 2
+    assert "--repo and --issue are required" in captured.err
 
 
 # --- HARDENING-025E-B: Already-integrated gate behavior ---

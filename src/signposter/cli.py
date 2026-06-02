@@ -48,7 +48,13 @@ from signposter.doctor import (
 from signposter.doctor import (
     main as doctor_main,
 )
-from signposter.gate import evaluate_gate_for_complete, format_gate_report, run_gate_dry_run
+from signposter.gate import (
+    build_gate_heuristic_audit,
+    evaluate_gate_for_complete,
+    format_gate_heuristic_audit,
+    format_gate_report,
+    run_gate_dry_run,
+)
 from signposter.handoff import format_handoff_plan, plan_handoff_for_issue
 from signposter.integration import (
     apply_integration,
@@ -1351,8 +1357,13 @@ def main() -> None:
         help="Evaluate review gate for an issue (dry-run by default)",
         description="Read local runner artifacts + GitHub state and propose next gate action.",
     )
-    gate_parser.add_argument("--repo", required=True)
-    gate_parser.add_argument("--issue", type=int, required=True)
+    gate_parser.add_argument("--repo")
+    gate_parser.add_argument("--issue", type=int)
+    gate_parser.add_argument(
+        "--audit-heuristics",
+        action="store_true",
+        help="Render a read-only audit of gate heuristic surfaces",
+    )
     gate_parser.add_argument(
         "--summary",
         default=None,
@@ -1873,8 +1884,19 @@ def run_artifact_show_bugs(args: argparse.Namespace) -> int:
 
 def run_gate(args: argparse.Namespace) -> int:
     """Run gate command."""
+    if getattr(args, "audit_heuristics", False):
+        print(format_gate_heuristic_audit(build_gate_heuristic_audit()))
+        return 0
+
     repo = args.repo
     issue = args.issue
+    if not repo or issue is None:
+        print(
+            "Error: --repo and --issue are required unless --audit-heuristics is used",
+            file=sys.stderr,
+        )
+        return 2
+
     summary = getattr(args, "summary", None)
 
     if not summary:
