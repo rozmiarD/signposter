@@ -85,7 +85,7 @@ def test_select_runner_profile_accepts_explicit_codex_cli_backend():
 def test_format_runner_plan_includes_backend_visibility():
     from signposter.runner import format_runner_plan
 
-    plan = make_runner_plan_for_test("worker", "build", number=42)
+    plan = make_runner_plan_for_test("worker", "build", number=42, proposed_runner="codex-cli")
     output = format_runner_plan([plan])
 
     assert "runner:" in output
@@ -96,7 +96,7 @@ def test_format_runner_plan_includes_backend_visibility():
 def test_execute_plan_uses_codex_cli_adapter(monkeypatch):
     from signposter.runner import execute_plan
 
-    plan = make_runner_plan_for_test("worker", "build", number=42)
+    plan = make_runner_plan_for_test("worker", "build", number=42, proposed_runner="codex-cli")
     plan = plan.__class__(
         **{
             **plan.__dict__,
@@ -180,7 +180,12 @@ def test_active_prompt_runner_plan_uses_refreshed_session_namespace(tmp_path, mo
 # --- Prompt rendering tests ---
 
 
-def make_runner_plan_for_test(role: str, phase: str, number: int = 42):
+def make_runner_plan_for_test(
+    role: str,
+    phase: str,
+    number: int = 42,
+    proposed_runner: str = "openclaw",
+):
     from signposter.runner import RunnerPlan
 
     item = make_item(number, ["state:ready", f"phase:{phase}", f"role:{role}"])
@@ -202,19 +207,33 @@ def make_runner_plan_for_test(role: str, phase: str, number: int = 42):
     return RunnerPlan(
         item=item,
         dispatch=dispatch,
-        proposed_runner="openclaw",
+        proposed_runner=proposed_runner,
         proposed_profile=role,
         proposed_working_dir=f"~/work/{number}",
         proposed_prompt_path=f"artifacts/prompts/issue-{number}.md",
-        proposed_command_shape="openclaw run ...",
+        proposed_command_shape=(
+            "codex exec --model test - < prompt.md"
+            if proposed_runner == "codex-cli"
+            else "openclaw run ..."
+        ),
         reason="test",
+        backend_reason=(
+            "default Codex CLI execution backend"
+            if proposed_runner == "codex-cli"
+            else "explicit OpenClaw legacy backend selected"
+        ),
     )
 
 
 def test_render_prompt_contains_key_sections():
     from signposter.runner import render_prompt
 
-    plan = make_runner_plan_for_test("reviewer", "review", number=2)
+    plan = make_runner_plan_for_test(
+        "reviewer",
+        "review",
+        number=2,
+        proposed_runner="codex-cli",
+    )
     content = render_prompt(plan, "ExatronOmega/signposter")
 
     assert "**Repository:** ExatronOmega/signposter" in content
@@ -230,6 +249,11 @@ def test_render_prompt_contains_key_sections():
     assert "## Selected Role Policy" in content
     assert "selected model:" in content
     assert "selected reasoning effort:" in content
+    assert "backend: codex-cli" in content
+    assert "backend reason: default Codex CLI execution backend" in content
+    assert "expected output format:" in content
+    assert "artifact requirements:" in content
+    assert "uncertainty handling:" in content
     assert "## Private Repository Rule" in content
     assert "Do not fetch the GitHub URL" in content
 
@@ -237,7 +261,7 @@ def test_render_prompt_contains_key_sections():
 def test_format_runner_plan_includes_role_policy_details():
     from signposter.runner import format_runner_plan
 
-    plan = make_runner_plan_for_test("worker", "build", number=42)
+    plan = make_runner_plan_for_test("worker", "build", number=42, proposed_runner="codex-cli")
     output = format_runner_plan([plan])
 
     assert "selected_role:" in output
@@ -258,12 +282,16 @@ def test_render_prompt_role_specific_instruction():
 def test_render_prompt_worker_uses_compact_format():
     from signposter.runner import render_prompt
 
-    plan = make_runner_plan_for_test("worker", "build", number=42)
+    plan = make_runner_plan_for_test("worker", "build", number=42, proposed_runner="codex-cli")
     content = render_prompt(plan, "test/repo")
 
     assert "# Signposter Worker Prompt" in content
     assert "## Context" in content
     assert "## Selected Role Policy" in content
+    assert "backend: codex-cli" in content
+    assert "expected output format:" in content
+    assert "artifact requirements:" in content
+    assert "uncertainty handling:" in content
     assert "## Rules" in content
     assert "## Validation" in content
     assert "## Role Profile" not in content
