@@ -64,11 +64,49 @@ class RunsArtifactAudit:
     limit: int
 
 
+@dataclass(frozen=True)
+class WorkerPromptAudit:
+    """Read-only audit result for a local worker prompt artifact."""
+
+    prompt_path: str
+    exists: bool
+    status: str
+    line_count: int
+    char_count: int
+    missing_fields: tuple[str, ...]
+    repeated_lines: tuple[str, ...]
+    limit: int
+    notes: tuple[str, ...]
+
+
 _RUN_ARTIFACT_RE = re.compile(
     r"^(?P<target>(?:issue-\d+-(?:worker|reviewer|gate)|pr-\d+-reviewer))"
     r"(?P<variant>(?:\.[A-Za-z0-9_-]+)*)"
     r"\.(?P<kind>summary\.md|raw\.txt)$"
 )
+
+_WORKER_PROMPT_REQUIRED_FIELDS = {
+    "repository context": "- repository:",
+    "issue context": "- issue:",
+    "labels context": "- labels:",
+    "route/phase/role/risk/area/gate context": "route/phase/role/risk/area/gate",
+    "working directory": "- working directory:",
+    "selected role policy section": "## selected role policy",
+    "backend metadata": "- backend:",
+    "role identity metadata": "- role identity:",
+    "selected model metadata": "- selected model:",
+    "reasoning effort metadata": "- selected reasoning effort:",
+    "prompt contract section": "## prompt contract",
+    "expected output format": "expected output format:",
+    "artifact requirements": "artifact requirements:",
+    "uncertainty handling": "uncertainty handling:",
+    "issue body section": "## issue body",
+    "rules section": "## rules",
+    "private repository rule": "do not fetch the github url",
+    "scoped task rule": "implement only this scoped issue",
+    "task section": "## task",
+    "validation section": "## validation",
+}
 
 
 def build_worker_summary(
@@ -242,6 +280,123 @@ def audit_run_artifacts(
         unsafe_markers=tuple(unsafe_markers[:bounded_limit]),
         limit=bounded_limit,
     )
+
+
+def audit_worker_prompt(
+    *,
+    prompt_path: str | Path,
+    limit: int = 8,
+) -> WorkerPromptAudit:
+    """Audit a worker prompt artifact for task-boundary fields.
+
+    The audit is intentionally read-only. It verifies that a generated worker
+    prompt carries enough local context for an execution agent without relying
+    on GitHub fetches or hidden global defaults.
+    """
+    path = Path(prompt_path)
+    bounded_limit = max(0, limit)
+    notes = (
+        "Read-only prompt quality audit.",
+        "No GitHub mutation was performed.",
+        "No OpenClaw execution was performed.",
+        "No local prompt or artifact was modified.",
+    )
+
+    if not path.is_file():
+        return WorkerPromptAudit(
+            prompt_path=str(path),
+            exists=False,
+            status="blocked",
+            line_count=0,
+            char_count=0,
+            missing_fields=("prompt artifact",),
+            repeated_lines=(),
+            limit=bounded_limit,
+            notes=notes,
+        )
+
+    text = path.read_text(encoding="utf-8", errors="replace")
+    lowered = text.lower()
+    missing = tuple(
+        name
+        for name, needle in _WORKER_PROMPT_REQUIRED_FIELDS.items()
+        if needle not in lowered
+    )
+    status = "blocked" if missing else "ready"
+
+    repeated = _find_repeated_prompt_lines(text, limit=bounded_limit)
+    return WorkerPromptAudit(
+        prompt_path=str(path),
+        exists=True,
+        status=status,
+        line_count=len(text.splitlines()),
+        char_count=len(text),
+        missing_fields=missing,
+        repeated_lines=repeated,
+        limit=bounded_limit,
+        notes=notes,
+    )
+
+
+def _find_repeated_prompt_lines(text: str, *, limit: int) -> tuple[str, ...]:
+    if limit <= 0:
+        return ()
+
+    counts: dict[str, int] = {}
+    originals: dict[str, str] = {}
+    for line in text.splitlines():
+        stripped = line.strip()
+        if len(stripped) < 24:
+            continue
+        normalized = re.sub(r"\s+", " ", stripped).lower()
+        counts[normalized] = counts.get(normalized, 0) + 1
+        originals.setdefault(normalized, stripped)
+
+    repeated = [
+        f"{count}x {originals[key]}"
+        for key, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+        if count > 1
+    ]
+    return tuple(repeated[:limit])
+
+
+def format_worker_prompt_audit(result: WorkerPromptAudit) -> str:
+    """Render a compact read-only worker prompt audit."""
+    lines = [
+        "Signposter Worker Prompt Audit",
+        "",
+        "Prompt:",
+        f"  path: {result.prompt_path}",
+        f"  exists: {'yes' if result.exists else 'no'}",
+        "",
+        "Status:",
+        f"  {result.status}",
+    ]
+    if result.exists:
+        lines.extend(
+            [
+                "",
+                "Size:",
+                f"  lines: {result.line_count}",
+                f"  chars: {result.char_count}",
+            ]
+        )
+
+    lines.extend(["", "Missing task-boundary fields:"])
+    if result.missing_fields:
+        lines.extend(f"  - {field}" for field in result.missing_fields)
+    else:
+        lines.append("  none")
+
+    lines.extend(["", "Repeated line examples:"])
+    if result.repeated_lines:
+        lines.extend(f"  - {line}" for line in result.repeated_lines)
+    else:
+        lines.append("  none")
+
+    lines.extend(["", "Notes:"])
+    lines.extend(f"  {note}" for note in result.notes)
+    return "\n".join(lines)
 
 
 def _read_artifact_safety_signal(path: Path) -> str | None:

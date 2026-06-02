@@ -11,9 +11,11 @@ from pathlib import Path
 
 from signposter.artifact import (
     audit_run_artifacts,
+    audit_worker_prompt,
     format_manual_artifact_plan,
     format_run_artifact_audit,
     format_worker_artifact_validation,
+    format_worker_prompt_audit,
     plan_review_summary,
     plan_worker_summary,
     validate_worker_summary_artifact,
@@ -1239,6 +1241,23 @@ def main() -> None:
     )
     audit_runs_parser.set_defaults(func=run_artifact_audit_runs)
 
+    audit_worker_prompt_parser = artifact_subparsers.add_parser(
+        "audit-worker-prompt",
+        help="Audit a local worker prompt artifact for task-boundary fields (read-only)",
+    )
+    audit_worker_prompt_parser.add_argument(
+        "--prompt",
+        required=True,
+        help="Path to the worker prompt artifact to audit",
+    )
+    audit_worker_prompt_parser.add_argument(
+        "--limit",
+        type=int,
+        default=8,
+        help="Maximum repeated line examples to show",
+    )
+    audit_worker_prompt_parser.set_defaults(func=run_artifact_audit_worker_prompt)
+
     review_artifact_parser = artifact_subparsers.add_parser(
         "write-review-summary",
         help="Create a local manual reviewer summary artifact",
@@ -1795,6 +1814,16 @@ def run_artifact_audit_runs(args: argparse.Namespace) -> int:
         limit=getattr(args, "limit", 8),
     )
     print(format_run_artifact_audit(result))
+    return 0 if result.status == "ready" else 1
+
+
+def run_artifact_audit_worker_prompt(args: argparse.Namespace) -> int:
+    """Audit a local worker prompt artifact."""
+    result = audit_worker_prompt(
+        prompt_path=args.prompt,
+        limit=getattr(args, "limit", 8),
+    )
+    print(format_worker_prompt_audit(result))
     return 0 if result.status == "ready" else 1
 
 
