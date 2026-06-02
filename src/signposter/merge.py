@@ -10,6 +10,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import Any
 
+from signposter.pr_linkage import detect_pr_issue_linkage
 from signposter.review import (
     ReviewGateResult,
     _run_gh_pr_view,
@@ -75,20 +76,7 @@ def _has_auto_close_keywords(body: str | None) -> bool:
 
 
 def _extract_issue_from_branch_or_body(head_branch: str, body: str | None) -> int | None:
-    # Primary: work/issue-N-...
-    m = re.search(r"work/issue-(\d+)", head_branch or "")
-    if m:
-        return int(m.group(1))
-
-    # Secondary: Related issue: #N or similar
-    if body:
-        m = re.search(r"(?i)related\s+issue:\s*#?(\d+)", body)
-        if m:
-            return int(m.group(1))
-        m = re.search(r"(?i)issue\s*#?(\d+)", body)
-        if m:
-            return int(m.group(1))
-    return None
+    return detect_pr_issue_linkage(head_branch, body).associated_issue
 
 
 def _fetch_pr_reviews_and_author(repo: str, pr: int) -> dict[str, Any]:
@@ -289,7 +277,8 @@ def plan_merge_for_pr(
     reviewer_risk = gate.opinion.risk if gate else None
 
     # Associated issue + auto-close
-    associated_issue = _extract_issue_from_branch_or_body(head, body)
+    linkage = detect_pr_issue_linkage(head, body)
+    associated_issue = linkage.associated_issue
     has_auto_close = _has_auto_close_keywords(body)
 
     scope_allowed = size == "small" or (
@@ -329,6 +318,8 @@ def plan_merge_for_pr(
         status = f"blocked — reviewer risk is {reviewer_risk or 'unknown'}"
     elif not scope_allowed:
         status = f"blocked — PR scope is {size}"
+    elif linkage.ambiguous:
+        status = f"blocked — {linkage.reason}"
     elif associated_issue is None:
         status = "blocked — associated Signposter issue could not be detected"
     elif has_auto_close:

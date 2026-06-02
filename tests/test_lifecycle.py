@@ -267,6 +267,25 @@ def test_blocked_when_no_associated_issue_from_pr():
         assert "associated issue could not be detected" in status.status
 
 
+def test_lifecycle_status_blocks_ambiguous_pr_issue_linkage():
+    with patch("signposter.lifecycle._run_gh_pr_view") as m_pr:
+        m_pr.return_value = {
+            "number": 99,
+            "state": "MERGED",
+            "headRefName": "work/issue-4-branch",
+            "body": "Related issue: #5",
+            "mergeCommit": {"oid": "x"},
+            "reviews": [],
+        }
+
+        status = plan_lifecycle_status("ExatronOmega/signposter", pr=99)
+
+    assert "associated issue link is ambiguous" in status.status
+    assert status.issue_number is None
+    assert status.linkage_source == "ambiguous"
+    assert status.linkage_confidence == "low"
+
+
 # =============================================================================
 # Output & CLI contract
 # =============================================================================

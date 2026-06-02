@@ -12,8 +12,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from signposter.cleanup import _extract_issue_number, _local_branch_exists, _worktree_exists
+from signposter.cleanup import _local_branch_exists, _worktree_exists
 from signposter.labels import check_labels
+from signposter.pr_linkage import PrIssueLinkage, detect_pr_issue_linkage
 from signposter.review import _run_gh_pr_view
 from signposter.scan import fetch_issue_by_number, fetch_issue_context
 from signposter.sync import plan_sync
@@ -238,16 +239,13 @@ def _detect_link_source(
     - detected-pr-search: issue → PR discovery via search → medium
     - unknown: low
     """
+    linkage = detect_pr_issue_linkage(pr_head, body)
+    if linkage.status in ("detected", "ambiguous"):
+        return linkage.source, linkage.confidence
+
     body = body or ""
-
-    if pr_head and re.search(r"work/issue-\d+", pr_head):
-        return "branch-pattern", "high"
-
     if _contains_auto_close_keyword(body):
         return "closing-keyword", "high"
-
-    if re.search(r"Related issue:\s*#?\d+", body, re.IGNORECASE):
-        return "pr-body-related-issue", "medium"
 
     if detected_from == "issue-search":
         return "detected-pr-search", "medium"
@@ -396,6 +394,7 @@ def plan_lifecycle_status(
     pr_data: dict[str, Any] = {}
     issue_labels: list[str] = []
     issue_state: str | None = None
+    pr_linkage: PrIssueLinkage | None = None
 
     try:
         if pr is not None:
@@ -403,7 +402,8 @@ def plan_lifecycle_status(
             pr_number = pr_data.get("number")
             head = pr_data.get("headRefName", "") or ""
             body = pr_data.get("body", "") or ""
-            detected_issue = _extract_issue_number(head, body)
+            pr_linkage = detect_pr_issue_linkage(head, body)
+            detected_issue = pr_linkage.associated_issue
             if detected_issue is not None:
                 issue_number = detected_issue
 
@@ -499,7 +499,9 @@ def plan_lifecycle_status(
     # === Overall status ===
     status = "complete"
 
-    if issue_number is None:
+    if issue_number is None and pr_linkage is not None and pr_linkage.ambiguous:
+        status = f"incomplete — {pr_linkage.reason}"
+    elif issue_number is None:
         status = "incomplete — associated issue could not be detected"
     elif (
         pr_number is None
