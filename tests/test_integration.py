@@ -1,6 +1,9 @@
 """Tests for post-merge integration planning (HARDENING-021A)."""
 
+import sys
 from unittest.mock import patch
+
+import pytest
 
 from signposter.integration import (
     IntegrationPlan,
@@ -156,6 +159,33 @@ def test_integration_apply_dry_run_does_not_mutate(monkeypatch):
             mock_sub.assert_not_called()
 
         assert result["mode"] == "dry_run"
+        assert result["apply_status"] == "ready"
+        assert result["would_execute"] is True
+
+
+def test_integration_apply_dry_run_marks_not_executable_when_main_ci_unknown():
+    from signposter.integration import apply_integration
+
+    with patch("signposter.integration.plan_integration_for_pr") as mock_plan, \
+         patch("subprocess.run") as mock_sub:
+        fake_plan = IntegrationPlan(
+            pr_number=5, pr_title="test", pr_state="MERGED",
+            merge_commit="abc123", base_branch="main", head_branch="work/issue-4-xxx",
+            associated_issue=4, issue_state="OPEN",
+            current_workflow_state="state:done",
+            proposed_workflow_state="state:merged",
+            close_issue=True, close_reason="completed",
+            main_ci_status="unknown",
+            status="ready", notes=[],
+        )
+        mock_plan.return_value = fake_plan
+
+        result = apply_integration("test/repo", 5, apply=False)
+
+    mock_sub.assert_not_called()
+    assert result["mode"] == "dry_run"
+    assert result["apply_status"] == "blocked — main CI is not confirmed pass (got unknown)"
+    assert result["would_execute"] is False
 
 
 def test_integration_apply_refuses_when_plan_not_ready():
@@ -351,6 +381,60 @@ def test_integration_apply_dry_run_blocks_when_main_ci_unknown():
     assert "main CI: unknown" in output
     assert "blocked — main CI is not confirmed pass (got unknown)" in output
     assert "Status:\n  ready" not in output
+
+
+def test_cli_integration_apply_dry_run_returns_blocked_exit_for_blocked_plan(
+    monkeypatch, capsys
+):
+    from signposter.cli import main
+
+    plan = IntegrationPlan(
+        pr_number=5,
+        pr_title="test",
+        pr_state="MERGED",
+        merge_commit="abc123",
+        base_branch="main",
+        head_branch="work/issue-4-xxx",
+        associated_issue=4,
+        issue_state="OPEN",
+        current_workflow_state="state:done",
+        proposed_workflow_state="state:merged",
+        close_issue=True,
+        close_reason="completed",
+        main_ci_status="unknown",
+        status="ready",
+        notes=[],
+    )
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "integration",
+            "apply",
+            "--repo",
+            "test/repo",
+            "--pr",
+            "5",
+        ],
+    )
+
+    with patch(
+        "signposter.cli.apply_integration",
+        return_value={
+            "mode": "dry_run",
+            "plan": plan,
+            "apply_status": "blocked — main CI is not confirmed pass (got unknown)",
+            "would_execute": False,
+        },
+    ), pytest.raises(SystemExit) as exc:
+        main()
+
+    out = capsys.readouterr().out
+    assert exc.value.code == 1
+    assert "blocked — main CI is not confirmed pass (got unknown)" in out
+    assert "DRY RUN: no issue was closed." in out
 
 
 def test_integration_apply_dry_run_ready_when_main_ci_pass():
