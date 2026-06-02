@@ -2287,7 +2287,7 @@ def run_merge_apply(args: argparse.Namespace) -> int:
 
         if result.get("mode") == "dry_run":
             print(format_merge_apply_dry_run(plan))
-            return 0
+            return 0 if plan and plan.status == "ready" else 1
         elif result.get("mode") == "apply":
             success = result.get("success", False)
             print(f"Signposter Merge Apply — PR #{pr}")

@@ -355,6 +355,39 @@ def test_merge_apply_dry_run_does_not_call_subprocess():
         mock_sub.assert_not_called()
         assert result["mode"] == "dry_run"
         assert "gh pr merge" in result["command"]
+        assert result["would_execute"] is True
+
+
+def test_merge_apply_dry_run_hides_command_when_plan_blocked():
+    from signposter.merge import apply_merge
+
+    with patch("signposter.merge.plan_merge_for_pr") as mock_plan, \
+         patch("subprocess.run") as mock_sub:
+
+        fake_plan = MergePlan(
+            pr_number=5, title="test", state="OPEN", base_branch="main",
+            head_branch="work/issue-4-xxx", mergeable="MERGEABLE",
+            review_decision="APPROVED", checks_status="failing",
+            successful_checks=1, failing_checks=1, pending_checks=0,
+            github_approved=True, approving_reviewers=["AlphaExatron"],
+            has_non_author_approval=True, pr_author="ExatronOmega",
+            reviewer_gate_pass=True, reviewer_verdict="APPROVE",
+            reviewer_confidence=0.95, reviewer_risk="low",
+            associated_issue=4, has_auto_close_keywords=False,
+            files_changed=1, additions=8, deletions=0,
+            risk_level="low", size="small",
+            merge_method="squash", delete_branch_after_merge=True,
+            command_preview="gh pr merge 5 -R test/repo --squash --delete-branch",
+            status="blocked — checks are failing", notes=[],
+        )
+        mock_plan.return_value = fake_plan
+
+        result = apply_merge("test/repo", 5, apply=False)
+
+        mock_sub.assert_not_called()
+        assert result["mode"] == "dry_run"
+        assert result["command"] == ""
+        assert result["would_execute"] is False
 
 
 def test_merge_apply_refuses_when_plan_not_ready():
@@ -488,6 +521,60 @@ def test_format_merge_apply_dry_run_contains_safety_notes():
     assert "No issue was closed" in output
     assert "No local worktree was removed" in output
     assert "--delete-branch" in output
+
+
+def test_cli_merge_apply_dry_run_returns_blocked_exit_for_blocked_plan(
+    monkeypatch, capsys
+):
+    from signposter.cli import main
+
+    blocked_plan = MergePlan(
+        pr_number=5, title="test", state="OPEN", base_branch="main",
+        head_branch="work/issue-4-xxx", mergeable="MERGEABLE",
+        review_decision="APPROVED", checks_status="failing",
+        successful_checks=1, failing_checks=1, pending_checks=0,
+        github_approved=True, approving_reviewers=["AlphaExatron"],
+        has_non_author_approval=True, pr_author="ExatronOmega",
+        reviewer_gate_pass=True, reviewer_verdict="APPROVE",
+        reviewer_confidence=0.95, reviewer_risk="low",
+        associated_issue=4, has_auto_close_keywords=False,
+        files_changed=1, additions=8, deletions=0,
+        risk_level="low", size="small",
+        merge_method="squash", delete_branch_after_merge=True,
+        command_preview="gh pr merge 5 -R test/repo --squash --delete-branch",
+        status="blocked — checks are failing", notes=[],
+    )
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "merge",
+            "apply",
+            "--repo",
+            "test/repo",
+            "--pr",
+            "5",
+        ],
+    )
+
+    with patch(
+        "signposter.cli.apply_merge",
+        return_value={
+            "mode": "dry_run",
+            "plan": blocked_plan,
+            "command": "",
+            "would_execute": False,
+        },
+    ), pytest.raises(SystemExit) as exc:
+        main()
+
+    out = capsys.readouterr().out
+    assert exc.value.code == 1
+    assert "blocked — merge plan is not ready" in out
+    assert "gh pr merge 5" not in out
+    assert "No issue was closed" in out
 
 
 # =============================================================================
