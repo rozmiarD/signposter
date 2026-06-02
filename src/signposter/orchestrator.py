@@ -101,6 +101,10 @@ class OrchestratorRunNext:
     step: OrchestratorStep | None
     status: str
     notes: list[str]
+    selection_source: str = "github-scheduler"
+    selection_reason: str = "selected from GitHub scheduler"
+    manifest_path: str | None = None
+    planner_next: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -118,6 +122,9 @@ class OrchestratorRunNextLoop:
     notes: list[str]
     stop_category: str | None = None
     stop_tolerated: bool = False
+    selection_source: str = "github-scheduler"
+    selection_reason: str = "selected from GitHub scheduler"
+    manifest_path: str | None = None
 
 
 @dataclass(frozen=True)
@@ -133,6 +140,17 @@ class OrchestratorAutonomySmoke:
     artifact_path: str
     transcript_path: str | None
     notes: list[str]
+
+
+@dataclass(frozen=True)
+class _RunNextSelection:
+    """Internal run-next issue selection with visible provenance."""
+
+    scheduler: SchedulerNext
+    source: str
+    reason: str
+    manifest_path: str | None = None
+    planner_next: dict[str, object] | None = None
 
 
 def plan_orchestrator_next(
@@ -393,9 +411,19 @@ def plan_orchestrator_run_next(
     *,
     limit: int = 50,
     allow_execute: bool = False,
+    manifest_path: str | Path | None = None,
+    sync_github: bool = False,
+    run_command=subprocess.run,
 ) -> OrchestratorRunNext:
     """Select the next scheduler issue and plan its lifecycle action."""
-    scheduler = select_next_issue(repo, limit=limit)
+    selection = _select_run_next_source(
+        repo,
+        limit=limit,
+        manifest_path=manifest_path,
+        sync_github=sync_github,
+        run_command=run_command,
+    )
+    scheduler = selection.scheduler
     planned: OrchestratorNext | None = None
     status = scheduler.status
 
@@ -419,6 +447,10 @@ def plan_orchestrator_run_next(
             "No local mutation was performed.",
             "No execution backend was started.",
         ],
+        selection_source=selection.source,
+        selection_reason=selection.reason,
+        manifest_path=selection.manifest_path,
+        planner_next=selection.planner_next,
     )
 
 
@@ -428,10 +460,19 @@ def run_orchestrator_run_next(
     limit: int = 50,
     apply: bool = False,
     execute: bool = False,
+    manifest_path: str | Path | None = None,
+    sync_github: bool = False,
     run_command=subprocess.run,
 ) -> OrchestratorRunNext:
     """Select the next scheduler issue and optionally run one lifecycle step."""
-    planned = plan_orchestrator_run_next(repo, limit=limit, allow_execute=execute)
+    planned = plan_orchestrator_run_next(
+        repo,
+        limit=limit,
+        allow_execute=execute,
+        manifest_path=manifest_path,
+        sync_github=sync_github,
+        run_command=run_command,
+    )
     if planned.scheduler.issue is None or not apply:
         return planned
 
@@ -451,6 +492,10 @@ def run_orchestrator_run_next(
             "Run-next one-step execution.",
             "No command is executed unless --apply is present.",
         ],
+        selection_source=planned.selection_source,
+        selection_reason=planned.selection_reason,
+        manifest_path=planned.manifest_path,
+        planner_next=planned.planner_next,
     )
 
 
@@ -466,6 +511,8 @@ def run_orchestrator_run_next_loop(
     tolerate_active_ambiguity: bool = False,
     tolerate_blocked_lifecycle: bool = False,
     tolerate_failed_step: bool = False,
+    manifest_path: str | Path | None = None,
+    sync_github: bool = False,
     run_command=subprocess.run,
 ) -> OrchestratorRunNextLoop:
     """Run scheduler-selected lifecycle work with hard task and cycle limits."""
@@ -478,10 +525,21 @@ def run_orchestrator_run_next_loop(
     selected_issue: int | None = None
     tasks_started = 0
     stop_reason: str | None = None
+    selection_source = "github-scheduler"
+    selection_reason = "selected from GitHub scheduler"
+    manifest_label = str(Path(manifest_path)) if manifest_path is not None else None
 
     for _ in range(max_cycles):
         if selected_issue is None:
-            selected_issue, stop_reason = _select_run_next_loop_issue(repo, limit=limit)
+            selected_issue, stop_reason, selection_source, selection_reason = (
+                _select_run_next_loop_issue(
+                    repo,
+                    limit=limit,
+                    manifest_path=manifest_path,
+                    sync_github=sync_github,
+                    run_command=run_command,
+                )
+            )
             if selected_issue is None:
                 break
             tasks_started += 1
@@ -553,6 +611,9 @@ def run_orchestrator_run_next_loop(
         ],
         stop_category=stop_category,
         stop_tolerated=stop_tolerated,
+        selection_source=selection_source,
+        selection_reason=selection_reason,
+        manifest_path=manifest_label,
     )
 
 
@@ -579,20 +640,42 @@ def _run_next_loop_stop_category(
     return None
 
 
-def _select_run_next_loop_issue(repo: str, *, limit: int) -> tuple[int | None, str | None]:
-    scheduler = select_next_issue(repo, limit=limit)
+def _select_run_next_loop_issue(
+    repo: str,
+    *,
+    limit: int,
+    manifest_path: str | Path | None = None,
+    sync_github: bool = False,
+    run_command=subprocess.run,
+) -> tuple[int | None, str | None, str, str]:
+    selection = _select_run_next_source(
+        repo,
+        limit=limit,
+        manifest_path=manifest_path,
+        sync_github=sync_github,
+        run_command=run_command,
+    )
+    scheduler = selection.scheduler
     if scheduler.issue is not None:
-        return scheduler.issue.number, None
+        return scheduler.issue.number, None, selection.source, selection.reason
+    if manifest_path is not None:
+        return None, scheduler.reason, selection.source, selection.reason
 
     open_issues = fetch_open_issues(repo, limit=limit)
     active = [issue for issue in open_issues if _issue_state(issue) == "active"]
     if len(active) == 1:
-        return active[0].number, None
+        return (
+            active[0].number,
+            None,
+            "github-active-resume",
+            "no scheduler-ready issue; one active GitHub issue is resumable",
+        )
     if len(active) > 1:
         numbers = ", ".join(
             f"#{issue.number}" for issue in sorted(active, key=lambda item: item.number)
         )
-        return None, f"multiple active issues require explicit --issue: {numbers}"
+        reason = f"multiple active issues require explicit --issue: {numbers}"
+        return None, reason, "github-active-resume", reason
 
     resumable_done = [
         issue
@@ -601,13 +684,133 @@ def _select_run_next_loop_issue(repo: str, *, limit: int) -> tuple[int | None, s
         and plan_lifecycle_next(repo, issue=issue.number).status == "actionable"
     ]
     if len(resumable_done) == 1:
-        return resumable_done[0].number, None
+        return (
+            resumable_done[0].number,
+            None,
+            "github-done-tail",
+            "no scheduler-ready issue; one done issue has resumable PR tail work",
+        )
     if len(resumable_done) > 1:
         numbers = ", ".join(
             f"#{issue.number}" for issue in sorted(resumable_done, key=lambda item: item.number)
         )
-        return None, f"multiple resumable done issues require explicit --issue: {numbers}"
-    return None, scheduler.reason
+        reason = f"multiple resumable done issues require explicit --issue: {numbers}"
+        return None, reason, "github-done-tail", reason
+    return None, scheduler.reason, selection.source, selection.reason
+
+
+def _select_run_next_source(
+    repo: str,
+    *,
+    limit: int,
+    manifest_path: str | Path | None,
+    sync_github: bool,
+    run_command=subprocess.run,
+) -> _RunNextSelection:
+    if manifest_path is None:
+        scheduler = select_next_issue(repo, limit=limit)
+        return _RunNextSelection(
+            scheduler=scheduler,
+            source="github-scheduler",
+            reason=f"manifest not provided; using GitHub scheduler: {scheduler.reason}",
+        )
+
+    manifest_file = Path(manifest_path)
+    manifest_label = str(manifest_file)
+    if not manifest_file.exists():
+        reason = f"manifest file not found: {manifest_label}"
+        return _RunNextSelection(
+            scheduler=SchedulerNext(repo, "blocked", None, reason, [], []),
+            source="planner-manifest",
+            reason=reason,
+            manifest_path=manifest_label,
+        )
+
+    manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+    issue_states = (
+        _fetch_manifest_issue_states(repo, manifest, run_command=run_command)
+        if sync_github
+        else {}
+    )
+    status = build_planner_status(manifest, issue_states)
+    planner_next = build_planner_next_from_status(status)
+
+    active_tasks = [
+        task for task in status.get("tasks", []) if str(task.get("state", "")).lower() == "active"
+    ]
+    if len(active_tasks) == 1:
+        task = active_tasks[0]
+        issue = _labeled_item_from_planner_task(task, state="active")
+        reason = (
+            f"manifest has one active task {task.get('key')}; "
+            "resume it before selecting another ready task"
+        )
+        return _RunNextSelection(
+            scheduler=SchedulerNext(repo, "active", issue, reason, [], []),
+            source="planner-manifest",
+            reason=reason,
+            manifest_path=manifest_label,
+            planner_next=planner_next,
+        )
+    if len(active_tasks) > 1:
+        numbers = ", ".join(
+            f"#{task.get('github_issue')}"
+            for task in active_tasks
+            if task.get("github_issue") is not None
+        )
+        reason = f"manifest has multiple active tasks; explicit --issue required: {numbers}"
+        return _RunNextSelection(
+            scheduler=SchedulerNext(repo, "blocked", None, reason, [], []),
+            source="planner-manifest",
+            reason=reason,
+            manifest_path=manifest_label,
+            planner_next=planner_next,
+        )
+
+    next_task = planner_next.get("next")
+    if isinstance(next_task, dict) and next_task.get("github_issue") is not None:
+        issue = _labeled_item_from_planner_task(next_task, state="ready")
+        reason = (
+            f"manifest selected {next_task.get('key')}: "
+            f"{planner_next.get('reason', 'dependency-ready task')}"
+        )
+        return _RunNextSelection(
+            scheduler=SchedulerNext(repo, "ready", issue, reason, [], []),
+            source="planner-manifest",
+            reason=reason,
+            manifest_path=manifest_label,
+            planner_next=planner_next,
+        )
+
+    reason = (
+        "manifest did not select a ready or active task: "
+        f"{planner_next.get('reason', 'unknown')}"
+    )
+    return _RunNextSelection(
+        scheduler=SchedulerNext(
+            repo,
+            str(planner_next.get("status", "blocked")),
+            None,
+            reason,
+            [],
+            [],
+        ),
+        source="planner-manifest",
+        reason=reason,
+        manifest_path=manifest_label,
+        planner_next=planner_next,
+    )
+
+
+def _labeled_item_from_planner_task(task: dict[str, object], *, state: str) -> LabeledItem:
+    issue_number = int(task["github_issue"])  # manifest validation owns type shape
+    return LabeledItem(
+        number=issue_number,
+        title=str(task.get("title", f"Issue {issue_number}")),
+        html_url=str(task.get("github_url", "")),
+        labels=[f"state:{state}"],
+        item_type="issue",
+    )
 
 
 def _issue_state(issue: LabeledItem) -> str | None:
@@ -810,6 +1013,15 @@ def format_orchestrator_run_next(result: OrchestratorRunNext) -> str:
     lines = [
         "Signposter Orchestrator Run Next",
         "",
+        "Selection source:",
+        f"  source: {result.selection_source}",
+        f"  reason: {result.selection_reason}",
+        (
+            f"  manifest: {result.manifest_path}"
+            if result.manifest_path
+            else "  manifest: not provided"
+        ),
+        "",
         "Scheduler:",
     ]
     if result.scheduler.issue:
@@ -873,6 +1085,7 @@ def format_orchestrator_run_next_summary(result: OrchestratorRunNext) -> str:
     lines = [
         "Signposter Automation Summary",
         f"selected: {issue}",
+        f"source: {result.selection_source}",
         f"action: {action}",
         f"status: {result.status}",
         f"stop: {stop}",
@@ -898,6 +1111,15 @@ def format_orchestrator_run_next_loop(result: OrchestratorRunNextLoop) -> str:
         "  execute required for backend: yes",
         f"  stop category: {result.stop_category or 'none'}",
         f"  stop tolerated: {'yes' if result.stop_tolerated else 'no'}",
+        "",
+        "Selection source:",
+        f"  source: {result.selection_source}",
+        f"  reason: {result.selection_reason}",
+        (
+            f"  manifest: {result.manifest_path}"
+            if result.manifest_path
+            else "  manifest: not provided"
+        ),
         "",
         "Selection:",
         (
@@ -950,6 +1172,7 @@ def format_orchestrator_run_next_loop_summary(result: OrchestratorRunNextLoop) -
     lines = [
         "Signposter Automation Summary",
         f"selected: {selected}",
+        f"source: {result.selection_source}",
         f"action: {action}",
         f"status: {result.status}",
         f"stop: {stop}",
@@ -1112,6 +1335,8 @@ def run_orchestrator_autonomy_smoke(
         limit=limit,
         apply=False,
         execute=False,
+        manifest_path=manifest_path,
+        sync_github=sync_github,
         run_command=run_command,
     )
     loop = run_orchestrator_run_next_loop(
@@ -1125,6 +1350,8 @@ def run_orchestrator_autonomy_smoke(
         tolerate_active_ambiguity=True,
         tolerate_blocked_lifecycle=True,
         tolerate_failed_step=True,
+        manifest_path=manifest_path,
+        sync_github=sync_github,
         run_command=run_command,
     )
 

@@ -797,6 +797,145 @@ def test_orchestrator_run_next_handles_no_scheduler_issue() -> None:
     assert result.status == "completed"
 
 
+def test_orchestrator_run_next_uses_manifest_active_task_before_scheduler_ready(
+    tmp_path,
+) -> None:
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        """
+{
+  "version": "planner.seed-manifest.v0.1",
+  "repo": "example/repo",
+  "status": "applied",
+  "issues": [
+    {
+      "key": "H049-028",
+      "title": "H049-028",
+      "labels": ["phase:build"],
+      "depends_on": [],
+      "github_issue": 235,
+      "github_url": "https://github.com/example/repo/issues/235"
+    },
+    {
+      "key": "H049-032",
+      "title": "H049-032",
+      "labels": ["phase:build"],
+      "depends_on": [],
+      "github_issue": 239,
+      "github_url": "https://github.com/example/repo/issues/239"
+    }
+  ]
+}
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    scheduler_ready = SchedulerNext(
+        repo="example/repo",
+        status="ready",
+        issue=LabeledItem(239, "Issue 239", "url", ["state:ready"], "issue"),
+        reason="scheduler saw a later ready task",
+        skipped=[],
+        notes=[],
+    )
+    lifecycle_next = _next(issue_number=235, action="write-prompt")
+
+    with (
+        patch("signposter.orchestrator.select_next_issue", return_value=scheduler_ready),
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next),
+    ):
+        result = plan_orchestrator_run_next(
+            "example/repo",
+            manifest_path=manifest,
+            sync_github=True,
+            run_command=Mock(
+                side_effect=[
+                    type(
+                        "Proc",
+                        (),
+                        {
+                            "returncode": 0,
+                            "stdout": '{"state":"OPEN","labels":[{"name":"state:active"}]}',
+                            "stderr": "",
+                        },
+                    )(),
+                    type(
+                        "Proc",
+                        (),
+                        {
+                            "returncode": 0,
+                            "stdout": '{"state":"OPEN","labels":[{"name":"state:ready"}]}',
+                            "stderr": "",
+                        },
+                    )(),
+                ]
+            ),
+        )
+
+    assert result.scheduler.issue is not None
+    assert result.scheduler.issue.number == 235
+    assert result.selection_source == "planner-manifest"
+    assert "one active task H049-028" in result.selection_reason
+    assert result.next is not None
+    assert result.next.lifecycle.issue_number == 235
+
+
+def test_orchestrator_run_next_loop_uses_manifest_active_task(
+    tmp_path,
+) -> None:
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        """
+{
+  "version": "planner.seed-manifest.v0.1",
+  "repo": "example/repo",
+  "status": "applied",
+  "issues": [
+    {
+      "key": "H049-028",
+      "title": "H049-028",
+      "labels": [],
+      "depends_on": [],
+      "github_issue": 235,
+      "github_url": "https://github.com/example/repo/issues/235"
+    }
+  ]
+}
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    lifecycle_next = _next(issue_number=235, action="write-prompt")
+    proc = type("Proc", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
+
+    with patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next):
+        result = run_orchestrator_run_next_loop(
+            "example/repo",
+            manifest_path=manifest,
+            sync_github=True,
+            max_cycles=1,
+            apply=True,
+            run_command=Mock(
+                side_effect=[
+                    type(
+                        "Proc",
+                        (),
+                        {
+                            "returncode": 0,
+                            "stdout": '{"state":"OPEN","labels":[{"name":"state:active"}]}',
+                            "stderr": "",
+                        },
+                    )(),
+                    proc,
+                ]
+            ),
+        )
+
+    assert result.steps[0].next.lifecycle.issue_number == 235
+    assert result.selection_source == "planner-manifest"
+    assert result.selected_issue == 235
+
+
 def test_format_orchestrator_run_next_contains_selection_and_action() -> None:
     issue = LabeledItem(
         number=55,
@@ -823,6 +962,8 @@ def test_format_orchestrator_run_next_contains_selection_and_action() -> None:
     out = format_orchestrator_run_next(result)
 
     assert "Signposter Orchestrator Run Next" in out
+    assert "source: github-scheduler" in out
+    assert "manifest: not provided" in out
     assert "selected: #55" in out
     assert "action: execute-worker" in out
     assert "No lifecycle command was executed." in out
@@ -856,6 +997,7 @@ def test_format_orchestrator_run_next_summary_is_concise() -> None:
     assert out.splitlines() == [
         "Signposter Automation Summary",
         "selected: #55",
+        "source: github-scheduler",
         "action: execute-worker",
         "status: blocked",
         "stop: Execution backend requires explicit --execute",
@@ -1476,6 +1618,7 @@ def test_format_orchestrator_run_next_loop_summary_is_concise() -> None:
     assert out.splitlines() == [
         "Signposter Automation Summary",
         "selected: #57",
+        "source: github-active-resume",
         "action: execute-worker",
         "status: stopped",
         "stop: Execution backend requires explicit --execute",
