@@ -210,6 +210,10 @@ def plan_pr_for_issue(
         "No PR, merge, push, close, or GitHub mutation was performed.",
         "This command only plans PR metadata and suggested gh commands.",
         "Do not use auto-closing keywords until explicit close policy exists.",
+        (
+            "If this head branch or PR already exists, inspect and reuse it "
+            "instead of creating duplicates."
+        ),
     ]
 
     return PRPlan(
