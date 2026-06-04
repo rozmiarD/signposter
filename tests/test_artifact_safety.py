@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from signposter.artifact import plan_review_summary, plan_worker_summary
 from signposter.artifact_safety import find_stale_or_failover_signal
+from signposter.comments import (
+    audit_github_comment_body,
+    redact_github_comment_body,
+)
 from signposter.gate import evaluate_ci_gate
 from signposter.review import evaluate_review_gate
 
@@ -80,3 +84,28 @@ def test_review_gate_accepts_formal_manual_artifact(tmp_path):
     )
 
     assert gate.gate_pass is True
+
+
+def test_comment_redaction_covers_reviewer_token_assignment():
+    body = "Signposter report\n\nSIGNPOSTER_REVIEWER_GH_TOKEN=ghp_" + ("A" * 24)
+
+    redacted = redact_github_comment_body(body)
+    audit = audit_github_comment_body(redacted)
+
+    assert "SIGNPOSTER_REVIEWER_GH_TOKEN=" not in redacted
+    assert "[REDACTED:reviewer-token-assignment]" in redacted
+    assert audit.valid is True
+
+
+def test_comment_audit_rejects_unredacted_private_key_block():
+    body = (
+        "Signposter report\n\n"
+        "-----BEGIN PRIVATE KEY-----\n"
+        "abc123\n"
+        "-----END PRIVATE KEY-----"
+    )
+
+    audit = audit_github_comment_body(body)
+
+    assert audit.valid is False
+    assert "comment body contains possible private key block" in audit.errors
