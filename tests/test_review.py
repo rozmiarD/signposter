@@ -1566,6 +1566,47 @@ def test_validate_review_artifact_blocks_unsafe_raw_marker(tmp_path):
     assert "preserve unsafe backend output separately" in out
 
 
+def test_validate_review_artifact_missing_summary_reports_stale_raw_takeover_fields(tmp_path):
+    from signposter.review import format_review_artifact_validation, validate_review_artifact
+
+    summary_path = tmp_path / "pr-73-reviewer.summary.md"
+    raw = tmp_path / "pr-73-reviewer.raw.txt"
+    raw.write_text("The model is not supported for this account.\n", encoding="utf-8")
+
+    result = validate_review_artifact(73, summary_path=str(summary_path))
+    out = format_review_artifact_validation(result)
+
+    assert result.status == "blocked"
+    assert result.raw_exists is True
+    assert result.raw_stale_signal == "model is not supported"
+    assert "summary artifact missing" in result.errors[0]
+    assert "Raw unsafe marker:" in out
+    assert "manual reviewer summary required fields" in out
+    assert "Verdict, Confidence, Risk" in out
+    assert "manual reviewer summary required sections" in out
+
+
+def test_validate_review_artifact_stale_raw_guidance_lists_manual_takeover_fields(
+    tmp_path,
+):
+    from signposter.artifact import plan_review_summary, write_manual_artifact
+    from signposter.review import format_review_artifact_validation, validate_review_artifact
+
+    plan = plan_review_summary(pr=74, risk="medium", runs_dir=tmp_path)
+    write_manual_artifact(plan, apply=True)
+    raw = tmp_path / "pr-74-reviewer.raw.txt"
+    raw.write_text("Model unavailable.\n", encoding="utf-8")
+
+    result = validate_review_artifact(74, summary_path=plan.path)
+    out = format_review_artifact_validation(result)
+
+    assert result.status == "blocked"
+    assert result.raw_stale_signal == "model unavailable"
+    assert "manual reviewer summary required fields" in out
+    assert "Scope match, CI considered" in out
+    assert "manual reviewer summary required sections" in out
+
+
 def test_review_gate_blocks_unsafe_raw_marker(tmp_path):
     from signposter.artifact import plan_review_summary, write_manual_artifact
     from signposter.review import evaluate_review_gate
