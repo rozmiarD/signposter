@@ -325,6 +325,69 @@ def test_format_worktree_apply_plan_blocked():
     output = format_worktree_apply_plan(plan, dry_run=True)
     assert "blocked — issue is state:done" in output
     assert "Refusing to create worktree" in output
+    assert "No branches or worktrees were created." in output
+    assert "No GitHub mutation was performed." in output
+
+
+def test_format_worktree_apply_plan_blocked_existing_path_has_recovery_guidance():
+    from signposter.worktree import WorktreePlan, format_worktree_apply_plan
+
+    plan = WorktreePlan(
+        issue_number=42,
+        title="Existing path",
+        state="ready",
+        route="worker",
+        gate="ci",
+        base_branch="main",
+        proposed_branch="work/issue-42-existing-path",
+        proposed_worktree="../signposter-work/42",
+        working_tree_clean=True,
+        branch_exists=False,
+        worktree_exists=True,
+        has_unresolved_dependencies=False,
+        dependency_block_reason=None,
+        status="blocked — proposed worktree path already exists: ../signposter-work/42",
+        notes=["No branches or worktrees were created."],
+        branch_collision_reason="worktree path already exists",
+    )
+
+    output = format_worktree_apply_plan(plan, dry_run=True)
+
+    assert "Refusing to create worktree" in output
+    assert "Recovery guidance:" in output
+    assert "Worktree collision: expected worktree path already exists." in output
+    assert "Inspect worktree path: ../signposter-work/42" in output
+    assert "No branches or worktrees were created." in output
+
+
+def test_format_worktree_apply_plan_blocked_dirty_tree_has_recovery_guidance():
+    from signposter.worktree import WorktreePlan, format_worktree_apply_plan
+
+    plan = WorktreePlan(
+        issue_number=42,
+        title="Dirty tree",
+        state="ready",
+        route="worker",
+        gate="ci",
+        base_branch="main",
+        proposed_branch="work/issue-42-dirty-tree",
+        proposed_worktree="../signposter-work/42",
+        working_tree_clean=False,
+        branch_exists=False,
+        worktree_exists=False,
+        has_unresolved_dependencies=False,
+        dependency_block_reason=None,
+        status="blocked — working tree has uncommitted changes",
+        notes=["No branches or worktrees were created."],
+    )
+
+    output = format_worktree_apply_plan(plan, dry_run=True)
+
+    assert "Refusing to create worktree" in output
+    assert "Recovery guidance:" in output
+    assert "Working tree is dirty." in output
+    assert "Inspect changes: git status --short" in output
+    assert "Commit, stash, or clean unrelated changes before retrying." in output
 
 
 def test_apply_worktree_plan_dry_run_returns_command_no_subprocess():

@@ -310,8 +310,37 @@ def format_worktree_apply_plan(plan: WorktreePlan, *, dry_run: bool = True) -> s
             lines.append(f"  {cmd_str}")
     else:
         lines.append("\nRefusing to create worktree.")
+        recovery_hints = _format_worktree_apply_recovery_hints(plan)
+        if recovery_hints:
+            lines.append("\nRecovery guidance:")
+            lines.extend(recovery_hints)
+        lines.append("\nNotes:")
+        lines.append("  No branches or worktrees were created.")
+        lines.append("  No GitHub mutation was performed.")
 
     return "\n".join(lines)
+
+
+def _format_worktree_apply_recovery_hints(plan: WorktreePlan) -> list[str]:
+    """Return read-only recovery guidance for blocked worktree apply output."""
+    if not plan.working_tree_clean:
+        return [
+            "  Working tree is dirty.",
+            "  Inspect changes: git status --short",
+            "  Commit, stash, or clean unrelated changes before retrying.",
+        ]
+
+    collision_hints = _format_collision_recovery_hints(plan)
+    if collision_hints:
+        return collision_hints
+
+    if plan.has_unresolved_dependencies:
+        return [
+            f"  Dependency blocked: {plan.dependency_block_reason or 'unknown'}",
+            "  Complete or reconcile dependencies before creating a worktree.",
+        ]
+
+    return ["  Inspect the blocked status above before retrying."]
 
 
 def apply_worktree_plan(plan: WorktreePlan, *, dry_run: bool = True) -> list[str]:
