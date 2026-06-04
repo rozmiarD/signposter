@@ -91,6 +91,23 @@ def test_format_runner_plan_includes_backend_visibility():
     assert "runner:" in output
     assert "backend_reason:" in output
     assert "execute_ready:" in output
+    assert "fallback_takeover:" in output
+    assert "automatic_fallback: no" in output
+    assert "manual_takeover:" in output
+    assert "silent_fallback: forbidden" in output
+
+
+def test_format_runner_plan_surfaces_explicit_openclaw_fallback_candidate():
+    from signposter.runner import format_runner_plan
+
+    plan = make_runner_plan_for_test("worker", "build", number=43, proposed_runner="openclaw")
+    output = format_runner_plan([plan])
+
+    assert "fallback_takeover:" in output
+    assert "automatic_fallback: yes" in output
+    assert "fallback_candidate: WORKER_CORE / openai/gpt-5.4 / medium" in output
+    assert "fallback_trigger: unsupported selected model from runtime output" in output
+    assert "silent_fallback: forbidden; retry is recorded" in output
 
 
 def test_execute_plan_uses_codex_cli_adapter(monkeypatch):
@@ -251,6 +268,8 @@ def test_render_prompt_contains_key_sections():
     assert "selected reasoning effort:" in content
     assert "backend: codex-cli" in content
     assert "backend reason: default Codex CLI execution backend" in content
+    assert "fallback/takeover transparency:" in content
+    assert "silent_fallback: forbidden" in content
     assert "expected output format:" in content
     assert "artifact requirements:" in content
     assert "uncertainty handling:" in content
@@ -1038,6 +1057,9 @@ def test_generate_execution_summary_records_runtime_fallback():
 
     assert "**Runtime Fallback Used:** yes" in summary
     assert "**Original Selected Model:** openai/gpt-5.3-codex" in summary
+    assert "## Fallback / takeover transparency" in summary
+    assert "automatic fallback retry was used" in summary
+    assert "silent fallback: forbidden" in summary
 
 
 def test_execute_plan_preflight_blocks_before_openclaw_and_artifacts(tmp_path):
@@ -1359,6 +1381,9 @@ def test_generate_execution_summary_records_clean_for_worker_when_not_bypassed()
 
     assert "**Dirty Guard:** clean" in summary
     assert "bypassed by --allow-dirty" not in summary
+    assert "## Fallback / takeover transparency" in summary
+    assert "- automatic_fallback:" in summary
+    assert "- manual_takeover:" in summary
 
 
 def test_generate_execution_summary_omits_dirty_guard_for_reviewer():

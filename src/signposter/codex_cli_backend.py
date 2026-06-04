@@ -355,6 +355,8 @@ def _format_codex_cli_summary(
         f"**Token Usage Status:** {token_usage.status}",
         f"**Exit Code:** {exit_code}",
         f"**Status:** {status}",
+        "**Automatic Fallback:** no",
+        f"**Takeover Required:** {'no' if complete else 'yes'}",
         f"**Task execution complete:** {'yes' if complete else 'no'}",
         f"**Acceptance:** {'pass' if complete else 'needs-work'}",
         "",
@@ -383,6 +385,23 @@ def _format_codex_cli_summary(
             "Files changed: not reported by Codex CLI execution summary",
             "Validation notes: not reported by Codex CLI execution summary",
             "Raw output: local only",
+            "",
+            "## Fallback / takeover transparency",
+            "",
+            "- Automatic fallback: no; codex-cli uses the selected model exactly once.",
+            "- Silent fallback: forbidden.",
+            (
+                "- Takeover: "
+                + (
+                    "not required for this successful execution."
+                    if complete
+                    else (
+                        "preserve raw/summary artifacts and use bounded manual "
+                        "artifact fallback if the workflow must continue."
+                    )
+                )
+            ),
+            "- Fallback metadata: selected backend/model/reasoning are recorded above.",
             "",
             "## First output lines",
             "",
