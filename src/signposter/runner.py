@@ -40,6 +40,7 @@ from signposter.openclaw_runtime import (
 from signposter.role_policy import execution_agent_for_backend, get_role_policy
 from signposter.role_routing import resolve_role_execution, select_role_for_issue
 from signposter.scan import LabeledItem, fetch_issue_by_number, fetch_issue_context
+from signposter.token_usage import format_token_usage_accounting, summarize_token_usage
 from signposter.worktree import get_worktree_status_for_issue
 
 DEFAULT_OPENCLAW_SESSION_NAMESPACE = "v2"
@@ -2026,6 +2027,13 @@ def _generate_execution_summary(
 
     # Basic stats
     raw_text = stdout + ("\n" + stderr if stderr else "")
+    token_usage = summarize_token_usage(
+        role=plan.selected_role_name,
+        model=plan.selected_model,
+        reasoning_effort=plan.selected_reasoning_effort,
+        output_text=raw_text,
+    )
+    lines.append(f"**Token Usage Status:** {token_usage.status}")
     line_count = len(raw_text.splitlines())
     byte_count = len(raw_text.encode("utf-8"))
     lines.append(f"**Output Size:** {line_count} lines, {byte_count} bytes")
@@ -2035,6 +2043,9 @@ def _generate_execution_summary(
     if diagnostics_warnings:
         lines.append("\n## Runtime warnings\n")
         lines.extend(f"- {warning}" for warning in diagnostics_warnings)
+
+    lines.append("")
+    lines.extend(format_token_usage_accounting(token_usage).splitlines())
 
     # Excerpts
     lines.append("\n## First 30 lines of output\n")
