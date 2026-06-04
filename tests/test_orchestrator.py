@@ -531,6 +531,89 @@ def test_orchestrator_step_apply_blocks_takeover_until_manual_recovery(
     run_command.assert_not_called()
 
 
+def test_orchestrator_stuck_state_recovery_smoke_surfaces_takeover_and_ci_blocker(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    issue = LabeledItem(
+        number=46,
+        title="Issue 46",
+        html_url="https://github.com/example/repo/issues/46",
+        labels=["state:active"],
+        item_type="issue",
+        updated_at="2026-05-20T00:00:00Z",
+    )
+
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=issue),
+    ):
+        planned = plan_orchestrator_next(
+            "ExatronOmega/signposter",
+            issue=46,
+            allow_execute=True,
+        )
+
+    assert planned.status == "actionable"
+    assert planned.takeover_category == "resume-existing-worktree"
+    assert planned.lifecycle.worker_summary_exists is False
+    output = format_orchestrator_next(planned)
+    assert "Takeover plan:" in output
+    assert "resume path: resume existing worktree and prompt" in output
+    assert "manual fallback: write a manual worker summary" in output
+    assert "mutation policy: this plan is read-only" in output
+
+    run_command = Mock()
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=issue),
+    ):
+        step = run_orchestrator_step(
+            "ExatronOmega/signposter",
+            issue=46,
+            apply=True,
+            execute=True,
+            run_command=run_command,
+        )
+
+    assert step.status == "blocked"
+    assert step.applied is False
+    assert step.stop_reason == (
+        "takeover plan requires explicit manual recovery before apply: "
+        "resume-existing-worktree"
+    )
+    assert any(
+        "Takeover apply guard stopped before running" in note for note in step.notes
+    )
+    run_command.assert_not_called()
+
+    ci_blocked = _next(
+        issue_number=46,
+        pr_number=47,
+        pr_state="OPEN",
+        worker_summary_exists=True,
+        action="merge-pr",
+        command=(
+            "signposter merge apply --repo ExatronOmega/signposter --pr 47 "
+            "--apply"
+        ),
+        status="blocked",
+        reason="blocked — checks are failing",
+    )
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=ci_blocked),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=issue),
+    ):
+        blocked_pr = plan_orchestrator_next("ExatronOmega/signposter", issue=46)
+
+    assert blocked_pr.status == "blocked"
+    assert blocked_pr.stop_reason == "blocked — checks are failing"
+    blocked_output = format_orchestrator_next(blocked_pr)
+    assert "blocked — checks are failing" in blocked_output
+    assert "No GitHub mutation was performed." in blocked_output
+
+
 def test_orchestrator_loop_stops_after_dry_run_step() -> None:
     lifecycle_next = _next(
         workflow_state="state:ready",
