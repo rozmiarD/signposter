@@ -52,6 +52,10 @@ def test_plan_codex_subagent_dispatch_builds_bounded_contract(tmp_path) -> None:
     assert contract.model == "openai/gpt-5.3-codex"
     assert contract.reasoning_effort == "low"
     assert contract.timeout_seconds == 45
+    assert contract.session_key == "signposter-test-subagent"
+    assert contract.command_preview.startswith("codex exec --model openai/gpt-5.3-codex")
+    assert "--cd" in contract.command_preview
+    assert "--output-last-message" in contract.command_preview
     assert "malformed output" in contract.takeover_condition
     assert "no GitHub mutation" in contract.forbidden_actions
     assert contract.invocation.agent == "codex_worker_code"
@@ -69,6 +73,20 @@ def test_plan_codex_subagent_dispatch_rejects_non_codex_backend(tmp_path) -> Non
             summary_artifact=tmp_path / "summary.md",
             last_message_artifact=tmp_path / "last-message.txt",
             role_execution=_role_execution("openclaw"),
+            session_key="signposter-test-subagent",
+        )
+
+
+def test_plan_codex_subagent_dispatch_rejects_artifact_path_collision(tmp_path) -> None:
+    with pytest.raises(ValueError, match="artifact paths must be distinct"):
+        plan_codex_subagent_dispatch(
+            task_scope="do work",
+            prompt_artifact=tmp_path / "prompt.md",
+            working_dir=tmp_path,
+            raw_artifact=tmp_path / "artifact.txt",
+            summary_artifact=tmp_path / "artifact.txt",
+            last_message_artifact=tmp_path / "last-message.txt",
+            role_execution=_role_execution(),
             session_key="signposter-test-subagent",
         )
 
@@ -91,6 +109,10 @@ def test_format_codex_subagent_dispatch_contract_is_read_only(tmp_path) -> None:
     assert "Status:\n  ready" in output
     assert "agent: codex_worker_code" in output
     assert "model: openai/gpt-5.3-codex" in output
+    assert "command_preview: codex exec --model openai/gpt-5.3-codex" in output
+    assert "session_key: signposter-test-subagent (Signposter metadata only)" in output
+    assert "prompt_transport: stdin" in output
+    assert "--session-key" not in output
     assert "takeover:" in output
     assert "No GitHub mutation was performed." in output
     assert "No Codex CLI execution was performed." in output
@@ -127,6 +149,8 @@ def test_cli_subagent_plan_codex_renders_read_only_contract(
     assert exc_info.value.code == 0
     assert "Signposter Codex Subagent Dispatch Contract" in output
     assert "agent: codex_worker_code" in output
+    assert "command_preview: codex exec --model openai/gpt-5.3-codex" in output
+    assert "session_key: signposter-subagent-dry-run (Signposter metadata only)" in output
     assert "No Codex CLI execution was performed." in output
 
 
