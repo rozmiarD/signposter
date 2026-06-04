@@ -326,6 +326,11 @@ def _main_ci_inspection_command(
     )
 
 
+def _main_ci_log_command(*, repo: str | None = None) -> str:
+    repo_arg = repo or "<repo>"
+    return f"gh run view <run-id-from-inspect-command> -R {repo_arg} --log-failed"
+
+
 def _integration_ci_blockage_lines(
     plan: IntegrationPlan,
     *,
@@ -349,6 +354,14 @@ def _integration_ci_blockage_lines(
         f"category: {category}",
         f"reason: {reason}",
         f"inspect command: {_main_ci_inspection_command(plan, repo=repo)}",
+        *(
+            [
+                f"log command: {_main_ci_log_command(repo=repo)}",
+                "logs: not fetched or printed by Signposter output",
+            ]
+            if plan.main_ci_status == "failing"
+            else []
+        ),
         f"next: {next_action}",
     ]
 
