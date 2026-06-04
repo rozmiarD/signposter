@@ -2269,6 +2269,7 @@ def _generate_execution_summary(
         role=plan.selected_role_name,
         model=plan.selected_model,
         reasoning_effort=plan.selected_reasoning_effort,
+        backend=plan.proposed_runner,
         output_text=raw_text,
     )
     lines.append(f"**Token Usage Status:** {token_usage.status}")
