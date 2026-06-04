@@ -1,0 +1,3401 @@
+{
+  "version": "planner.seed-manifest.v0.1",
+  "plan": "docs/roadmaps/h050-plan.json",
+  "repo": "ExatronOmega/signposter",
+  "status": "applied",
+  "issues": [
+    {
+      "key": "H050-001",
+      "title": "H050-001 — Repository truth and H049 carryover audit",
+      "labels": [
+        "phase:build",
+        "risk:low",
+        "role:worker",
+        "area:core",
+        "state:ready"
+      ],
+      "depends_on": [],
+      "body_file": "/tmp/signposter-h050-bodies/H050-001.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 102,
+        "char_count": 3622,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 371,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/371",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [],
+      "github_depends_on": [],
+      "github_dependency_urls": []
+    },
+    {
+      "key": "H050-002",
+      "title": "H050-002 — Documentation truth gap audit",
+      "labels": [
+        "phase:build",
+        "risk:low",
+        "role:worker",
+        "area:docs"
+      ],
+      "depends_on": [
+        "H050-001"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-002.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3643,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 372,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/372",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-001",
+          "github_issue": 371,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/371",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        371
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/371"
+      ]
+    },
+    {
+      "key": "H050-003",
+      "title": "H050-003 — Command surface smoke inventory",
+      "labels": [
+        "phase:build",
+        "risk:low",
+        "role:worker",
+        "area:cli"
+      ],
+      "depends_on": [
+        "H050-001"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-003.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3658,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 373,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/373",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-001",
+          "github_issue": 371,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/371",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        371
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/371"
+      ]
+    },
+    {
+      "key": "H050-004",
+      "title": "H050-004 — Test coverage gap map",
+      "labels": [
+        "phase:build",
+        "risk:low",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H050-001"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-004.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3633,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 374,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/374",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-001",
+          "github_issue": 371,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/371",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        371
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/371"
+      ]
+    },
+    {
+      "key": "H050-005",
+      "title": "H050-005 — H050 roadmap grounding audit",
+      "labels": [
+        "phase:build",
+        "risk:low",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H050-002",
+        "H050-003",
+        "H050-004"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-005.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 112,
+        "char_count": 3846,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 375,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/375",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-002",
+          "github_issue": 372,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/372",
+          "status": "resolved"
+        },
+        {
+          "key": "H050-003",
+          "github_issue": 373,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/373",
+          "status": "resolved"
+        },
+        {
+          "key": "H050-004",
+          "github_issue": 374,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/374",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        372,
+        373,
+        374
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/372",
+        "https://github.com/ExatronOmega/signposter/issues/373",
+        "https://github.com/ExatronOmega/signposter/issues/374"
+      ]
+    },
+    {
+      "key": "H050-006",
+      "title": "H050-006 — Planner seed manifest compatibility audit",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:scheduler"
+      ],
+      "depends_on": [
+        "H050-005"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-006.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3644,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 376,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/376",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-005",
+          "github_issue": 375,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/375",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        375
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/375"
+      ]
+    },
+    {
+      "key": "H050-007",
+      "title": "H050-007 — Planner seed dry-run output determinism",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:scheduler"
+      ],
+      "depends_on": [
+        "H050-006"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-007.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3646,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 377,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/377",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-006",
+          "github_issue": 376,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/376",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        376
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/376"
+      ]
+    },
+    {
+      "key": "H050-008",
+      "title": "H050-008 — Planner seed idempotence resume coverage",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:scheduler"
+      ],
+      "depends_on": [
+        "H050-006"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-008.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3634,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 378,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/378",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-006",
+          "github_issue": 376,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/376",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        376
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/376"
+      ]
+    },
+    {
+      "key": "H050-009",
+      "title": "H050-009 — Planner seed partial-apply recovery guard",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:scheduler"
+      ],
+      "depends_on": [
+        "H050-007",
+        "H050-008"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-009.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 108,
+        "char_count": 3741,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 379,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/379",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-007",
+          "github_issue": 377,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/377",
+          "status": "resolved"
+        },
+        {
+          "key": "H050-008",
+          "github_issue": 378,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/378",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        377,
+        378
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/377",
+        "https://github.com/ExatronOmega/signposter/issues/378"
+      ]
+    },
+    {
+      "key": "H050-010",
+      "title": "H050-010 — Seed label preflight clarity",
+      "labels": [
+        "phase:build",
+        "risk:low",
+        "role:worker",
+        "area:scheduler"
+      ],
+      "depends_on": [
+        "H050-009"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-010.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3602,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 380,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/380",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-009",
+          "github_issue": 379,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/379",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        379
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/379"
+      ]
+    },
+    {
+      "key": "H050-011",
+      "title": "H050-011 — Planner unseeded task status handling",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:scheduler"
+      ],
+      "depends_on": [
+        "H050-010"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-011.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3650,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 381,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/381",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-010",
+          "github_issue": 380,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/380",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        380
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/380"
+      ]
+    },
+    {
+      "key": "H050-012",
+      "title": "H050-012 — Planner next root and waiting consistency",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:scheduler"
+      ],
+      "depends_on": [
+        "H050-011"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-012.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3633,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 382,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/382",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-011",
+          "github_issue": 381,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/381",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        381
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/381"
+      ]
+    },
+    {
+      "key": "H050-013",
+      "title": "H050-013 — Planner advance duplicate-ready guard",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:scheduler"
+      ],
+      "depends_on": [
+        "H050-012"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-013.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3623,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 383,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/383",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-012",
+          "github_issue": 382,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/382",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        382
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/382"
+      ]
+    },
+    {
+      "key": "H050-014",
+      "title": "H050-014 — Planner stale GitHub issue detection",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:scheduler"
+      ],
+      "depends_on": [
+        "H050-013"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-014.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3625,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 384,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/384",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-013",
+          "github_issue": 383,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/383",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        383
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/383"
+      ]
+    },
+    {
+      "key": "H050-015",
+      "title": "H050-015 — Planner roadmap status artifact",
+      "labels": [
+        "phase:build",
+        "risk:low",
+        "role:worker",
+        "area:scheduler"
+      ],
+      "depends_on": [
+        "H050-014"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-015.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3602,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 385,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/385",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-014",
+          "github_issue": 384,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/384",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        384
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/384"
+      ]
+    },
+    {
+      "key": "H050-016",
+      "title": "H050-016 — Lifecycle terminal-state consistency audit",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H050-015"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-016.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3714,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 386,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/386",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-015",
+          "github_issue": 385,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/385",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        385
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/385"
+      ]
+    },
+    {
+      "key": "H050-017",
+      "title": "H050-017 — Lifecycle next blocked wording coverage",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H050-016"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-017.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3692,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 387,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/387",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-016",
+          "github_issue": 386,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/386",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        386
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/386"
+      ]
+    },
+    {
+      "key": "H050-018",
+      "title": "H050-018 — Active issue stale-age surface",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H050-017"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-018.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3612,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 388,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/388",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-017",
+          "github_issue": 387,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/387",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        387
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/387"
+      ]
+    },
+    {
+      "key": "H050-019",
+      "title": "H050-019 — Takeover plan for missing worker summary",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H050-018"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-019.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3702,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 389,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/389",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-018",
+          "github_issue": 388,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/388",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        388
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/388"
+      ]
+    },
+    {
+      "key": "H050-020",
+      "title": "H050-020 — Worker prompt and worktree recovery hints",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:runner"
+      ],
+      "depends_on": [
+        "H050-019"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-020.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3692,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 390,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/390",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-019",
+          "github_issue": 389,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/389",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        389
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/389"
+      ]
+    },
+    {
+      "key": "H050-021",
+      "title": "H050-021 — Reviewer artifact stale diagnostic coverage",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:runner"
+      ],
+      "depends_on": [
+        "H050-020"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-021.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3631,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 391,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/391",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-020",
+          "github_issue": 390,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/390",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        390
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/390"
+      ]
+    },
+    {
+      "key": "H050-022",
+      "title": "H050-022 — PR red-CI blocked-state surface",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:github"
+      ],
+      "depends_on": [
+        "H050-021"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-022.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3649,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 392,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/392",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-021",
+          "github_issue": 391,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/391",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        391
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/391"
+      ]
+    },
+    {
+      "key": "H050-023",
+      "title": "H050-023 — Integration pending issue-closure surface",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:github"
+      ],
+      "depends_on": [
+        "H050-022"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-023.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3637,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 393,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/393",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-022",
+          "github_issue": 392,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/392",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        392
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/392"
+      ]
+    },
+    {
+      "key": "H050-024",
+      "title": "H050-024 — Cleanup pending stale-worktree surface",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:github"
+      ],
+      "depends_on": [
+        "H050-023"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-024.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3630,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 394,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/394",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-023",
+          "github_issue": 393,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/393",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        393
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/393"
+      ]
+    },
+    {
+      "key": "H050-025",
+      "title": "H050-025 — Recovery status compact formatter",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H050-024"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-025.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3670,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 395,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/395",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-024",
+          "github_issue": 394,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/394",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        394
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/394"
+      ]
+    },
+    {
+      "key": "H050-026",
+      "title": "H050-026 — Human gate structured evidence audit",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H050-025"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-026.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3620,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 396,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/396",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-025",
+          "github_issue": 395,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/395",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        395
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/395"
+      ]
+    },
+    {
+      "key": "H050-027",
+      "title": "H050-027 — CI gate trigger-word regression hardening",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H050-026"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-027.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3649,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 397,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/397",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-026",
+          "github_issue": 396,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/396",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        396
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/396"
+      ]
+    },
+    {
+      "key": "H050-028",
+      "title": "H050-028 — Docs-only worker artifact preflight fields",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:runner"
+      ],
+      "depends_on": [
+        "H050-027"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-028.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3681,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 398,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/398",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-027",
+          "github_issue": 397,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/397",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        397
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/397"
+      ]
+    },
+    {
+      "key": "H050-029",
+      "title": "H050-029 — Worker summary validation command",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:runner"
+      ],
+      "depends_on": [
+        "H050-028"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-029.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3636,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 399,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/399",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-028",
+          "github_issue": 398,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/398",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        398
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/398"
+      ]
+    },
+    {
+      "key": "H050-030",
+      "title": "H050-030 — Reviewer schema error wording",
+      "labels": [
+        "phase:build",
+        "risk:low",
+        "role:worker",
+        "area:runner"
+      ],
+      "depends_on": [
+        "H050-029"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-030.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3597,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 400,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/400",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-029",
+          "github_issue": 399,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/399",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        399
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/399"
+      ]
+    },
+    {
+      "key": "H050-031",
+      "title": "H050-031 — Artifact safety redaction coverage",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H050-030"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-031.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3664,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 401,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/401",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-030",
+          "github_issue": 400,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/400",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        400
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/400"
+      ]
+    },
+    {
+      "key": "H050-032",
+      "title": "H050-032 — Bounded excerpt ellipsis determinism",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H050-031"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-032.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3663,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 402,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/402",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-031",
+          "github_issue": 401,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/401",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        401
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/401"
+      ]
+    },
+    {
+      "key": "H050-033",
+      "title": "H050-033 — Report comment duplicate behavior audit",
+      "labels": [
+        "phase:build",
+        "risk:low",
+        "role:worker",
+        "area:github"
+      ],
+      "depends_on": [
+        "H050-032"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-033.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3713,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 403,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/403",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-032",
+          "github_issue": 402,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/402",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        402
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/402"
+      ]
+    },
+    {
+      "key": "H050-034",
+      "title": "H050-034 — Raw artifact locality tests",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H050-033"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-034.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3640,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 404,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/404",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-033",
+          "github_issue": 403,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/403",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        403
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/403"
+      ]
+    },
+    {
+      "key": "H050-035",
+      "title": "H050-035 — Gate blocked-evidence section map",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H050-034"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-035.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3603,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 405,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/405",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-034",
+          "github_issue": 404,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/404",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        404
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/404"
+      ]
+    },
+    {
+      "key": "H050-036",
+      "title": "H050-036 — PR plan title and body determinism",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:github"
+      ],
+      "depends_on": [
+        "H050-035"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-036.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3608,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 406,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/406",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-035",
+          "github_issue": 405,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/405",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        405
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/405"
+      ]
+    },
+    {
+      "key": "H050-037",
+      "title": "H050-037 — PR auto-close guard expansion",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:github"
+      ],
+      "depends_on": [
+        "H050-036"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-037.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3634,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 407,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/407",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-036",
+          "github_issue": 406,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/406",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        406
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/406"
+      ]
+    },
+    {
+      "key": "H050-038",
+      "title": "H050-038 — PR linkage confidence fallback tests",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:github"
+      ],
+      "depends_on": [
+        "H050-037"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-038.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3772,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 408,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/408",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-037",
+          "github_issue": 407,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/407",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        407
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/407"
+      ]
+    },
+    {
+      "key": "H050-039",
+      "title": "H050-039 — Merge override note consistency",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:github"
+      ],
+      "depends_on": [
+        "H050-038"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-039.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3599,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 409,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/409",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-038",
+          "github_issue": 408,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/408",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        408
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/408"
+      ]
+    },
+    {
+      "key": "H050-040",
+      "title": "H050-040 — Merge apply critical-stop coverage",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:github"
+      ],
+      "depends_on": [
+        "H050-039"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-040.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3613,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 410,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/410",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-039",
+          "github_issue": 409,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/409",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        409
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/409"
+      ]
+    },
+    {
+      "key": "H050-041",
+      "title": "H050-041 — Integration stale main-CI guard",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:github"
+      ],
+      "depends_on": [
+        "H050-040"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-041.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3612,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 411,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/411",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-040",
+          "github_issue": 410,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/410",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        410
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/410"
+      ]
+    },
+    {
+      "key": "H050-042",
+      "title": "H050-042 — Integration apply idempotence for merged issue",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:github"
+      ],
+      "depends_on": [
+        "H050-041"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-042.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3673,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 412,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/412",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-041",
+          "github_issue": 411,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/411",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        411
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/411"
+      ]
+    },
+    {
+      "key": "H050-043",
+      "title": "H050-043 — Cleanup apply idempotence after remote branch removal",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:github"
+      ],
+      "depends_on": [
+        "H050-042"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-043.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3667,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 413,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/413",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-042",
+          "github_issue": 412,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/412",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        412
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/412"
+      ]
+    },
+    {
+      "key": "H050-044",
+      "title": "H050-044 — Branch collision recovery plan",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:github"
+      ],
+      "depends_on": [
+        "H050-043"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-044.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3629,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 414,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/414",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-043",
+          "github_issue": 413,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/413",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        413
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/413"
+      ]
+    },
+    {
+      "key": "H050-045",
+      "title": "H050-045 — Worktree existing-path blocked output",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:github"
+      ],
+      "depends_on": [
+        "H050-044"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-045.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3625,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 415,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/415",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-044",
+          "github_issue": 414,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/414",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        414
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/414"
+      ]
+    },
+    {
+      "key": "H050-046",
+      "title": "H050-046 — Local validation discovery audit",
+      "labels": [
+        "phase:build",
+        "risk:low",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H050-045"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-046.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3658,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 416,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/416",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-045",
+          "github_issue": 415,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/415",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        415
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/415"
+      ]
+    },
+    {
+      "key": "H050-047",
+      "title": "H050-047 — CI run selection helper smoke",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:ci"
+      ],
+      "depends_on": [
+        "H050-046"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-047.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3646,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 417,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/417",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-046",
+          "github_issue": 416,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/416",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        416
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/416"
+      ]
+    },
+    {
+      "key": "H050-048",
+      "title": "H050-048 — Failed CI diagnosis formatter",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:ci"
+      ],
+      "depends_on": [
+        "H050-047"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-048.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3662,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 418,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/418",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-047",
+          "github_issue": 417,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/417",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        417
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/417"
+      ]
+    },
+    {
+      "key": "H050-049",
+      "title": "H050-049 — Validation result artifact schema",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H050-048"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-049.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3651,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 419,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/419",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-048",
+          "github_issue": 418,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/418",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        418
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/418"
+      ]
+    },
+    {
+      "key": "H050-050",
+      "title": "H050-050 — Validation provenance in summaries",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H050-049"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-050.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3634,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 420,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/420",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-049",
+          "github_issue": 419,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/419",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        419
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/419"
+      ]
+    },
+    {
+      "key": "H050-051",
+      "title": "H050-051 — Plain signposter status current-task view",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:cli"
+      ],
+      "depends_on": [
+        "H050-050"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-051.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3709,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 421,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/421",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-050",
+          "github_issue": 420,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/420",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        420
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/420"
+      ]
+    },
+    {
+      "key": "H050-052",
+      "title": "H050-052 — Status active and next task composition",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:cli"
+      ],
+      "depends_on": [
+        "H050-051"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-052.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3693,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 422,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/422",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-051",
+          "github_issue": 421,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/421",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        421
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/421"
+      ]
+    },
+    {
+      "key": "H050-053",
+      "title": "H050-053 — Status stale worktree warning",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:cli"
+      ],
+      "depends_on": [
+        "H050-052"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-053.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3652,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 423,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/423",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-052",
+          "github_issue": 422,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/422",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        422
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/422"
+      ]
+    },
+    {
+      "key": "H050-054",
+      "title": "H050-054 — Dashboard planner count compactness",
+      "labels": [
+        "phase:build",
+        "risk:low",
+        "role:worker",
+        "area:cli"
+      ],
+      "depends_on": [
+        "H050-053"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-054.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3669,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 424,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/424",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-053",
+          "github_issue": 423,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/423",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        423
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/423"
+      ]
+    },
+    {
+      "key": "H050-055",
+      "title": "H050-055 — Operator log template standardization",
+      "labels": [
+        "phase:build",
+        "risk:low",
+        "role:worker",
+        "area:docs"
+      ],
+      "depends_on": [
+        "H050-054"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-055.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3627,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 425,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/425",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-054",
+          "github_issue": 424,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/424",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        424
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/424"
+      ]
+    },
+    {
+      "key": "H050-056",
+      "title": "H050-056 — Handoff snapshot command gap audit",
+      "labels": [
+        "phase:build",
+        "risk:low",
+        "role:worker",
+        "area:docs"
+      ],
+      "depends_on": [
+        "H050-055"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-056.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3644,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 426,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/426",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-055",
+          "github_issue": 425,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/425",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        425
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/425"
+      ]
+    },
+    {
+      "key": "H050-057",
+      "title": "H050-057 — Handoff snapshot implementation slice",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:cli"
+      ],
+      "depends_on": [
+        "H050-056"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-057.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3686,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 427,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/427",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-056",
+          "github_issue": 426,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/426",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        426
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/426"
+      ]
+    },
+    {
+      "key": "H050-058",
+      "title": "H050-058 — Role policy current-state audit",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H050-057"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-058.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3672,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 428,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/428",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-057",
+          "github_issue": 427,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/427",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        427
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/427"
+      ]
+    },
+    {
+      "key": "H050-059",
+      "title": "H050-059 — Runtime availability status output",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:runner"
+      ],
+      "depends_on": [
+        "H050-058"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-059.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3698,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 429,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/429",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-058",
+          "github_issue": 428,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/428",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        428
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/428"
+      ]
+    },
+    {
+      "key": "H050-060",
+      "title": "H050-060 — Model fallback transparency",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:runner"
+      ],
+      "depends_on": [
+        "H050-059"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-060.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3641,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 430,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/430",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-059",
+          "github_issue": 429,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/429",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        429
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/429"
+      ]
+    },
+    {
+      "key": "H050-061",
+      "title": "H050-061 — Token usage aggregation by role coverage",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:runner"
+      ],
+      "depends_on": [
+        "H050-060"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-061.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3643,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 431,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/431",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-060",
+          "github_issue": 430,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/430",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        430
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/430"
+      ]
+    },
+    {
+      "key": "H050-062",
+      "title": "H050-062 — Worker prompt budget warning coverage",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:runner"
+      ],
+      "depends_on": [
+        "H050-061"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-062.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3626,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 432,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/432",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-061",
+          "github_issue": 431,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/431",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        431
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/431"
+      ]
+    },
+    {
+      "key": "H050-063",
+      "title": "H050-063 — Reviewer prompt budget warning coverage",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:runner"
+      ],
+      "depends_on": [
+        "H050-062"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-063.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3638,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 433,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/433",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-062",
+          "github_issue": 432,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/432",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        432
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/432"
+      ]
+    },
+    {
+      "key": "H050-064",
+      "title": "H050-064 — Planner prompt compactness audit",
+      "labels": [
+        "phase:build",
+        "risk:low",
+        "role:worker",
+        "area:scheduler"
+      ],
+      "depends_on": [
+        "H050-063"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-064.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3676,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 434,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/434",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-063",
+          "github_issue": 433,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/433",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        433
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/433"
+      ]
+    },
+    {
+      "key": "H050-065",
+      "title": "H050-065 — Subagent output normalization coverage",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:runner"
+      ],
+      "depends_on": [
+        "H050-064"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-065.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3702,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 435,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/435",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-064",
+          "github_issue": 434,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/434",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        434
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/434"
+      ]
+    },
+    {
+      "key": "H050-066",
+      "title": "H050-066 — Subagent timeout classification",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:runner"
+      ],
+      "depends_on": [
+        "H050-065"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-066.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3665,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 436,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/436",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-065",
+          "github_issue": 435,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/435",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        435
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/435"
+      ]
+    },
+    {
+      "key": "H050-067",
+      "title": "H050-067 — README current-state update",
+      "labels": [
+        "phase:build",
+        "risk:low",
+        "role:worker",
+        "area:docs"
+      ],
+      "depends_on": [
+        "H050-066"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-067.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3564,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 437,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/437",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-066",
+          "github_issue": 436,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/436",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        436
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/436"
+      ]
+    },
+    {
+      "key": "H050-068",
+      "title": "H050-068 — Workflow document current lifecycle update",
+      "labels": [
+        "phase:build",
+        "risk:low",
+        "role:worker",
+        "area:docs"
+      ],
+      "depends_on": [
+        "H050-067"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-068.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3603,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 438,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/438",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-067",
+          "github_issue": 437,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/437",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        437
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/437"
+      ]
+    },
+    {
+      "key": "H050-069",
+      "title": "H050-069 — Artifact docs schema update",
+      "labels": [
+        "phase:build",
+        "risk:low",
+        "role:worker",
+        "area:docs"
+      ],
+      "depends_on": [
+        "H050-068"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-069.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3595,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 439,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/439",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-068",
+          "github_issue": 438,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/438",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        438
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/438"
+      ]
+    },
+    {
+      "key": "H050-070",
+      "title": "H050-070 — Troubleshooting cross-link update",
+      "labels": [
+        "phase:build",
+        "risk:low",
+        "role:worker",
+        "area:docs"
+      ],
+      "depends_on": [
+        "H050-069"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-070.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3673,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 440,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/440",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-069",
+          "github_issue": 439,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/439",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        439
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/439"
+      ]
+    },
+    {
+      "key": "H050-071",
+      "title": "H050-071 — Architecture debt register",
+      "labels": [
+        "phase:build",
+        "risk:low",
+        "role:worker",
+        "area:docs"
+      ],
+      "depends_on": [
+        "H050-070"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-071.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3585,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 441,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/441",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-070",
+          "github_issue": 440,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/440",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        440
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/440"
+      ]
+    },
+    {
+      "key": "H050-072",
+      "title": "H050-072 — Docs-only lifecycle smoke fixture",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H050-071"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-072.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3636,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 442,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/442",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-071",
+          "github_issue": 441,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/441",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        441
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/441"
+      ]
+    },
+    {
+      "key": "H050-073",
+      "title": "H050-073 — Code-change lifecycle smoke fixture",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H050-072"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-073.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3637,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 443,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/443",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-072",
+          "github_issue": 442,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/442",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        442
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/442"
+      ]
+    },
+    {
+      "key": "H050-074",
+      "title": "H050-074 — Validated no-op integration regression",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H050-073"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-074.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3696,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 444,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/444",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-073",
+          "github_issue": 443,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/443",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        443
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/443"
+      ]
+    },
+    {
+      "key": "H050-075",
+      "title": "H050-075 — Side-task return regression",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H050-074"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-075.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3565,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 445,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/445",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-074",
+          "github_issue": 444,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/444",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        444
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/444"
+      ]
+    },
+    {
+      "key": "H050-076",
+      "title": "H050-076 — Stuck recovery end-to-end regression",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H050-075"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-076.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3707,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 446,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/446",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-075",
+          "github_issue": 445,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/445",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        445
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/445"
+      ]
+    },
+    {
+      "key": "H050-077",
+      "title": "H050-077 — Planner seed/apply dry-run safety smoke",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H050-076"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-077.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3617,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 447,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/447",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-076",
+          "github_issue": 446,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/446",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        446
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/446"
+      ]
+    },
+    {
+      "key": "H050-078",
+      "title": "H050-078 — H050 hardening audit",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H050-077"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-078.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3585,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 448,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/448",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-077",
+          "github_issue": 447,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/447",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        447
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/447"
+      ]
+    },
+    {
+      "key": "H050-079",
+      "title": "H050-079 — Next-roadmap bootstrap contract",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:scheduler"
+      ],
+      "depends_on": [
+        "H050-078"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-079.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 104,
+        "char_count": 3607,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 449,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/449",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-078",
+          "github_issue": 448,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/448",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        448
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/448"
+      ]
+    },
+    {
+      "key": "H050-080",
+      "title": "H050-080 — H050 final audit and H051 bootstrap",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H050-078",
+        "H050-079"
+      ],
+      "body_file": "/tmp/signposter-h050-bodies/H050-080.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 108,
+        "char_count": 3758,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 450,
+      "github_url": "https://github.com/ExatronOmega/signposter/issues/450",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": false,
+      "dependency_metadata": [
+        {
+          "key": "H050-078",
+          "github_issue": 448,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/448",
+          "status": "resolved"
+        },
+        {
+          "key": "H050-079",
+          "github_issue": 449,
+          "github_url": "https://github.com/ExatronOmega/signposter/issues/449",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        448,
+        449
+      ],
+      "github_dependency_urls": [
+        "https://github.com/ExatronOmega/signposter/issues/448",
+        "https://github.com/ExatronOmega/signposter/issues/449"
+      ]
+    }
+  ],
+  "notes": [
+    "Local manifest only.",
+    "No GitHub mutation was performed.",
+    "No GitHub issue was created.",
+    "No OpenClaw execution was performed."
+  ],
+  "issue_key_map": {
+    "H050-001": 371,
+    "H050-002": 372,
+    "H050-003": 373,
+    "H050-004": 374,
+    "H050-005": 375,
+    "H050-006": 376,
+    "H050-007": 377,
+    "H050-008": 378,
+    "H050-009": 379,
+    "H050-010": 380,
+    "H050-011": 381,
+    "H050-012": 382,
+    "H050-013": 383,
+    "H050-014": 384,
+    "H050-015": 385,
+    "H050-016": 386,
+    "H050-017": 387,
+    "H050-018": 388,
+    "H050-019": 389,
+    "H050-020": 390,
+    "H050-021": 391,
+    "H050-022": 392,
+    "H050-023": 393,
+    "H050-024": 394,
+    "H050-025": 395,
+    "H050-026": 396,
+    "H050-027": 397,
+    "H050-028": 398,
+    "H050-029": 399,
+    "H050-030": 400,
+    "H050-031": 401,
+    "H050-032": 402,
+    "H050-033": 403,
+    "H050-034": 404,
+    "H050-035": 405,
+    "H050-036": 406,
+    "H050-037": 407,
+    "H050-038": 408,
+    "H050-039": 409,
+    "H050-040": 410,
+    "H050-041": 411,
+    "H050-042": 412,
+    "H050-043": 413,
+    "H050-044": 414,
+    "H050-045": 415,
+    "H050-046": 416,
+    "H050-047": 417,
+    "H050-048": 418,
+    "H050-049": 419,
+    "H050-050": 420,
+    "H050-051": 421,
+    "H050-052": 422,
+    "H050-053": 423,
+    "H050-054": 424,
+    "H050-055": 425,
+    "H050-056": 426,
+    "H050-057": 427,
+    "H050-058": 428,
+    "H050-059": 429,
+    "H050-060": 430,
+    "H050-061": 431,
+    "H050-062": 432,
+    "H050-063": 433,
+    "H050-064": 434,
+    "H050-065": 435,
+    "H050-066": 436,
+    "H050-067": 437,
+    "H050-068": 438,
+    "H050-069": 439,
+    "H050-070": 440,
+    "H050-071": 441,
+    "H050-072": 442,
+    "H050-073": 443,
+    "H050-074": 444,
+    "H050-075": 445,
+    "H050-076": 446,
+    "H050-077": 447,
+    "H050-078": 448,
+    "H050-079": 449,
+    "H050-080": 450
+  },
+  "applied_at": "2026-06-04T10:55:33+00:00"
+}
