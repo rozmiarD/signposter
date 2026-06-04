@@ -808,6 +808,8 @@ def format_seed_label_preflight(result: dict[str, Any]) -> str:
         [
             "",
             "Notes:",
+            "  Label preflight runs before any GitHub issue creation.",
+            "  Missing labels block before any GitHub issue creation.",
             "  No GitHub issue was created.",
             "  No OpenClaw execution was performed.",
         ]
