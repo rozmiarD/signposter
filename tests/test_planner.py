@@ -1231,6 +1231,52 @@ def test_apply_planner_seed_manifest_stops_on_runner_failure(tmp_path: Path) -> 
     assert saved["status"] == "partial"
 
 
+def test_apply_planner_seed_manifest_stops_after_partial_create_failure(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    write_planner_seed_issue_bodies(seed_plan, body_dir)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    write_planner_seed_manifest(manifest, manifest_path)
+    calls: list[list[str]] = []
+
+    def partially_failing_runner(args: list[str]) -> _FakeGhIssueCreateResult:
+        calls.append(args)
+        if len(calls) == 1:
+            return _FakeGhIssueCreateResult(
+                0,
+                stdout="https://github.com/ExatronOmega/signposter/issues/501",
+            )
+        return _FakeGhIssueCreateResult(1, stderr="second create broke")
+
+    result = apply_planner_seed_manifest(manifest_path, partially_failing_runner)
+
+    saved = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert result["status"] == "failed"
+    assert result["created"] == [
+        {
+            "key": "WATCH-001",
+            "github_issue": 501,
+            "github_url": "https://github.com/ExatronOmega/signposter/issues/501",
+        }
+    ]
+    assert result["errors"] == ["second create broke"]
+    assert len(calls) == 2
+    assert saved["status"] == "partial"
+    assert saved["issues"][0]["github_issue"] == 501
+    assert saved["issues"][1]["github_issue"] is None
+    assert saved["issues"][2]["github_issue"] is None
+
+
 def test_cli_planner_seed_apply_uses_fake_subprocess_and_updates_manifest(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1357,6 +1403,72 @@ def test_cli_planner_seed_apply_stops_on_fake_subprocess_failure(
     assert "Planner Seed Apply" in captured
     assert "Status:\n  failed" in captured
     assert "gh failed safely" in captured
+
+
+def test_cli_planner_seed_apply_reports_partial_create_before_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    calls: list[list[str]] = []
+
+    write_planner_draft("build lifecycle watch", plan_path)
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> _FakeGhIssueCreateResult:
+        if command[:3] == ["gh", "label", "list"]:
+            return _fake_label_list_result()
+        calls.append(command)
+        if len(calls) == 1:
+            return _FakeGhIssueCreateResult(
+                0,
+                stdout="https://github.com/ExatronOmega/signposter/issues/601",
+            )
+        return _FakeGhIssueCreateResult(1, stderr="second create broke")
+
+    monkeypatch.setattr("signposter.cli.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "seed",
+            "--plan",
+            str(plan_path),
+            "--repo",
+            "ExatronOmega/signposter",
+            "--body-dir",
+            str(body_dir),
+            "--manifest",
+            str(manifest_path),
+            "--apply",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    captured = capsys.readouterr().out
+
+    assert exc_info.value.code == 1
+    assert len(calls) == 2
+    assert manifest["status"] == "partial"
+    assert manifest["issues"][0]["github_issue"] == 601
+    assert manifest["issues"][1]["github_issue"] is None
+    assert "Planner Seed Apply" in captured
+    assert "Status:\n  failed" in captured
+    assert "WATCH-001 -> #601" in captured
+    assert "second create broke" in captured
+    assert "WATCH-003 ->" not in captured
 
 
 def test_prepare_planner_seed_manifest_creates_new_manifest(tmp_path: Path) -> None:
