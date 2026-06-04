@@ -296,6 +296,9 @@ def test_render_prompt_worker_uses_compact_format():
     assert "backend: codex-cli" in content
     assert "expected output format:" in content
     assert "artifact requirements:" in content
+    assert "validation provenance:" in content
+    assert "signposter.validation-result.v1" in content
+    assert "Preserve validation command provenance" in content
     assert "docs-only artifact fields:" in content
     assert "Docs-only scope: yes" in content
     assert "Changed files are" in content

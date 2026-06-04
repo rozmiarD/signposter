@@ -743,6 +743,8 @@ def build_review_prompt(
 - expected output format: structured review opinion exactly matching the format below
 - artifact requirements: raw backend output stays local; GitHub comments and
   reviews must use bounded summaries
+- validation provenance: verify command/source provenance from worker summary
+  evidence and PR checks; do not include raw validation logs in GitHub-facing output
 - uncertainty handling: prefer NEEDS_CHANGES or BLOCK when evidence is insufficient
 
 ## Changed Files Excerpt (from GitHub metadata, bounded)

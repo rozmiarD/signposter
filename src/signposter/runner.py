@@ -1189,6 +1189,7 @@ def render_prompt(
   safety notes, and completion status
 - artifact requirements: keep raw backend output local under artifacts/runs/
   and provide bounded summaries only
+- validation provenance: use signposter.validation-result.v1; keep comments bounded
 - docs-only artifact fields: include Docs-only scope: yes, Changed files are
   documentation-only: yes, Code behavior unchanged: yes, Scope stayed inside
   requested documentation task: yes, and Dirty guard: clean
@@ -1290,6 +1291,7 @@ def _render_compact_worker_prompt(
   safety notes, and completion status
 - artifact requirements: keep raw backend output local under artifacts/runs/
   and provide bounded summaries only
+- validation provenance: signposter.validation-result.v1; comments bounded
 - docs-only artifact fields: include Docs-only scope: yes, Changed files are
   documentation-only: yes, Code behavior unchanged: yes, Scope stayed inside
   requested documentation task: yes, and Dirty guard: clean
@@ -1310,6 +1312,7 @@ def _render_compact_worker_prompt(
 - Do not commit unless explicitly instructed.
 - Keep raw backend output local under artifacts/runs/.
 - Report changed files, validation, safety notes, and remaining risks.
+- Preserve validation command provenance; no raw logs in comments.
 - If uncertain, state the uncertainty explicitly instead of guessing.
 
 ## Recovery Hints
