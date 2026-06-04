@@ -1321,6 +1321,16 @@ class ReviewArtifactValidation:
 
 _REVIEW_VALID_RISKS = ("low", "medium", "high")
 _REVIEW_VALID_YES_NO = ("yes", "no")
+_REVIEW_MANUAL_TAKEOVER_GUIDANCE = [
+    (
+        "manual reviewer summary required fields: Verdict, Confidence, Risk, "
+        "Scope match, CI considered, Merge recommendation, Automerge eligible"
+    ),
+    (
+        "manual reviewer summary required sections: Findings, Reasoning summary, "
+        "Validation considered, Safety notes"
+    ),
+]
 
 
 def _normalized_review_value(value: str | None) -> str | None:
@@ -1481,6 +1491,7 @@ def validate_review_artifact(
             guidance=[
                 "write a parser-compatible reviewer summary before review gate",
                 "keep raw reviewer output local for diagnostic evidence",
+                *_REVIEW_MANUAL_TAKEOVER_GUIDANCE,
             ],
         )
 
@@ -1586,6 +1597,7 @@ def _review_artifact_guidance(*, errors: list[str], raw_exists: bool) -> list[st
     guidance: list[str] = []
     if errors:
         guidance.append("repair reviewer artifact before review gate or submit")
+        guidance.extend(_REVIEW_MANUAL_TAKEOVER_GUIDANCE)
     if any("unsafe execution marker" in error.lower() for error in errors):
         guidance.append(
             "preserve unsafe backend output separately and provide clean reviewer evidence"
