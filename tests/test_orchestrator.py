@@ -262,6 +262,13 @@ def test_format_orchestrator_next_includes_resume_takeover_contract(
     assert "resume path: resume existing worktree and prompt" in output
     assert "manual fallback: write a manual worker summary" in output
     assert "mutation policy: this plan is read-only" in output
+    assert "Recovery summary:" in output
+    assert "category: resume-existing-worktree" in output
+    assert (
+        "next: signposter run --repo ExatronOmega/signposter "
+        "--issue 46 --execute --worktree"
+    ) in output
+    assert "safety: read-only; apply/execute flags still required" in output
 
 
 def test_orchestrator_next_surfaces_active_issue_activity_age(
@@ -1123,6 +1130,7 @@ def test_format_orchestrator_run_next_summary_is_concise() -> None:
         "action: execute-worker",
         "status: blocked",
         "stop: Execution backend requires explicit --execute",
+        "recovery: execution-requires-explicit-execute",
     ]
     assert "command:" not in out
     assert "Notes:" not in out
@@ -1744,6 +1752,7 @@ def test_format_orchestrator_run_next_loop_summary_is_concise() -> None:
         "action: execute-worker",
         "status: stopped",
         "stop: Execution backend requires explicit --execute",
+        "recovery: execution-requires-explicit-execute",
         "stop_category: blocked-lifecycle",
         "stop_tolerated: no",
         "steps: 1",
