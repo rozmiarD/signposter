@@ -323,6 +323,39 @@ def _integration_ci_blockage_lines(
     ]
 
 
+def _integration_pending_issue_closure_lines(
+    plan: IntegrationPlan,
+    *,
+    repo: str | None = None,
+) -> list[str]:
+    if plan.status != "ready":
+        return []
+    if plan.pr_state != "MERGED":
+        return []
+    if not plan.associated_issue:
+        return []
+    if (plan.issue_state or "").upper() != "OPEN":
+        return []
+    if plan.current_workflow_state == "state:merged":
+        return []
+
+    repo_arg = repo or "<repo>"
+    return [
+        "category: pending-issue-closure",
+        (
+            "reason: "
+            f"PR #{plan.pr_number} is merged but issue #{plan.associated_issue} "
+            "remains open"
+        ),
+        (
+            "apply command: "
+            f"signposter integration apply --repo {repo_arg} "
+            f"--pr {plan.pr_number} --apply"
+        ),
+        "next: run integration apply only after the dry-run remains ready",
+    ]
+
+
 def format_integration_plan(plan: IntegrationPlan) -> str:
     """Compact deterministic output for post-merge integration planning."""
     lines = [f"Signposter Integration Plan — PR #{plan.pr_number}\n"]
@@ -350,6 +383,11 @@ def format_integration_plan(plan: IntegrationPlan) -> str:
     if ci_blockage:
         lines.append("\nMain CI blockage:")
         for line in ci_blockage:
+            lines.append(f"  {line}")
+    pending_closure = _integration_pending_issue_closure_lines(plan)
+    if pending_closure:
+        lines.append("\nPending issue closure:")
+        for line in pending_closure:
             lines.append(f"  {line}")
 
     lines.append("\nStatus:")
@@ -658,6 +696,11 @@ def format_integration_apply_dry_run(plan: IntegrationPlan, repo: str | None = N
     if ci_blockage:
         lines.append("\nMain CI blockage:")
         for line in ci_blockage:
+            lines.append(f"  {line}")
+    pending_closure = _integration_pending_issue_closure_lines(plan, repo=repo)
+    if pending_closure:
+        lines.append("\nPending issue closure:")
+        for line in pending_closure:
             lines.append(f"  {line}")
 
     if "required labels missing" in apply_status.lower():
