@@ -396,3 +396,70 @@ def test_cleanup_output_contains_no_github_mutation_notes():
     blocked = {"mode": "apply_blocked", "plan": plan, "error": "test"}
     blocked_out = format_cleanup_apply_result(blocked)
     assert "No GitHub mutation was performed" in blocked_out
+
+
+def test_cleanup_plan_surfaces_pending_stale_worktree_and_branch():
+    """ready plan names the leftover local cleanup and guarded apply command."""
+    plan = _make_plan()
+
+    out = format_cleanup_plan(plan)
+
+    assert "Pending local cleanup:" in out
+    assert "category: stale local worker state" in out
+    assert "pending: worktree: ../signposter-work/4" in out
+    assert (
+        "pending: local branch: "
+        "work/issue-4-test-task-isolated-worker-readme-note"
+    ) in out
+    assert (
+        "next command: signposter cleanup apply --repo <repo> --pr 5 --apply"
+        in out
+    )
+    assert "cleanup apply is local-only and remains guarded by --apply" in out
+
+
+def test_cleanup_plan_surfaces_pending_branch_only_cleanup():
+    """branch-only ready plan remains visible after worktree cleanup already happened."""
+    plan = _make_plan(worktree_exists=False, local_branch_exists=True)
+
+    out = format_cleanup_plan(plan)
+
+    assert "Pending local cleanup:" in out
+    assert "pending: worktree:" not in out
+    assert (
+        "pending: local branch: "
+        "work/issue-4-test-task-isolated-worker-readme-note"
+    ) in out
+    assert (
+        "next command: signposter cleanup apply --repo <repo> --pr 5 --apply"
+        in out
+    )
+
+
+def test_cleanup_apply_dry_run_surfaces_pending_local_cleanup():
+    """dry-run apply shows the same stale local cleanup details before mutation."""
+    plan = _make_plan()
+
+    out = format_cleanup_apply_dry_run(plan)
+
+    assert "DRY RUN: no local worktree was removed." in out
+    assert "Pending local cleanup:" in out
+    assert "pending: worktree: ../signposter-work/4" in out
+    assert (
+        "next command: signposter cleanup apply --repo <repo> --pr 5 --apply"
+        in out
+    )
+
+
+def test_cleanup_plan_omits_pending_cleanup_when_already_completed():
+    """completed cleanup plan should stay a compact no-op surface."""
+    plan = _make_plan(
+        status="completed",
+        worktree_exists=False,
+        local_branch_exists=False,
+    )
+
+    out = format_cleanup_plan(plan)
+
+    assert "Pending local cleanup:" not in out
+    assert "cleanup eligible: no" in out

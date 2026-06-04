@@ -218,6 +218,11 @@ def format_cleanup_plan(plan: CleanupPlan) -> str:
     lines.append(f"  local branch exists: {'yes' if plan.local_branch_exists else 'no'}")
     lines.append(f"  cleanup eligible: {'yes' if plan.status == 'ready' else 'no'}")
 
+    pending = _format_pending_local_cleanup(plan)
+    if pending:
+        lines.append("\nPending local cleanup:")
+        lines.extend(pending)
+
     lines.append("\nStatus:")
     lines.append(f"  {plan.status}")
 
@@ -227,6 +232,38 @@ def format_cleanup_plan(plan: CleanupPlan) -> str:
             lines.append(f"  {n}")
 
     return "\n".join(lines)
+
+
+def _format_pending_local_cleanup(plan: CleanupPlan) -> list[str]:
+    """Return operator-facing pending cleanup details for ready local cleanup."""
+    if plan.status != "ready":
+        return []
+    if not plan.worktree_exists and not plan.local_branch_exists:
+        return []
+
+    stale_items: list[str] = []
+    if plan.worktree_exists:
+        stale_items.append(f"worktree: {plan.expected_worktree_path or 'n/a'}")
+    if plan.local_branch_exists:
+        stale_items.append(f"local branch: {plan.local_branch or 'n/a'}")
+
+    if not stale_items:
+        return []
+
+    lines = [
+        "  category: stale local worker state",
+        "  reason: PR is merged and issue integration is complete, but local cleanup remains.",
+    ]
+    for item in stale_items:
+        lines.append(f"  pending: {item}")
+    lines.extend(
+        [
+            "  next command: signposter cleanup apply --repo <repo> "
+            f"--pr {plan.pr_number} --apply",
+            "  safety: cleanup apply is local-only and remains guarded by --apply.",
+        ]
+    )
+    return lines
 
 
 def _is_already_fully_cleaned(plan: CleanupPlan) -> bool:
@@ -259,6 +296,11 @@ def format_cleanup_apply_dry_run(plan: CleanupPlan) -> str:
     lines.append(f"  worktree path: {plan.expected_worktree_path or 'n/a'}")
     lines.append(f"  remove worktree: {'yes' if plan.worktree_exists else 'no'}")
     lines.append(f"  delete local branch if present: {'yes' if plan.local_branch_exists else 'no'}")
+
+    pending = _format_pending_local_cleanup(plan)
+    if pending:
+        lines.append("\nPending local cleanup:")
+        lines.extend(pending)
 
     lines.append("\nStatus:")
     lines.append(f"  {plan.status}")
