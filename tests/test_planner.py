@@ -2056,6 +2056,7 @@ def test_build_planner_status_counts_groups_lifecycle_buckets() -> None:
     assert counts == {
         "total": 11,
         "pending": 1,
+        "unseeded": 1,
         "ready": 2,
         "waiting": 1,
         "active": 1,
@@ -2083,10 +2084,16 @@ def test_format_planner_status_contains_safety_notes(tmp_path: Path) -> None:
     assert "Signposter Planner Status" in output
     assert "Progress:" in output
     assert "  pending: 5" in output
+    assert "  unseeded: 5" in output
     assert "  ready: 0" in output
     assert "  waiting: 0" in output
     assert "WATCH-001 — issue: none — state: unseeded" in output
     assert "depends on: WATCH-001" in output
+    assert "Unseeded tasks have no GitHub issue yet." in output
+    assert (
+        "Open tasks need state:ready or unfinished dependencies to avoid blocked "
+        "classification."
+    ) in output
     assert "No GitHub mutation was performed." in output
     assert "No OpenClaw execution was performed." in output
     assert "No task execution was performed." in output
@@ -2594,6 +2601,7 @@ def test_build_planner_run_plan_from_status_reports_next_open_task(
     assert result["status_counts"] == {
         "total": 5,
         "pending": 0,
+        "unseeded": 0,
         "ready": 1,
         "waiting": 4,
         "active": 0,

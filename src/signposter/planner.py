@@ -1213,6 +1213,7 @@ def build_planner_status_counts(tasks: list[dict[str, Any]]) -> dict[str, int]:
     counts = {
         "total": len(tasks),
         "pending": 0,
+        "unseeded": 0,
         "ready": 0,
         "waiting": 0,
         "active": 0,
@@ -1233,6 +1234,7 @@ def build_planner_status_counts(tasks: list[dict[str, Any]]) -> dict[str, int]:
         if state == "active":
             counts["active"] += 1
         elif state == "unseeded":
+            counts["unseeded"] += 1
             counts["pending"] += 1
         elif state == "done":
             counts["done"] += 1
@@ -2771,6 +2773,11 @@ def build_planner_status(
         "tasks": tasks,
         "notes": [
             "Local status summary only.",
+            "Unseeded tasks have no GitHub issue yet.",
+            (
+                "Open tasks need state:ready or unfinished dependencies "
+                "to avoid blocked classification."
+            ),
             "No GitHub mutation was performed.",
             "No OpenClaw execution was performed.",
             "No task execution was performed.",
@@ -2878,6 +2885,7 @@ def format_planner_status(status: dict[str, Any]) -> str:
         "Progress:",
         f"  total: {counts.get('total', 0)}",
         f"  pending: {counts.get('pending', 0)}",
+        f"  unseeded: {counts.get('unseeded', 0)}",
         f"  ready: {counts.get('ready', 0)}",
         f"  waiting: {counts.get('waiting', 0)}",
         f"  active: {counts.get('active', 0)}",
