@@ -1370,6 +1370,45 @@ def _review_enum_contract_error(
     return f"{field} must be {choices}"
 
 
+def _review_artifact_value(value: str | float | None) -> str:
+    if value is None:
+        return "missing"
+    return str(value)
+
+
+def _review_allowed_text(allowed: tuple[str, ...]) -> str:
+    if len(allowed) == 2:
+        return f"{allowed[0]} or {allowed[1]}"
+    return ", ".join(allowed[:-1]) + f", or {allowed[-1]}"
+
+
+def _review_artifact_enum_error(
+    field: str,
+    value: str | None,
+    allowed: tuple[str, ...],
+) -> str | None:
+    if _normalized_review_value(value) in allowed:
+        return None
+    return (
+        f"{field}: expected {_review_allowed_text(allowed)}; "
+        f"got {_review_artifact_value(value)}"
+    )
+
+
+def _review_artifact_confidence_error(
+    confidence: float | None,
+    *,
+    threshold: float,
+) -> str | None:
+    if confidence is None:
+        return "Confidence: expected decimal 0..1; got missing or unparsable"
+    if confidence < 0 or confidence > 1:
+        return f"Confidence: expected 0..1; got {confidence}"
+    if confidence < threshold:
+        return f"Confidence: expected >= {threshold}; got {confidence}"
+    return None
+
+
 def parse_reviewer_opinion(text: str) -> ReviewerOpinion:
     """Parse the structured reviewer contract from raw or summary text.
 
@@ -1513,8 +1552,11 @@ def validate_review_artifact(
     if raw_stale_signal:
         errors.append(f"Raw artifact contains unsafe execution marker: {raw_stale_signal}")
     if opinion.verdict not in ("APPROVE", "NEEDS_CHANGES", "BLOCK"):
-        errors.append("Verdict must be APPROVE, NEEDS_CHANGES, or BLOCK")
-    confidence_error = _review_confidence_contract_error(
+        errors.append(
+            "Verdict: expected APPROVE, NEEDS_CHANGES, or BLOCK; "
+            f"got {_review_artifact_value(opinion.verdict)}"
+        )
+    confidence_error = _review_artifact_confidence_error(
         opinion.confidence,
         threshold=confidence_threshold,
     )
@@ -1527,11 +1569,11 @@ def validate_review_artifact(
         ("Merge recommendation", opinion.merge_recommendation, _REVIEW_VALID_YES_NO),
         ("Automerge eligible", opinion.automerge_eligible, _REVIEW_VALID_YES_NO),
     ):
-        field_error = _review_enum_contract_error(field, value, allowed)
+        field_error = _review_artifact_enum_error(field, value, allowed)
         if field_error:
             errors.append(field_error)
     errors.extend(
-        f"Missing reviewer summary schema field: {field}"
+        f"Schema: missing {field}"
         for field in _missing_reviewer_summary_schema_fields(text)
     )
 

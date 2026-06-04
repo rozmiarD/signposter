@@ -1544,7 +1544,7 @@ def test_validate_review_artifact_blocks_confidence_out_of_range(tmp_path):
     result = validate_review_artifact(73, summary_path=plan.path)
 
     assert result.status == "blocked"
-    assert "Confidence must be between 0 and 1" in result.errors
+    assert "Confidence: expected 0..1; got 1.2" in result.errors
 
 
 def test_validate_review_artifact_blocks_unsafe_raw_marker(tmp_path):
@@ -2160,9 +2160,12 @@ def test_validate_review_artifact_blocks_malformed_fields(tmp_path):
     result = validate_review_artifact(38, summary_path=str(path))
 
     assert result.status == "blocked"
-    assert any("Verdict" in error for error in result.errors)
-    assert any("Confidence" in error for error in result.errors)
-    assert any("Risk" in error for error in result.errors)
+    assert "Verdict: expected APPROVE, NEEDS_CHANGES, or BLOCK; got MAYBE" in result.errors
+    assert (
+        "Confidence: expected decimal 0..1; got missing or unparsable"
+        in result.errors
+    )
+    assert "Risk: expected low, medium, or high; got severe" in result.errors
 
 
 def test_validate_review_artifact_blocks_missing_schema_fields(tmp_path):
@@ -2183,9 +2186,36 @@ def test_validate_review_artifact_blocks_missing_schema_fields(tmp_path):
     result = validate_review_artifact(38, summary_path=str(path))
 
     assert result.status == "blocked"
-    assert any("agent or backend metadata" in error for error in result.errors)
-    assert any("validation considered section" in error for error in result.errors)
-    assert any("safety notes section" in error for error in result.errors)
+    assert "Schema: missing agent or backend metadata" in result.errors
+    assert "Schema: missing validation considered section" in result.errors
+    assert "Schema: missing safety notes section" in result.errors
+
+
+def test_validate_review_artifact_errors_are_concise_and_field_specific(tmp_path):
+    from signposter.review import format_review_artifact_validation, validate_review_artifact
+
+    path = tmp_path / "pr-38-reviewer.summary.md"
+    path.write_text(
+        "Verdict: MAYBE\n"
+        "Confidence: 0.44\n"
+        "Risk: severe\n"
+        "Scope match: maybe\n"
+        "CI considered: no\n"
+        "Merge recommendation: later\n"
+        "Automerge eligible: perhaps\n",
+        encoding="utf-8",
+    )
+
+    result = validate_review_artifact(38, summary_path=str(path))
+    output = format_review_artifact_validation(result)
+
+    assert result.status == "blocked"
+    assert "Verdict: expected APPROVE, NEEDS_CHANGES, or BLOCK; got MAYBE" in output
+    assert "Confidence: expected >= 0.85; got 0.44" in output
+    assert "Scope match: expected yes or no; got maybe" in output
+    assert "Merge recommendation: expected yes or no; got later" in output
+    assert "Automerge eligible: expected yes or no; got perhaps" in output
+    assert "manual reviewer summary required fields" in output
 
 
 def test_format_review_artifact_validation_contains_status(tmp_path):
