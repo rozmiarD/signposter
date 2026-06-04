@@ -210,6 +210,11 @@ def format_control_plane_status(result: ControlPlaneStatus) -> str:
         "",
         "Repo:",
         f"  {result.repo}",
+        "",
+        "Current task:",
+        f"  active: {_format_current_active_task(result)}",
+        f"  next: {_format_current_next_task(result)}",
+        f"  stop reason: {_format_current_stop_reason(result)}",
     ]
 
     agreement = result.agreement
@@ -325,3 +330,47 @@ def _format_issue_refs(values: Any) -> str:
     if not values:
         return "none"
     return ", ".join(f"#{value}" for value in values)
+
+
+def _format_current_active_task(result: ControlPlaneStatus) -> str:
+    active = result.agreement.get("active_issues")
+    if active:
+        return _format_issue_refs(active)
+    return "none"
+
+
+def _format_current_next_task(result: ControlPlaneStatus) -> str:
+    planner_next = _planner_next_task(result.planner)
+    if planner_next is not None:
+        key = planner_next.get("key", "unknown")
+        issue = planner_next.get("github_issue")
+        state = planner_next.get("state", "unknown")
+        return f"{key} ({_format_issue_ref(issue)}, state={state})"
+    if result.scheduler is not None and result.scheduler.issue is not None:
+        issue = result.scheduler.issue
+        return f"#{issue.number} — {issue.title}"
+    return "none"
+
+
+def _format_current_stop_reason(result: ControlPlaneStatus) -> str:
+    if result.status != "blocked":
+        return "none"
+    if result.agreement.get("status") == "disagreement":
+        return str(result.agreement.get("reason", "agreement disagreement"))
+    if result.orchestrator is not None and result.orchestrator.stop_reason:
+        return str(result.orchestrator.stop_reason)
+    if result.scheduler is not None and result.scheduler.status == "blocked":
+        return result.scheduler.reason
+    return "blocked state requires operator inspection"
+
+
+def _planner_next_task(planner_run: dict[str, Any] | None) -> dict[str, Any] | None:
+    if planner_run is None:
+        return None
+    next_plan = planner_run.get("next")
+    if not isinstance(next_plan, dict):
+        return None
+    next_task = next_plan.get("next")
+    if not isinstance(next_task, dict):
+        return None
+    return next_task
