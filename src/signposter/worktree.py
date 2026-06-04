@@ -220,6 +220,35 @@ def format_worktree_plan(plan: WorktreePlan) -> str:
         for n in plan.notes:
             lines.append(f"  {n}")
 
+    lines.append("\nRecovery hints:")
+    if plan.worktree_exists:
+        lines.append(
+            "  Existing worktree detected: inspect it and resume from that path "
+            "before creating replacements."
+        )
+    else:
+        lines.append(
+            "  If execution is interrupted later, inspect the branch/worktree and "
+            "existing artifacts before retrying."
+        )
+    lines.append(
+        f"  Resume worker: signposter run --repo <repo> --issue {plan.issue_number} "
+        "--execute --worktree"
+    )
+    lines.append(
+        "  Manual summary: signposter artifact write-worker-summary "
+        f"--repo <repo> --issue {plan.issue_number} --agent human/operator --apply"
+    )
+    lines.append(
+        "  Report summary: signposter report --repo <repo> "
+        f"--issue {plan.issue_number} --summary "
+        f"artifacts/runs/issue-{plan.issue_number}-worker.summary.md --apply"
+    )
+    lines.append(
+        f"  Recheck gate: signposter gate --repo <repo> --issue {plan.issue_number} "
+        "--dry-run"
+    )
+
     return "\n".join(lines)
 
 

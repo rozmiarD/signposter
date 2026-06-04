@@ -298,6 +298,11 @@ def test_render_prompt_worker_uses_compact_format():
     assert "artifact requirements:" in content
     assert "uncertainty handling:" in content
     assert "## Rules" in content
+    assert "## Recovery Hints" in content
+    assert "preserve existing raw and" in content
+    assert "signposter artifact write-worker-summary" in content
+    assert "signposter report" in content
+    assert "signposter gate" in content
     assert "## Validation" in content
     assert "## Role Profile" not in content
     assert "Do not fetch the GitHub URL" in content
