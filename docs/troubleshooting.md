@@ -18,7 +18,7 @@ worktree.
 ```bash
 REPO=ExatronOmega/signposter
 ISSUE=286
-PR=369
+PR=370
 WORKTREE=../signposter-work/$ISSUE
 
 git status --short --branch
