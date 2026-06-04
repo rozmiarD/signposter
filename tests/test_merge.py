@@ -103,6 +103,46 @@ def test_merge_plan_ready_for_ideal_pr5():
         assert "No merge was performed" in plan.notes[0]
 
 
+def test_merge_plan_ready_with_pr_body_related_issue_fallback():
+    with patch("signposter.merge._run_gh_pr_view") as mock_view, \
+         patch("signposter.merge._fetch_pr_reviews_and_author") as mock_reviews, \
+         patch("signposter.merge.evaluate_review_gate") as mock_gate, \
+         patch("signposter.merge._fetch_pr_checks_for_merge") as mock_checks:
+
+        mock_view.return_value = {
+            "title": "docs: body-link-fallback",
+            "state": "OPEN",
+            "baseRefName": "main",
+            "headRefName": "feature/body-link-fallback",
+            "mergeable": "MERGEABLE",
+            "reviewDecision": "APPROVED",
+            "body": "Related issue: #4",
+            "files": [{"path": "README.md"}],
+            "additions": 8,
+            "deletions": 0,
+        }
+        mock_reviews.return_value = {
+            "pr_author": "ExatronOmega",
+            "review_decision": "APPROVED",
+            "approving_reviewers": ["AlphaExatron"],
+        }
+        mock_gate.return_value = type("G", (), {
+            "gate_pass": True,
+            "opinion": type("O", (), {
+                "verdict": "APPROVE",
+                "confidence": 0.95,
+                "risk": "low",
+            })()
+        })()
+        mock_checks.return_value = {"status": "pass", "successful": 1, "failing": 0, "pending": 0}
+
+        plan = plan_merge_for_pr("test/repo", 5)
+
+        assert plan.status == "ready"
+        assert plan.associated_issue == 4
+        assert plan.has_auto_close_keywords is False
+
+
 def test_merge_plan_blocks_on_auto_close_keywords():
     with patch("signposter.merge._run_gh_pr_view") as mock_view, \
          patch("signposter.merge._fetch_pr_reviews_and_author") as mock_reviews, \
