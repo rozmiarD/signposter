@@ -3956,7 +3956,11 @@ def test_cli_planner_run_sync_github_uses_workflow_state_labels(
 
     assert exc_info.value.code in (None, 0)
     assert len(calls) == 5
-    assert "WATCH-002 — issue: #11 — state: open" in captured
+    assert "Next task:\n  none" in captured
+    assert (
+        "dependency-ready task is open but missing GitHub label state:ready"
+        in captured
+    )
     assert "issue #10 / WATCH-001:" in captured
     assert "decision: advance_mainline" in captured
     assert "targets: WATCH-002" in captured
@@ -4592,6 +4596,83 @@ def test_cli_planner_next_manifest_sync_github_selects_ready_issue(
     assert "Status:\n  ready" in captured
     assert "WATCH-001 — issue: #10 — state: open" in captured
     assert "No OpenClaw execution was performed." in captured
+
+
+def test_cli_planner_next_manifest_sync_github_blocks_dependency_missing_ready_label(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    calls: list[list[str]] = []
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+    write_planner_seed_manifest(manifest, manifest_path)
+
+    issue_payloads = {
+        10: {"state": "CLOSED", "labels": [{"name": "state:merged"}]},
+        11: {"state": "OPEN", "labels": []},
+        12: {"state": "OPEN", "labels": []},
+        13: {"state": "OPEN", "labels": []},
+        14: {"state": "OPEN", "labels": []},
+    }
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> _FakeGhIssueCreateResult:
+        calls.append(command)
+        issue_number = int(command[3])
+        return _FakeGhIssueCreateResult(
+            0,
+            stdout=json.dumps(issue_payloads[issue_number]),
+        )
+
+    monkeypatch.setattr("signposter.cli.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "next",
+            "--manifest",
+            str(manifest_path),
+            "--sync-github",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+    assert exc_info.value.code == 1
+    assert len(calls) == 5
+    assert calls[0][:4] == ["gh", "issue", "view", "10"]
+    assert "Status:\n  blocked" in captured
+    assert (
+        "WATCH-002 — dependency-ready task is open but missing GitHub label "
+        "state:ready (issue #11)"
+    ) in captured
+    assert (
+        "reconcile hint: run planner advance/apply from completed dependency "
+        "issue(s) #10"
+    ) in captured
+    assert "No GitHub mutation was performed." in captured
 
 
 def test_cli_planner_next_requires_plan_or_manifest(
