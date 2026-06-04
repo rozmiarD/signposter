@@ -58,7 +58,12 @@ from signposter.gate import (
     format_gate_report,
     run_gate_dry_run,
 )
-from signposter.handoff import format_handoff_plan, plan_handoff_for_issue
+from signposter.handoff import (
+    build_handoff_snapshot,
+    format_handoff_plan,
+    format_handoff_snapshot,
+    plan_handoff_for_issue,
+)
 from signposter.integration import (
     apply_integration,
     apply_noop_integration,
@@ -887,6 +892,15 @@ def main() -> None:
     handoff_plan_parser.add_argument("--repo", required=True)
     handoff_plan_parser.add_argument("--issue", type=int, required=True)
     handoff_plan_parser.set_defaults(func=run_handoff_plan)
+
+    handoff_snapshot_parser = handoff_subparsers.add_parser(
+        "snapshot",
+        help="Produce a read-only operator handoff snapshot",
+    )
+    handoff_snapshot_parser.add_argument("--repo", required=True)
+    handoff_snapshot_parser.add_argument("--manifest", type=Path, default=None)
+    handoff_snapshot_parser.add_argument("--sync-github", action="store_true")
+    handoff_snapshot_parser.set_defaults(func=run_handoff_snapshot)
 
     # pr subcommand group (planning only — HARDENING-013)
     pr_parser = subparsers.add_parser(
@@ -2016,6 +2030,63 @@ def run_handoff_plan(args: argparse.Namespace) -> int:
     except Exception as e:
         print(f"Handoff plan failed: {e}", file=sys.stderr)
         return 2
+
+
+def run_handoff_snapshot(args: argparse.Namespace) -> int:
+    """Handler for `signposter handoff snapshot --repo ...`."""
+    repo = getattr(args, "repo", None)
+    if not repo:
+        print("Error: --repo is required", file=sys.stderr)
+        return 1
+
+    manifest_path = getattr(args, "manifest", None)
+    planner_run = None
+    if manifest_path is not None:
+        if not manifest_path.exists():
+            print("Signposter Handoff Snapshot")
+            print()
+            print("Status:")
+            print("  blocked")
+            print()
+            print("Reason:")
+            print(f"  manifest file not found: {manifest_path}")
+            print()
+            print("Notes:")
+            print("  No GitHub mutation was performed.")
+            print("  No manifest mutation was performed.")
+            print("  No lifecycle command was executed.")
+            print("  No backend execution was performed.")
+            return 1
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        issue_states = (
+            _fetch_manifest_issue_states(str(manifest.get("repo", repo)), manifest)
+            if getattr(args, "sync_github", False)
+            else {}
+        )
+        planner_status = build_planner_status(manifest, issue_states)
+        planner_run = build_planner_run_plan_from_status(
+            planner_status,
+            manifest_path=str(manifest_path),
+        )
+        planner_run["active_tasks"] = [
+            {
+                "key": task.get("key"),
+                "github_issue": task.get("github_issue"),
+                "state": task.get("state"),
+            }
+            for task in planner_status.get("tasks", [])
+            if str(task.get("state", "")).lower() == "active"
+        ]
+
+    snapshot = build_handoff_snapshot(
+        repo=repo,
+        manifest_path=str(manifest_path) if manifest_path is not None else None,
+        planner_run=planner_run,
+        local_warnings=collect_local_worker_state_warnings(planner_run=planner_run),
+    )
+    print(format_handoff_snapshot(snapshot))
+    return 0 if snapshot.status == "ready" else 1
+
 
 def run_pr_plan(args: argparse.Namespace) -> None:
     """Run PR planning for an issue."""
