@@ -264,6 +264,34 @@ def test_format_orchestrator_next_includes_resume_takeover_contract(
     assert "mutation policy: this plan is read-only" in output
 
 
+def test_orchestrator_next_surfaces_active_issue_activity_age(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    issue = LabeledItem(
+        number=46,
+        title="Issue 46",
+        html_url="https://github.com/example/repo/issues/46",
+        labels=["state:active"],
+        item_type="issue",
+        updated_at="2000-01-01T00:00:00Z",
+    )
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=issue),
+    ):
+        result = plan_orchestrator_next("ExatronOmega/signposter", issue=46)
+
+    output = format_orchestrator_next(result)
+
+    assert result.activity_updated_at == "2000-01-01T00:00:00Z"
+    assert (result.activity_age or "").startswith("stale(")
+    assert "activity updated at: 2000-01-01T00:00:00Z" in output
+    assert "activity age: stale(" in output
+    assert "Takeover plan:" in output
+
+
 def test_orchestrator_next_plans_regenerate_prompt_for_stale_active_issue(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
