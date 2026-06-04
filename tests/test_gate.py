@@ -263,6 +263,9 @@ def test_gate_heuristic_audit_maps_gate_surfaces_and_risks():
     assert any("review gate" in item for item in audit.gate_surfaces)
     assert any("human gate" in item for item in audit.gate_surfaces)
     assert any("no-op" in item for item in audit.gate_surfaces)
+    assert "human gate structured safety fields" in output
+    assert "legacy positive fallback" in output
+    assert "prefer structured human gate fields" in output
     assert "False-positive risks:" in output
     assert "False-negative risks:" in output
     assert "No GitHub mutation was performed." in output
@@ -976,6 +979,51 @@ No merge was performed by the implemented code.
     )
 
 
+def test_evaluate_human_gate_passes_with_structured_safety_fields():
+    from signposter.gate import evaluate_human_gate
+
+    summary = """
+# Signposter Human Gate Summary
+
+**Exit Code:** 0
+
+Human approval: approved
+Scope match: yes
+Local validation: pass
+GitHub mutation: no
+Execution backend: no
+Issue closure: no
+Merge performed: no
+"""
+
+    decision = evaluate_human_gate(0, summary)
+
+    assert decision.decision == "pass"
+    assert decision.confidence == "high"
+
+
+def test_evaluate_human_gate_blocks_incomplete_structured_safety_fields():
+    from signposter.gate import evaluate_human_gate
+
+    summary = """
+# Signposter Human Gate Summary
+
+**Exit Code:** 0
+
+Human approval: approved
+Scope match: yes
+Local validation: pass
+GitHub mutation: no
+Execution backend: no
+Issue closure: no
+"""
+
+    decision = evaluate_human_gate(0, summary)
+
+    assert decision.decision == "needs-work"
+    assert decision.reason == "Human gate approval evidence missing or incomplete: safety."
+
+
 def test_evaluate_human_gate_reports_missing_components():
     from signposter.gate import evaluate_human_gate
 
@@ -1065,6 +1113,7 @@ def test_gate_human_output_identifies_supported_human_gate():
         "has_gate_review": False,
         "has_gate_ci": False,
         "has_gate_human": True,
+        "valid_for_gate": True,
         "decision": "pass",
         "reason": "Human gate approval evidence found with validation and safety context.",
         "confidence": "high",
@@ -1078,6 +1127,7 @@ def test_gate_human_output_identifies_supported_human_gate():
     assert "gate:human present:   True" in output
     assert "Decision:" in output
     assert "PASS" in output
+    assert "WARNING:" not in output
 
 
 def test_evaluate_ci_gate_pass_on_general_scoped_code_task():
