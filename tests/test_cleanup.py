@@ -233,8 +233,15 @@ def test_cleanup_apply_already_cleaned_does_not_call_subprocess():
         result = apply_cleanup("ExatronOmega/signposter", 5, apply=True)
 
     mock_run.assert_not_called()
-    assert result["mode"] == "apply_blocked"
-    assert "completed" in result.get("error", "")
+    assert result["mode"] == "apply_completed"
+    assert result["success"] is True
+    assert result["results"] == ["cleanup already completed"]
+
+    output = format_cleanup_apply_result(result)
+    assert "status: already completed" in output
+    assert "worktree: already absent" in output
+    assert "local branch: already absent" in output
+    assert "No GitHub mutation was performed." in output
 
 
 def test_cleanup_apply_replans_once_after_post_integration_issue_state_race():
@@ -371,6 +378,48 @@ def test_cli_cleanup_apply_dry_run_returns_blocked_exit_for_blocked_plan(
     assert exc.value.code == 1
     assert "blocked — PR is not merged" in out
     assert "DRY RUN: no local worktree was removed." in out
+
+
+def test_cli_cleanup_apply_completed_returns_success(monkeypatch, capsys):
+    from signposter.cli import main
+
+    plan = _make_plan(
+        status="completed",
+        worktree_exists=False,
+        local_branch_exists=False,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "cleanup",
+            "apply",
+            "--repo",
+            "test/repo",
+            "--pr",
+            "5",
+            "--apply",
+        ],
+    )
+
+    with patch(
+        "signposter.cli.apply_cleanup",
+        return_value={
+            "mode": "apply_completed",
+            "plan": plan,
+            "success": True,
+            "results": ["cleanup already completed"],
+            "branch_deleted": False,
+        },
+    ), pytest.raises(SystemExit) as exc:
+        main()
+
+    out = capsys.readouterr().out
+    assert exc.value.code == 0
+    assert "status: already completed" in out
+    assert "Status:" in out
+    assert "completed" in out
 
 
 def test_cleanup_apply_stops_before_branch_deletion_on_worktree_failure():
