@@ -466,6 +466,17 @@ def main() -> None:
         choices=["openclaw", "codex-cli"],
         help="Backend to mark as selected default for this read-only report",
     )
+    backend_status_parser.add_argument(
+        "--runs-dir",
+        default="artifacts/runs",
+        help="Local run artifact directory to inspect for runtime diagnostics",
+    )
+    backend_status_parser.add_argument(
+        "--diagnostic-limit",
+        type=int,
+        default=5,
+        help="Maximum runtime diagnostic artifacts to show",
+    )
     backend_status_parser.set_defaults(func=run_backend_status)
 
     subagent_parser = subparsers.add_parser(
@@ -1736,7 +1747,11 @@ def run_roles_matrix(args: argparse.Namespace) -> int:
 
 def run_backend_status(args: argparse.Namespace) -> int:
     """Render read-only backend health and fallback visibility."""
-    report = build_backend_status_report(default_backend=getattr(args, "default", None))
+    report = build_backend_status_report(
+        default_backend=getattr(args, "default", None),
+        runs_dir=getattr(args, "runs_dir", "artifacts/runs"),
+        diagnostic_limit=getattr(args, "diagnostic_limit", 5),
+    )
     print(format_backend_status_report(report))
     return 0
 
