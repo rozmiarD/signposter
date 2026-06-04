@@ -1675,12 +1675,13 @@ def build_planner_advance_plan_from_status(
     for task in downstream:
         github_issue = task.get("github_issue")
         state = str(task.get("state", "")).lower()
+        workflow_state = str(task.get("workflow_state", "") or "").lower()
         labels = set(task.get("labels", []))
         if github_issue is None:
             continue
-        if state not in {"open", "unknown"}:
+        if state == "ready" or workflow_state == "ready" or "state:ready" in labels:
             continue
-        if "state:ready" in labels:
+        if state not in {"open", "unknown"}:
             continue
         missing_dependencies = [
             dependency
