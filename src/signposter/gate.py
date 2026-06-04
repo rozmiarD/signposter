@@ -258,7 +258,7 @@ def evaluate_ci_gate(
         "execution failed",
     ]
     for signal in negative_signals:
-        if signal in text:
+        if _has_contextual_worker_disqualifier_signal(text, signal):
             return GateDecision(
                 decision="needs-work",
                 reason=f"Worker output mentioned: '{signal}'",
@@ -596,7 +596,7 @@ def _has_scoped_worker_code_completion_evidence(text: str) -> bool:
         "pytest fails",
         "ruff failed",
     ]
-    if any(disqualifier in t for disqualifier in disqualifiers):
+    if _has_contextual_worker_disqualifier(t, disqualifiers):
         return False
     if _has_actual_traceback_signal(t):
         return False
@@ -709,6 +709,44 @@ def _has_contextual_worker_error_signal(text: str) -> str | None:
     return None
 
 
+def _has_contextual_worker_disqualifier(
+    text: str,
+    disqualifiers: list[str],
+) -> bool:
+    return any(
+        _has_contextual_worker_disqualifier_signal(text, disqualifier)
+        for disqualifier in disqualifiers
+    )
+
+
+def _has_contextual_worker_disqualifier_signal(text: str, signal: str) -> bool:
+    """Block real worker disqualifiers while allowing explicit policy examples."""
+    neutral_context = (
+        "example",
+        "examples",
+        "literal",
+        "policy context",
+        "negative signal",
+        "negative-signal",
+        "trigger word",
+        "trigger-word",
+        "documented as",
+        "words that still block",
+        "when actual failure output",
+        "without indicating real blockers",
+    )
+    for raw_line in (text or "").splitlines():
+        line = raw_line.strip().lower()
+        if signal not in line:
+            continue
+        if any(marker in line for marker in neutral_context):
+            continue
+        if f"no {signal}" in line:
+            continue
+        return True
+    return False
+
+
 def _has_scoped_worker_test_completion_evidence(text: str) -> bool:
     """Detect conservative scoped test-only worker completion evidence.
 
@@ -742,7 +780,7 @@ def _has_scoped_worker_test_completion_evidence(text: str) -> bool:
         "pytest fails",
         "validation failed",
     ]
-    if any(disqualifier in t for disqualifier in disqualifiers):
+    if _has_contextual_worker_disqualifier(t, disqualifiers):
         return False
 
     required = [
@@ -802,7 +840,7 @@ def _has_validated_noop_completion_evidence(text: str) -> bool:
         "pytest fails",
         "validation failed",
     ]
-    if any(disqualifier in t for disqualifier in disqualifiers):
+    if _has_contextual_worker_disqualifier(t, disqualifiers):
         return False
 
     required = [
