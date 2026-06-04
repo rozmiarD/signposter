@@ -35,6 +35,16 @@ class CodexSubagentDispatchContract:
     forbidden_actions: tuple[str, ...]
     invocation: CodexCliInvocation
 
+    @property
+    def command_preview(self) -> str:
+        """Shell-shaped Codex CLI command preview without executing it."""
+        return " ".join(self.invocation.command)
+
+    @property
+    def session_key(self) -> str:
+        """Signposter-side session key metadata for audit and takeover."""
+        return self.invocation.session_key
+
 
 def plan_codex_subagent_dispatch(
     *,
@@ -61,6 +71,10 @@ def plan_codex_subagent_dispatch(
     raw = Path(raw_artifact)
     summary = Path(summary_artifact)
     last_message = Path(last_message_artifact)
+    artifact_paths = (raw, summary, last_message)
+    if len(set(artifact_paths)) != len(artifact_paths):
+        raise ValueError("subagent artifact paths must be distinct")
+
     invocation = plan_codex_cli_invocation(
         agent=role_execution.execution_agent,
         session_key=session_key,
@@ -119,6 +133,11 @@ def format_codex_subagent_dispatch_contract(
         f"  agent: {contract.execution_agent}",
         f"  model: {contract.model}",
         f"  reasoning: {contract.reasoning_effort}",
+        "",
+        "Invocation:",
+        f"  command_preview: {contract.command_preview}",
+        f"  session_key: {contract.session_key} (Signposter metadata only)",
+        "  prompt_transport: stdin",
         "",
         "Artifacts:",
         f"  prompt: {contract.prompt_artifact}",
