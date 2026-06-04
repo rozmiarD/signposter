@@ -639,6 +639,59 @@ def test_fetch_main_ci_status_passes_on_latest_success(monkeypatch):
     assert _fetch_main_ci_status("test/repo") == "pass"
 
 
+def test_build_ci_run_selection_command_supports_branch_smoke():
+    from signposter.integration import _build_ci_run_selection_command
+
+    command = _build_ci_run_selection_command(
+        "test/repo",
+        branch="work/issue-417-ci-smoke",
+    )
+
+    assert command == [
+        "gh",
+        "run",
+        "list",
+        "-R",
+        "test/repo",
+        "--branch",
+        "work/issue-417-ci-smoke",
+        "--workflow",
+        "CI",
+        "--limit",
+        "1",
+        "--json",
+        "status,conclusion,workflowName,headBranch,headSha,databaseId",
+    ]
+
+
+def test_build_ci_run_selection_command_supports_merge_commit_smoke():
+    from signposter.integration import _build_ci_run_selection_command
+
+    command = _build_ci_run_selection_command(
+        "test/repo",
+        branch="main",
+        commit_sha="abc123",
+    )
+
+    assert command == [
+        "gh",
+        "run",
+        "list",
+        "-R",
+        "test/repo",
+        "--branch",
+        "main",
+        "--commit",
+        "abc123",
+        "--workflow",
+        "CI",
+        "--limit",
+        "1",
+        "--json",
+        "status,conclusion,workflowName,headBranch,headSha,databaseId",
+    ]
+
+
 def test_fetch_main_ci_status_filters_by_commit_when_provided(monkeypatch):
     from signposter.integration import _fetch_main_ci_status
 
