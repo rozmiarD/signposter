@@ -1573,15 +1573,7 @@ def format_planner_run_plan(result: dict[str, Any]) -> str:
             [
                 "",
                 "Task counts:",
-                f"  total: {counts.get('total', 0)}",
-                f"  pending: {counts.get('pending', 0)}",
-                f"  ready: {counts.get('ready', 0)}",
-                f"  waiting: {counts.get('waiting', 0)}",
-                f"  active: {counts.get('active', 0)}",
-                f"  done: {counts.get('done', 0)}",
-                f"  merged: {counts.get('merged', 0)}",
-                f"  blocked: {counts.get('blocked', 0)}",
-                f"  completed: {counts.get('completed', 0)}",
+                f"  {_format_planner_run_counts(counts)}",
             ]
         )
 
@@ -1656,6 +1648,21 @@ def format_planner_run_plan(result: dict[str, Any]) -> str:
     lines.extend(["", "Notes:"])
     lines.extend(f"  {note}" for note in result.get("notes", []))
     return "\n".join(lines)
+
+
+def _format_planner_run_counts(counts: dict[str, Any]) -> str:
+    order = (
+        "total",
+        "pending",
+        "ready",
+        "waiting",
+        "active",
+        "done",
+        "merged",
+        "blocked",
+        "completed",
+    )
+    return " ".join(f"{key}={counts.get(key, 0)}" for key in order)
 
 
 def build_planner_advance_plan_from_status(
