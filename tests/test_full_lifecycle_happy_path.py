@@ -310,3 +310,182 @@ def test_full_lifecycle_blocked_paths_stop_before_mutation() -> None:
 
     assert "blocked — associated issue #42 is not CLOSED" in cleanup_blocked.status
     assert "No GitHub mutation was performed." in cleanup_blocked.notes
+
+
+def test_full_lifecycle_validated_noop_gate_integration_and_status(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """Smoke the no-PR validated no-op path from gate evidence to lifecycle complete."""
+    from signposter.gate import evaluate_ci_gate
+    from signposter.integration import (
+        apply_noop_integration,
+        format_noop_integration_apply_dry_run,
+        format_noop_integration_plan,
+        plan_noop_integration_for_issue,
+    )
+
+    repo = "test/repo"
+    issue = 44
+
+    monkeypatch.chdir(tmp_path)
+    artifact_dir = tmp_path / "artifacts" / "runs"
+    artifact_dir.mkdir(parents=True)
+    summary = """
+# Signposter Execution Summary
+
+**Repository:** test/repo
+**Issue:** #44 — H049 validated no-op smoke
+**Agent:** worker
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+## Scoped completion evidence
+
+Validated no-op completion: requested behavior already exists.
+The existing implementation provides deterministic no-op gate handling.
+Existing ready output is deterministic and terminal-friendly.
+Existing blocked output is deterministic and terminal-friendly.
+
+## Files changed
+
+No files were changed in the isolated worktree.
+
+## Validation evidence
+
+Targeted validation in isolated worktree passed:
+- ruff check tests/test_full_lifecycle_happy_path.py
+- pytest tests/test_full_lifecycle_happy_path.py -q
+
+Full validation in isolated worktree passed:
+- ruff check .
+- pytest tests/ -q
+
+Manual CLI smoke passed.
+
+## Safety
+
+No GitHub mutation was performed by the implemented command.
+No OpenClaw execution was performed by the implemented command.
+No manifest mutation was performed.
+No unrelated files were changed.
+
+## Gate recommendation
+
+PASS — scoped no-op worker task completed with validation evidence.
+"""
+    (artifact_dir / f"issue-{issue}-gate.summary.md").write_text(
+        summary,
+        encoding="utf-8",
+    )
+
+    decision = evaluate_ci_gate(0, summary)
+    assert decision.decision == "pass"
+    assert decision.proposed_transition == "state:active → state:done"
+
+    class Proc:
+        def __init__(self, returncode: int = 0, stdout: str = "", stderr: str = ""):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = stderr
+
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd[:3] == ["gh", "issue", "view"]:
+            return Proc(
+                stdout=(
+                    '{"number":44,"title":"H049 validated no-op smoke",'
+                    '"state":"OPEN","labels":[{"name":"state:done"},'
+                    '{"name":"phase:build"}]}'
+                )
+            )
+        if cmd[:3] == ["git", "branch", "--list"]:
+            return Proc(stdout="")
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return Proc(stdout="[]")
+        if cmd[:3] == ["gh", "issue", "edit"]:
+            return Proc()
+        if cmd[:3] == ["gh", "issue", "close"]:
+            return Proc()
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr("signposter.integration.subprocess.run", fake_run)
+
+    plan = plan_noop_integration_for_issue(repo, issue)
+    assert plan.status == "ready"
+    assert plan.gate_decision == "pass"
+    assert plan.associated_pr_detected is False
+
+    plan_output = format_noop_integration_plan(plan)
+    apply_dry_run = format_noop_integration_apply_dry_run(plan, repo)
+    assert "Signposter No-op Integration Plan — Issue #44" in plan_output
+    assert "Status:\n  ready" in apply_dry_run
+    assert "No PR merge was performed." in apply_dry_run
+
+    result = apply_noop_integration(repo, issue, apply=True)
+    assert result["success"] is True
+    mutation_calls = [cmd for cmd in calls if cmd[:3] == ["gh", "issue", "edit"]]
+    close_calls = [cmd for cmd in calls if cmd[:3] == ["gh", "issue", "close"]]
+    assert mutation_calls == [
+        [
+            "gh",
+            "issue",
+            "edit",
+            "44",
+            "-R",
+            "test/repo",
+            "--add-label",
+            "state:merged",
+            "--remove-label",
+            "state:done",
+        ]
+    ]
+    assert close_calls == [
+        [
+            "gh",
+            "issue",
+            "close",
+            "44",
+            "-R",
+            "test/repo",
+            "--reason",
+            "completed",
+            "--comment",
+            "**Signposter:** completed validated no-op task.\n\n"
+            "`state:done → state:merged` · no PR required",
+        ]
+    ]
+
+    with (
+        patch("signposter.lifecycle.fetch_issue_by_number") as mock_issue,
+        patch("signposter.lifecycle.fetch_issue_context") as mock_ctx,
+        patch("signposter.lifecycle._detect_associated_pr_from_issue", return_value=None),
+        patch("signposter.lifecycle._worktree_exists", return_value=False),
+    ):
+        mock_issue.return_value = type(
+            "Issue",
+            (),
+            {
+                "labels": [
+                    "state:merged",
+                    "phase:build",
+                    "risk:low",
+                    "role:worker",
+                    "area:tests",
+                ]
+            },
+        )()
+        mock_ctx.return_value = {
+            "state": "CLOSED",
+            "labels": [{"name": "state:merged"}],
+        }
+
+        lifecycle = plan_lifecycle_status(repo, issue=issue)
+
+    assert lifecycle.status == "complete"
+    assert lifecycle.integrated is True
+    assert lifecycle.cleanup_complete is True
