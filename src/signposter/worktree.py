@@ -221,6 +221,7 @@ def format_worktree_plan(plan: WorktreePlan) -> str:
             lines.append(f"  {n}")
 
     lines.append("\nRecovery hints:")
+    lines.extend(_format_collision_recovery_hints(plan))
     if plan.worktree_exists:
         lines.append(
             "  Existing worktree detected: inspect it and resume from that path "
@@ -250,6 +251,37 @@ def format_worktree_plan(plan: WorktreePlan) -> str:
     )
 
     return "\n".join(lines)
+
+
+def _format_collision_recovery_hints(plan: WorktreePlan) -> list[str]:
+    """Return collision-specific, read-only recovery hints for blocked plans."""
+    if not plan.branch_collision_reason:
+        return []
+
+    if plan.branch_collision_reason == "local branch already exists":
+        return [
+            "  Branch collision: local branch already exists.",
+            f"  Inspect local branch: git branch --list {plan.proposed_branch}",
+            "  If it belongs to this issue, resume it; otherwise clean or rename manually.",
+        ]
+
+    if plan.branch_collision_reason == "remote-tracking branch already exists":
+        return [
+            "  Branch collision: remote branch already exists.",
+            f"  Inspect remote branch: git ls-remote --heads origin {plan.proposed_branch}",
+            (
+                "  Inspect existing PR before creating another: "
+                f"gh pr list --repo <repo> --head {plan.proposed_branch}"
+            ),
+        ]
+
+    if plan.branch_collision_reason == "worktree path already exists":
+        return [
+            "  Worktree collision: expected worktree path already exists.",
+            f"  Inspect worktree path: {plan.proposed_worktree}",
+        ]
+
+    return [f"  Collision: {plan.branch_collision_reason}"]
 
 
 def format_worktree_apply_plan(plan: WorktreePlan, *, dry_run: bool = True) -> str:
