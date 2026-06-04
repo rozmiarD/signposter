@@ -1189,6 +1189,9 @@ def render_prompt(
   safety notes, and completion status
 - artifact requirements: keep raw backend output local under artifacts/runs/
   and provide bounded summaries only
+- docs-only artifact fields: include Docs-only scope: yes, Changed files are
+  documentation-only: yes, Code behavior unchanged: yes, Scope stayed inside
+  requested documentation task: yes, and Dirty guard: clean
 - uncertainty handling: if uncertain, state exactly what is missing instead of guessing
 
 {prompt_budget_report}
@@ -1287,6 +1290,9 @@ def _render_compact_worker_prompt(
   safety notes, and completion status
 - artifact requirements: keep raw backend output local under artifacts/runs/
   and provide bounded summaries only
+- docs-only artifact fields: include Docs-only scope: yes, Changed files are
+  documentation-only: yes, Code behavior unchanged: yes, Scope stayed inside
+  requested documentation task: yes, and Dirty guard: clean
 - uncertainty handling: if uncertain, state exactly what is missing instead of guessing
 
 {prompt_budget_report}
