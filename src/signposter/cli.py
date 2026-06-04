@@ -2569,6 +2569,9 @@ def run_cleanup_apply(args: argparse.Namespace) -> int:
             print(format_cleanup_apply_result(result))
             success = result.get("success", False)
             return 0 if success else 1
+        elif result.get("mode") == "apply_completed":
+            print(format_cleanup_apply_result(result))
+            return 0
         else:
             # apply_blocked
             print(format_cleanup_apply_result(result))
