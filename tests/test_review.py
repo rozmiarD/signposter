@@ -433,6 +433,8 @@ def test_build_review_prompt_contains_contract_and_rules():
     assert "## Prompt Contract" in prompt
     assert "expected output format:" in prompt
     assert "artifact requirements:" in prompt
+    assert "validation provenance:" in prompt
+    assert "verify command/source provenance" in prompt
     assert "uncertainty handling:" in prompt
     assert "## Prompt Budget" in prompt
     assert f"Diff excerpt: max {REVIEW_PROMPT_LIMITS['diff_lines']} lines" in prompt
@@ -2140,6 +2142,9 @@ def test_validate_review_artifact_ready(tmp_path):
     assert result.errors == []
     assert result.opinion.verdict == "APPROVE"
     assert result.raw_exists is False
+    assert "## Validation provenance" in plan.content
+    assert "worker summary validation records" in plan.content
+    assert "GitHub comment impact: bounded summaries only" in plan.content
 
 
 def test_validate_review_artifact_blocks_missing_summary(tmp_path):
