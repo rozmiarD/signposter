@@ -199,6 +199,7 @@ def test_format_pr_plan_contains_key_sections():
     assert "README.md" in output
     assert "gh pr create" in output
     assert "No PR, merge, push, close, or GitHub mutation was performed" in output
+    assert "inspect and reuse it instead of creating duplicates" in output
 
 
 def plan_pr_for_issue_from_handoff_for_test(

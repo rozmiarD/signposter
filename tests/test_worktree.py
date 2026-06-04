@@ -221,15 +221,19 @@ def test_worktree_plan_blocks_dirty_tree_before_creation(monkeypatch):
 
 
 def test_worktree_plan_blocks_existing_branch(monkeypatch):
-    from signposter.worktree import plan_worktree_for_issue
+    from signposter.worktree import format_worktree_plan, plan_worktree_for_issue
 
     _patch_plan_inputs(monkeypatch, branch_exists=True)
 
     plan = plan_worktree_for_issue("test/repo", 77)
+    output = format_worktree_plan(plan)
 
     assert plan.status.startswith("blocked — proposed branch already exists:")
     assert plan.branch_exists is True
     assert plan.branch_collision_reason == "local branch already exists"
+    assert "Branch collision: local branch already exists." in output
+    assert "Inspect local branch: git branch --list" in output
+    assert "resume it; otherwise clean or rename manually" in output
 
 
 def test_worktree_plan_blocks_existing_remote_branch(monkeypatch):
@@ -246,6 +250,9 @@ def test_worktree_plan_blocks_existing_remote_branch(monkeypatch):
     assert plan.branch_collision_reason == "remote-tracking branch already exists"
     assert "remote branch exists: yes" in output
     assert "collision reason: remote-tracking branch already exists" in output
+    assert "Branch collision: remote branch already exists." in output
+    assert "Inspect remote branch: git ls-remote --heads origin" in output
+    assert "gh pr list --repo <repo> --head" in output
 
 
 def test_worktree_plan_blocks_existing_worktree_path(monkeypatch):
@@ -582,6 +589,8 @@ def test_format_worktree_plan_includes_recovery_hints():
     output = format_worktree_plan(plan)
 
     assert "Recovery hints:" in output
+    assert "Worktree collision: expected worktree path already exists." in output
+    assert "Inspect worktree path: ../signposter-work/42" in output
     assert "Existing worktree detected" in output
     assert "signposter run --repo <repo> --issue 42 --execute --worktree" in output
     assert "signposter artifact write-worker-summary" in output
