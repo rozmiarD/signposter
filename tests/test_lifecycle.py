@@ -416,6 +416,11 @@ def test_lifecycle_next_blocked_output_avoids_ready_apply_wording():
     assert "Blocked action:" in out
     assert "  apply ready: no" in out
     assert "  command preview: signposter labels ensure" in out
+    assert "Recovery summary:" in out
+    assert "  status: blocked" in out
+    assert "  category: preflight-blocked" in out
+    assert "  next: resolve preflight blockers before lifecycle apply" in out
+    assert "  safety: read-only; no mutation was performed" in out
     assert "\nNext:" not in out
     assert "\n  command: signposter labels ensure" not in out
     assert "Status:\n  ready" not in out

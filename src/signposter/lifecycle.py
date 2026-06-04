@@ -1046,6 +1046,12 @@ def format_lifecycle_next(result: LifecycleNext) -> str:
     if result.reason:
         lines.append(f"  reason: {result.reason}")
 
+    recovery = _format_lifecycle_recovery_summary(result)
+    if recovery:
+        lines.append("\nRecovery summary:")
+        for line in recovery:
+            lines.append(f"  {line}")
+
     lines.append("\nStatus:")
     lines.append(f"  {result.status}")
 
@@ -1055,3 +1061,24 @@ def format_lifecycle_next(result: LifecycleNext) -> str:
             lines.append(f"  {note}")
 
     return "\n".join(lines)
+
+
+def _format_lifecycle_recovery_summary(result: LifecycleNext) -> list[str]:
+    """Return a compact read-only recovery summary for blocked lifecycle output."""
+    if result.status != "blocked":
+        return []
+
+    category = "preflight-blocked" if result.blocked_next_action else "lifecycle-blocked"
+    if result.blocked_next_action:
+        next_step = "resolve preflight blockers before lifecycle apply"
+    elif result.reason:
+        next_step = "inspect lifecycle blocker before mutation"
+    else:
+        next_step = "inspect lifecycle status before mutation"
+
+    return [
+        f"status: {result.status}",
+        f"category: {category}",
+        f"next: {next_step}",
+        "safety: read-only; no mutation was performed",
+    ]
