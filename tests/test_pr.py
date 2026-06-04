@@ -155,6 +155,24 @@ def test_pr_plan_blocks_auto_close_keyword_in_suggested_metadata(monkeypatch):
     assert plan.status == "blocked — suggested PR metadata contains auto-close keyword"
 
 
+def test_pr_plan_blocks_extended_auto_close_keyword_in_suggested_metadata(monkeypatch):
+    monkeypatch.setattr(
+        "signposter.pr.plan_handoff_for_issue",
+        lambda repo, issue: _handoff_plan(
+            has_changes=False,
+            suggested_commit_message="work: fixes ExatronOmega/signposter#4",
+        ),
+    )
+    monkeypatch.setattr(
+        "signposter.pr._get_branch_changed_files",
+        lambda worktree, base, source: ["README.md"],
+    )
+
+    plan = plan_pr_for_issue("test/repo", 4)
+
+    assert plan.status == "blocked — suggested PR metadata contains auto-close keyword"
+
+
 def test_pr_plan_blocks_when_not_state_done(monkeypatch):
     monkeypatch.setattr(
         "signposter.pr.plan_handoff_for_issue",
