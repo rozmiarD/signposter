@@ -7,7 +7,10 @@ done inside a Signposter-managed worktree.
 from __future__ import annotations
 
 import re
+import subprocess
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 from signposter.git_utils import get_current_branch, get_git_status_short
 from signposter.worktree import (
@@ -38,6 +41,33 @@ class HandoffPlan:
 
     status: str  # "ready" or "blocked — <reason>"
     notes: list[str]
+
+
+@dataclass(frozen=True)
+class HandoffSnapshotArtifact:
+    label: str
+    path: str
+    exists: bool
+
+
+@dataclass(frozen=True)
+class HandoffSnapshot:
+    repo: str
+    repo_root: str
+    branch: str
+    head: str
+    git_status_lines: tuple[str, ...]
+    manifest_path: str | None
+    planner_status: str
+    planner_counts: dict[str, int]
+    active_issue: int | None
+    next_issue: int | None
+    stop_reason: str
+    resume_command: str
+    local_warnings: tuple[str, ...]
+    artifacts: tuple[HandoffSnapshotArtifact, ...]
+    status: str
+    notes: tuple[str, ...]
 
 
 def _slug_for_commit(title: str) -> str:
@@ -94,6 +124,297 @@ def _parse_status_path(line: str) -> str:
         return line[2:].strip()
 
     return line.strip()
+
+
+def _git_output(args: list[str], *, cwd: str | Path = ".") -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except Exception:
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip() or None
+
+
+def _issue_ref(value: object | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _planner_active_issue(planner_run: dict[str, Any] | None) -> int | None:
+    if planner_run is None:
+        return None
+    active_tasks = planner_run.get("active_tasks", [])
+    if not isinstance(active_tasks, list) or len(active_tasks) != 1:
+        return None
+    active = active_tasks[0]
+    if not isinstance(active, dict):
+        return None
+    return _issue_ref(active.get("github_issue"))
+
+
+def _planner_next_issue(planner_run: dict[str, Any] | None) -> int | None:
+    if planner_run is None:
+        return None
+    next_plan = planner_run.get("next")
+    if not isinstance(next_plan, dict):
+        return None
+    next_task = next_plan.get("next")
+    if not isinstance(next_task, dict):
+        return None
+    return _issue_ref(next_task.get("github_issue"))
+
+
+def _planner_stop_reason(planner_run: dict[str, Any] | None) -> str:
+    if planner_run is None:
+        return "manifest not provided"
+    active_tasks = planner_run.get("active_tasks", [])
+    if isinstance(active_tasks, list) and len(active_tasks) > 1:
+        return "multiple active manifest tasks require explicit operator selection"
+    next_plan = planner_run.get("next")
+    if isinstance(next_plan, dict):
+        reason = next_plan.get("reason")
+        if isinstance(reason, str) and reason.strip():
+            return reason.strip()
+    return "none"
+
+
+def _planner_counts(planner_run: dict[str, Any] | None) -> dict[str, int]:
+    if planner_run is None:
+        return {}
+    counts = planner_run.get("status_counts", {})
+    if not isinstance(counts, dict):
+        return {}
+    compact: dict[str, int] = {}
+    for key, value in counts.items():
+        try:
+            compact[str(key)] = int(value)
+        except (TypeError, ValueError):
+            continue
+    return compact
+
+
+def _main_repo_root_for_snapshot(repo_root: Path) -> Path:
+    if repo_root.parent.name == "signposter-work":
+        candidate = repo_root.parent.parent / "signposter"
+        if candidate.exists():
+            return candidate
+    return repo_root
+
+
+def _worktree_path_for_issue(repo_root: Path, issue: int) -> Path:
+    if repo_root.name == str(issue) and repo_root.parent.name == "signposter-work":
+        return repo_root
+    return repo_root.parent / "signposter-work" / str(issue)
+
+
+def _snapshot_artifacts_for_issue(
+    repo_root: Path,
+    issue: int | None,
+) -> tuple[HandoffSnapshotArtifact, ...]:
+    if issue is None:
+        return ()
+    main_repo = _main_repo_root_for_snapshot(repo_root)
+    worktree = _worktree_path_for_issue(repo_root, issue)
+    paths = [
+        ("worker prompt", main_repo / "artifacts" / "prompts" / f"issue-{issue}.md"),
+        (
+            "worker summary",
+            worktree / "artifacts" / "runs" / f"issue-{issue}-worker.summary.md",
+        ),
+        (
+            "worker raw",
+            worktree / "artifacts" / "runs" / f"issue-{issue}-worker.raw.txt",
+        ),
+    ]
+    return tuple(
+        HandoffSnapshotArtifact(
+            label=label,
+            path=str(path),
+            exists=path.exists(),
+        )
+        for label, path in paths
+    )
+
+
+def _resume_command(
+    *,
+    repo: str,
+    manifest_path: str | None,
+    active_issue: int | None,
+    next_issue: int | None,
+) -> str:
+    if active_issue is not None:
+        return f"signposter lifecycle status --repo {repo} --issue {active_issue}"
+    if next_issue is not None:
+        return f"signposter run --repo {repo} --issue {next_issue} --dry-run"
+    if manifest_path:
+        return f"signposter planner run --manifest {manifest_path} --sync-github --dry-run"
+    return f"signposter control-plane status --repo {repo}"
+
+
+def build_handoff_snapshot(
+    *,
+    repo: str,
+    manifest_path: str | None = None,
+    planner_run: dict[str, Any] | None = None,
+    local_warnings: tuple[str, ...] = (),
+    cwd: str | Path = ".",
+) -> HandoffSnapshot:
+    """Build a read-only operator handoff snapshot from existing surfaces."""
+    repo_root_raw = _git_output(["rev-parse", "--show-toplevel"], cwd=cwd)
+    repo_root = Path(repo_root_raw).resolve() if repo_root_raw else Path(cwd).resolve()
+    branch = _git_output(["branch", "--show-current"], cwd=repo_root) or "unknown"
+    head = _git_output(["rev-parse", "--short", "HEAD"], cwd=repo_root) or "unknown"
+    git_status_lines = tuple(get_git_status_short(cwd=repo_root))
+    active_issue = _planner_active_issue(planner_run)
+    next_issue = _planner_next_issue(planner_run)
+    stop_reason = _planner_stop_reason(planner_run)
+    status = (
+        "blocked"
+        if stop_reason != "none" and active_issue is None and next_issue is None
+        else "ready"
+    )
+
+    return HandoffSnapshot(
+        repo=repo,
+        repo_root=str(repo_root),
+        branch=branch,
+        head=head,
+        git_status_lines=git_status_lines,
+        manifest_path=manifest_path,
+        planner_status=str(planner_run.get("planner_status", "not evaluated"))
+        if planner_run is not None
+        else "not evaluated",
+        planner_counts=_planner_counts(planner_run),
+        active_issue=active_issue,
+        next_issue=next_issue,
+        stop_reason=stop_reason,
+        resume_command=_resume_command(
+            repo=repo,
+            manifest_path=manifest_path,
+            active_issue=active_issue,
+            next_issue=next_issue,
+        ),
+        local_warnings=local_warnings,
+        artifacts=_snapshot_artifacts_for_issue(repo_root, active_issue or next_issue),
+        status=status,
+        notes=(
+            "Read-only handoff snapshot.",
+            "No GitHub mutation was performed.",
+            "No manifest mutation was performed.",
+            "No lifecycle command was executed.",
+            "No backend execution was performed.",
+        ),
+    )
+
+
+def _format_issue(value: int | None) -> str:
+    return f"#{value}" if value is not None else "none"
+
+
+def _format_counts(counts: dict[str, int]) -> str:
+    if not counts:
+        return "not evaluated"
+    ordered = [
+        "total",
+        "ready",
+        "active",
+        "waiting",
+        "done",
+        "merged",
+        "blocked",
+        "completed",
+    ]
+    return " ".join(f"{key}={counts.get(key, 0)}" for key in ordered if key in counts)
+
+
+def format_handoff_snapshot(snapshot: HandoffSnapshot) -> str:
+    """Format a compact handoff snapshot suitable for session resume."""
+    lines = [
+        "Signposter Handoff Snapshot",
+        "",
+        "Status:",
+        f"  {snapshot.status}",
+        "",
+        "Repository:",
+        f"  repo: {snapshot.repo}",
+        f"  root: {snapshot.repo_root}",
+        f"  branch: {snapshot.branch}",
+        f"  head: {snapshot.head}",
+        f"  dirty: {'yes' if snapshot.git_status_lines else 'no'}",
+    ]
+    if snapshot.git_status_lines:
+        lines.append("  changes:")
+        lines.extend(f"    {line}" for line in snapshot.git_status_lines[:8])
+        if len(snapshot.git_status_lines) > 8:
+            lines.append(f"    ... {len(snapshot.git_status_lines) - 8} more")
+
+    lines.extend(
+        [
+            "",
+            "Planner:",
+            f"  manifest: {snapshot.manifest_path or 'not provided'}",
+            f"  status: {snapshot.planner_status}",
+            f"  counts: {_format_counts(snapshot.planner_counts)}",
+            "",
+            "Current task:",
+            f"  active: {_format_issue(snapshot.active_issue)}",
+            f"  next: {_format_issue(snapshot.next_issue)}",
+            f"  stop reason: {snapshot.stop_reason}",
+            "",
+            "Lifecycle:",
+            "  status: not evaluated",
+            f"  command: {snapshot.resume_command}",
+            "",
+            "PR / CI / review:",
+            "  status: not evaluated",
+            "  source: run lifecycle status for the active or next issue",
+            "",
+            "Integration / cleanup:",
+            "  status: not evaluated",
+            "  source: run lifecycle status for the active or next issue",
+            "",
+            "Local artifacts:",
+        ]
+    )
+    if snapshot.artifacts:
+        for artifact in snapshot.artifacts:
+            state = "present" if artifact.exists else "missing"
+            lines.append(f"  {artifact.label}: {artifact.path} ({state})")
+    else:
+        lines.append("  none")
+
+    lines.extend(["", "Recovery / bugs:"])
+    if snapshot.local_warnings:
+        lines.append("  local warnings:")
+        lines.extend(f"    {warning}" for warning in snapshot.local_warnings[:5])
+        if len(snapshot.local_warnings) > 5:
+            lines.append(f"    ... {len(snapshot.local_warnings) - 5} more")
+    else:
+        lines.append("  local warnings: none")
+
+    lines.extend(
+        [
+            "",
+            "Resume:",
+            f"  command: {snapshot.resume_command}",
+            "",
+            "Notes:",
+        ]
+    )
+    lines.extend(f"  {note}" for note in snapshot.notes)
+    return "\n".join(lines)
 
 
 def plan_handoff_for_issue(repo: str, issue_number: int) -> HandoffPlan:
