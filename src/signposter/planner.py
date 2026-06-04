@@ -2717,9 +2717,20 @@ def build_planner_status(
         if github_issue is not None:
             snapshot = issue_states.get(int(github_issue), "unknown")
             if isinstance(snapshot, dict):
-                github_state = str(snapshot.get("github_state", "")).lower() or None
-                workflow_state = str(snapshot.get("workflow_state", "")).lower() or None
-                state = str(snapshot.get("state", "")).lower() or "unknown"
+                raw_github_state = snapshot.get("github_state")
+                raw_workflow_state = snapshot.get("workflow_state")
+                raw_state = snapshot.get("state")
+                github_state = (
+                    str(raw_github_state).strip().lower()
+                    if raw_github_state
+                    else None
+                )
+                workflow_state = (
+                    str(raw_workflow_state).strip().lower()
+                    if raw_workflow_state
+                    else None
+                )
+                state = str(raw_state).strip().lower() if raw_state else "unknown"
             else:
                 state = str(snapshot).lower()
                 if state == "open":
