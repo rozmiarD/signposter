@@ -1233,6 +1233,75 @@ No unrelated files were changed.
     assert decision.decision == "pass"
 
 
+def test_evaluate_ci_gate_allows_neutral_trigger_word_examples():
+    """Neutral policy examples of blocker words must not block scoped evidence."""
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+# Signposter Execution Summary
+
+**Repository:** ExatronOmega/signposter
+**Issue:** #397
+**Agent:** human/operator
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+## Files changed
+
+- src/signposter/gate.py
+- tests/test_gate.py
+
+## Implemented behavior
+
+Negative-signal examples include critical blocker, cannot proceed,
+missing required evidence, and execution failed without indicating real blockers.
+
+## Validation evidence
+
+Targeted validation passed:
+
+- ruff check src/signposter/gate.py tests/test_gate.py
+- pytest tests/test_gate.py -q
+
+Full validation passed:
+
+- ruff check .
+- pytest tests/ -q
+
+## Safety
+
+No GitHub mutation was performed by the implemented code.
+No OpenClaw execution was performed by the implemented code.
+No issue was closed by the implemented code.
+No merge was performed by the implemented code.
+No unrelated files were changed.
+"""
+
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "pass"
+
+
+def test_evaluate_ci_gate_still_blocks_real_critical_blocker_line():
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+Critical blocker: validation evidence is not trustworthy.
+"""
+
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "needs-work"
+    assert "critical blocker" in decision.reason
+
+
 def test_evaluate_ci_gate_blocks_actual_traceback_output():
     from signposter.gate import evaluate_ci_gate
 
