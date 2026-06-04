@@ -909,6 +909,11 @@ def format_orchestrator_next(result: OrchestratorNext) -> str:
             lines.extend(["", "Recovery commands:"])
             lines.extend(f"  {command}" for command in result.recovery_commands)
 
+    recovery = _format_recovery_summary_lines(result)
+    if recovery:
+        lines.extend(["", "Recovery summary:"])
+        lines.extend(f"  {line}" for line in recovery)
+
     lines.extend(["", "Status:", f"  {result.status}"])
     lines.extend(["", "Notes:"])
     lines.extend(f"  {note}" for note in result.notes)
@@ -1124,6 +1129,10 @@ def format_orchestrator_run_next(result: OrchestratorRunNext) -> str:
             lines.append(f"  takeover: {result.next.takeover_category}")
         if result.next.activity_age:
             lines.append(f"  activity age: {result.next.activity_age}")
+        recovery = _format_recovery_summary_lines(result.next)
+        if recovery:
+            lines.extend(["", "Recovery summary:"])
+            lines.extend(f"  {line}" for line in recovery)
     else:
         lines.append("  none")
 
@@ -1165,6 +1174,7 @@ def format_orchestrator_run_next_summary(result: OrchestratorRunNext) -> str:
         f"action: {action}",
         f"status: {result.status}",
         f"stop: {stop}",
+        f"recovery: {_recovery_summary_category(result.next)}",
     ]
     return "\n".join(lines)
 
@@ -1244,6 +1254,9 @@ def format_orchestrator_run_next_loop_summary(result: OrchestratorRunNextLoop) -
     selected = f"#{issue}" if issue else "none"
     action = result.steps[-1].next.action if result.steps else "none"
     stop = result.stop_reason or "none"
+    recovery = (
+        _recovery_summary_category(result.steps[-1].next) if result.steps else "none"
+    )
 
     lines = [
         "Signposter Automation Summary",
@@ -1252,11 +1265,52 @@ def format_orchestrator_run_next_loop_summary(result: OrchestratorRunNextLoop) -
         f"action: {action}",
         f"status: {result.status}",
         f"stop: {stop}",
+        f"recovery: {recovery}",
         f"stop_category: {result.stop_category or 'none'}",
         f"stop_tolerated: {'yes' if result.stop_tolerated else 'no'}",
         f"steps: {result.cycles_run}",
     ]
     return "\n".join(lines)
+
+
+def _format_recovery_summary_lines(result: OrchestratorNext) -> list[str]:
+    """Return a compact read-only recovery summary for operator status output."""
+    category = _recovery_summary_category(result)
+    if category == "none":
+        return []
+
+    return [
+        f"status: {getattr(result, 'status', 'unknown')}",
+        f"category: {category}",
+        f"next: {_recovery_summary_next(result)}",
+        "safety: read-only; apply/execute flags still required",
+    ]
+
+
+def _recovery_summary_category(result: OrchestratorNext | None) -> str:
+    if result is None:
+        return "none"
+    takeover_category = getattr(result, "takeover_category", None)
+    if takeover_category:
+        return takeover_category
+    if getattr(result, "stop_reason", None) == EXECUTION_BACKEND_EXPLICIT_EXECUTE_REASON:
+        return "execution-requires-explicit-execute"
+    if getattr(result, "status", None) == "blocked":
+        return "blocked-lifecycle"
+    return "none"
+
+
+def _recovery_summary_next(result: OrchestratorNext) -> str:
+    recovery_commands = getattr(result, "recovery_commands", ())
+    if recovery_commands:
+        return recovery_commands[0]
+    if getattr(result, "takeover_category", None):
+        return "inspect takeover plan and preserve existing evidence"
+    if getattr(result, "stop_reason", None) == EXECUTION_BACKEND_EXPLICIT_EXECUTE_REASON:
+        return "rerun with --execute or use bounded manual artifact fallback"
+    if getattr(result, "status", None) == "blocked":
+        return "inspect lifecycle next/status before mutation"
+    return "none"
 
 
 def write_orchestrator_run_next_loop_transcript(
