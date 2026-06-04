@@ -455,8 +455,44 @@ def test_integration_apply_dry_run_blocks_when_main_ci_unknown():
     output = format_integration_apply_dry_run(plan)
 
     assert "main CI: unknown" in output
+    assert "Main CI blockage:" in output
+    assert "category: unknown-main-ci" in output
+    assert "inspect command: gh run list -R <repo> --branch main --commit abc123" in output
     assert "blocked — main CI is not confirmed pass (got unknown)" in output
     assert "Status:\n  ready" not in output
+
+
+def test_integration_apply_dry_run_surfaces_failing_main_ci_inspection_command():
+    from signposter.integration import IntegrationPlan, format_integration_apply_dry_run
+
+    plan = IntegrationPlan(
+        pr_number=5,
+        pr_title="test",
+        pr_state="MERGED",
+        merge_commit="abc123",
+        base_branch="main",
+        head_branch="work/issue-4-xxx",
+        associated_issue=4,
+        issue_state="OPEN",
+        current_workflow_state="state:done",
+        proposed_workflow_state="state:merged",
+        close_issue=True,
+        close_reason="completed",
+        main_ci_status="failing",
+        status="ready",
+        notes=[],
+    )
+
+    output = format_integration_apply_dry_run(plan, "test/repo")
+
+    assert "Main CI blockage:" in output
+    assert "category: failing-main-ci" in output
+    assert "reason: selected main CI run completed without success" in output
+    assert (
+        "inspect command: gh run list -R test/repo --branch main --commit abc123"
+        in output
+    )
+    assert "blocked — main CI is not confirmed pass (got failing)" in output
 
 
 def test_cli_integration_apply_dry_run_returns_blocked_exit_for_blocked_plan(
