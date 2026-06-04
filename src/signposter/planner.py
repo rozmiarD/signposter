@@ -1226,12 +1226,15 @@ def build_planner_status_counts(tasks: list[dict[str, Any]]) -> dict[str, int]:
     for task in tasks:
         state = str(task.get("state", "")).lower()
         workflow_state = str(task.get("workflow_state", "") or "").lower()
+        mapping_status = str(task.get("mapping_status", "") or "").lower()
         missing_dependencies = [
             dependency
             for dependency in task.get("depends_on", [])
             if dependency not in completed
         ]
-        if state == "active":
+        if mapping_status in {"stale", "missing", "mismatched"}:
+            counts["blocked"] += 1
+        elif state == "active":
             counts["active"] += 1
         elif state == "unseeded":
             counts["unseeded"] += 1
@@ -2310,6 +2313,7 @@ def build_planner_next_from_status(status: dict[str, Any]) -> dict[str, Any]:
     blocked: list[dict[str, Any]] = []
     ready_mainline: dict[str, Any] | None = None
     missing_ready_label = False
+    mapping_blocked = False
 
     for task in tasks:
         state = str(task.get("state", "")).lower()
@@ -2321,6 +2325,22 @@ def build_planner_next_from_status(status: dict[str, Any]) -> dict[str, Any]:
                 {
                     "key": task["key"],
                     "reason": "task is not seeded to a GitHub issue",
+                }
+            )
+            continue
+
+        mapping_status = str(task.get("mapping_status", "") or "").lower()
+        if mapping_status in {"stale", "missing", "mismatched"}:
+            mapping_blocked = True
+            mapping_reason = str(task.get("mapping_reason", "") or "").strip()
+            reason = f"GitHub issue mapping is {mapping_status}"
+            if mapping_reason:
+                reason += f": {mapping_reason}"
+            blocked.append(
+                {
+                    "key": task["key"],
+                    "reason": reason,
+                    "github_issue": task.get("github_issue"),
                 }
             )
             continue
@@ -2442,6 +2462,15 @@ def build_planner_next_from_status(status: dict[str, Any]) -> dict[str, Any]:
         return {
             "status": "blocked",
             "reason": "dependency-ready open task is missing GitHub label state:ready",
+            "next": None,
+            "waiting": waiting,
+            "blocked": blocked,
+        }
+
+    if mapping_blocked:
+        return {
+            "status": "blocked",
+            "reason": "one or more GitHub issue mappings are stale or mismatched",
             "next": None,
             "waiting": waiting,
             "blocked": blocked,
@@ -2700,7 +2729,7 @@ def format_planner_step(result: dict[str, Any]) -> str:
 
 def build_planner_status(
     manifest: dict[str, Any],
-    issue_states: dict[int, str] | None = None,
+    issue_states: dict[int, object] | None = None,
 ) -> dict[str, Any]:
     """Build a local planner status summary from a seed manifest."""
     manifest = _refresh_seed_manifest_dependency_metadata(dict(manifest))
@@ -2712,6 +2741,9 @@ def build_planner_status(
         state = "unseeded"
         github_state: str | None = None
         workflow_state: str | None = None
+        mapping_status: str | None = None
+        mapping_reason: str | None = None
+        github_title: str | None = None
         manifest_workflow_state = _workflow_state_from_manifest_labels(
             issue.get("labels", [])
         )
@@ -2721,6 +2753,9 @@ def build_planner_status(
                 raw_github_state = snapshot.get("github_state")
                 raw_workflow_state = snapshot.get("workflow_state")
                 raw_state = snapshot.get("state")
+                raw_mapping_status = snapshot.get("mapping_status")
+                raw_mapping_reason = snapshot.get("mapping_reason")
+                raw_github_title = snapshot.get("github_title")
                 github_state = (
                     str(raw_github_state).strip().lower()
                     if raw_github_state
@@ -2732,6 +2767,15 @@ def build_planner_status(
                     else None
                 )
                 state = str(raw_state).strip().lower() if raw_state else "unknown"
+                mapping_status = (
+                    str(raw_mapping_status).strip().lower()
+                    if raw_mapping_status
+                    else None
+                )
+                mapping_reason = (
+                    str(raw_mapping_reason).strip() if raw_mapping_reason else None
+                )
+                github_title = str(raw_github_title).strip() if raw_github_title else None
             else:
                 state = str(snapshot).lower()
                 if state == "open":
@@ -2753,6 +2797,9 @@ def build_planner_status(
                 "state": state,
                 "github_state": github_state,
                 "workflow_state": workflow_state,
+                "mapping_status": mapping_status,
+                "mapping_reason": mapping_reason,
+                "github_title": github_title,
                 "labels": issue.get("labels", []),
                 "depends_on": issue.get("depends_on", []),
                 "github_depends_on": issue.get("github_depends_on", []),
@@ -2922,6 +2969,16 @@ def format_planner_status(status: dict[str, Any]) -> str:
             lines.append(
                 f"  {task['key']} — issue: {issue_text} — state: {task['state']}{url}"
             )
+            mapping_status = str(task.get("mapping_status", "") or "").lower()
+            if mapping_status in {"stale", "missing", "mismatched"}:
+                mapping_reason = str(task.get("mapping_reason", "") or "").strip()
+                detail = f"    mapping: {mapping_status}"
+                if mapping_reason:
+                    detail += f" — {mapping_reason}"
+                lines.append(detail)
+                github_title = str(task.get("github_title", "") or "").strip()
+                if github_title:
+                    lines.append(f"    GitHub title: {github_title}")
             dependency_metadata = task.get("dependency_metadata", [])
             if dependency_metadata:
                 deps = ", ".join(
