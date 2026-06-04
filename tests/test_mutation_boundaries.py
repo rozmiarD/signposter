@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
+from signposter.artifact import build_worker_summary
 from signposter.claim import build_claim_plan, perform_claim_mutation
 from signposter.cleanup import CleanupPlan, apply_cleanup
 from signposter.dispatch import DispatchDecision
@@ -147,19 +148,12 @@ def test_report_apply_posts_exactly_one_issue_comment(tmp_path: Path):
     summary = tmp_path / "issue-10-worker.summary.md"
     raw = tmp_path / "issue-10-worker.raw.txt"
     summary.write_text(
-        "\n".join(
-            [
-                "# Signposter Execution Summary",
-                "**Agent:** human/operator",
-                "**Exit Code:** 0",
-                "",
-                "## Scoped completion evidence",
-                "PASS - scoped task completed.",
-                "",
-                "## Validation evidence",
-                "Full validation passed:",
-                "- `pytest tests/ -q`",
-            ]
+        build_worker_summary(
+            repo="test/repo",
+            issue=10,
+            changed_files=["src/signposter/report.py"],
+            implemented_behavior=["Report mutation boundary summary is schema-compatible."],
+            targeted_validation=["python -m pytest tests/test_mutation_boundaries.py -q"],
         ),
         encoding="utf-8",
     )

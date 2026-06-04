@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
+from signposter.artifact import build_worker_summary
 from signposter.report import (
     REPORT_COMMENT_MAX_CHARS,
     _make_bounded_excerpt,
@@ -252,12 +253,13 @@ def test_report_main_dry_run_passes_dry_run_to_post_comment(
 ):
     summary = tmp_path / "issue-72-worker.summary.md"
     summary.write_text(
-        "# Signposter Execution Summary\n"
-        "**Exit Code:** 0\n"
-        "\n"
-        "## Scoped completion evidence\n"
-        "\n"
-        "PASS - report dry-run test.\n",
+        build_worker_summary(
+            repo="test/repo",
+            issue=72,
+            changed_files=["src/signposter/report.py"],
+            implemented_behavior=["Report dry-run test summary is schema-compatible."],
+            targeted_validation=["python -m pytest tests/test_report.py -q"],
+        ),
         encoding="utf-8",
     )
     mock_post.return_value = ["gh issue comment 72 -R test/repo --body ... # dry-run"]
@@ -269,6 +271,35 @@ def test_report_main_dry_run_passes_dry_run_to_post_comment(
     assert "=== Signposter Report (dry-run mode)" in out
     assert "=== Dry-run: No GitHub mutation performed ===" in out
     assert mock_post.call_args.kwargs["dry_run"] is True
+
+
+@patch("signposter.report.post_comment")
+def test_report_main_blocks_malformed_worker_summary_before_comment(
+    mock_post,
+    tmp_path: Path,
+    capsys,
+):
+    summary = tmp_path / "issue-73-worker.summary.md"
+    summary.write_text(
+        "# Signposter Execution Summary\n"
+        "**Exit Code:** 0\n"
+        "\n"
+        "## Scoped completion evidence\n"
+        "\n"
+        "PASS - incomplete report summary.\n",
+        encoding="utf-8",
+    )
+
+    exit_code = report_main("test/repo", 73, summary, apply=True)
+
+    out = capsys.readouterr().out
+    assert exit_code == 1
+    assert "Report blocked: worker summary validation did not pass." in out
+    assert "Signposter Worker Artifact Validation" in out
+    assert "repair worker summary fields before gate or complete" in out
+    assert "No GitHub mutation was performed." in out
+    assert "signposter artifact validate-worker-summary --issue 73" in out
+    mock_post.assert_not_called()
 
 
 # --- ANSI sanitization tests (HARDENING-002) ---

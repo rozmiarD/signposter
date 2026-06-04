@@ -12,6 +12,10 @@ import re
 import subprocess
 from pathlib import Path
 
+from signposter.artifact import (
+    format_worker_artifact_validation,
+    validate_worker_summary_artifact,
+)
 from signposter.artifact_safety import find_stale_or_failover_signal
 from signposter.comments import DEFAULT_MAX_COMMENT_CHARS, ensure_github_comment_body
 
@@ -292,6 +296,10 @@ def find_report_artifact_safety_signal(
     )
 
 
+def _is_worker_summary_artifact(path: Path) -> bool:
+    return path.name.endswith("-worker.summary.md")
+
+
 def post_comment(
     repo: str,
     issue: int,
@@ -348,6 +356,23 @@ def report_main(
             print("No GitHub mutation was performed.")
             print("Use an explicit human/operator summary artifact after reviewing local logs.")
             return 1
+
+        if _is_worker_summary_artifact(summary_p):
+            worker_validation = validate_worker_summary_artifact(
+                issue,
+                summary_path=summary_p,
+            )
+            if worker_validation.status != "pass":
+                print("Report blocked: worker summary validation did not pass.")
+                print("")
+                print(format_worker_artifact_validation(worker_validation))
+                print("")
+                print("No GitHub mutation was performed.")
+                print(
+                    "Run: signposter artifact validate-worker-summary "
+                    f"--issue {issue} --summary {summary_p}"
+                )
+                return 1
 
         # Try to extract prompt path from summary
         prompt_path = None
