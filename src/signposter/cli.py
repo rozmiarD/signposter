@@ -37,6 +37,7 @@ from signposter.codex_subagent import (
 )
 from signposter.control_status import (
     build_control_plane_status,
+    collect_local_worker_state_warnings,
     format_control_plane_status,
 )
 from signposter.dispatch import cli_main as dispatch_cli_main
@@ -3262,6 +3263,10 @@ def run_control_plane_status(args: argparse.Namespace) -> int:
         scheduler_next=scheduler_next,
         orchestrator_next=orchestrator_next,
         refresh_command=_control_plane_refresh_command(args),
+        local_warnings=collect_local_worker_state_warnings(
+            planner_run=planner_run,
+            scheduler_next=scheduler_next,
+        ),
         bugs=bugs,
     )
     print(format_control_plane_status(result))
