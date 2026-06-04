@@ -404,6 +404,7 @@ def _merge_check_blockage_lines(plan: MergePlan) -> list[str]:
                 f"{plan.failing_checks} failing check(s), "
                 f"{plan.pending_checks} pending check(s)"
             ),
+            f"inspect command: gh pr checks {plan.pr_number} --repo <repo>",
             f"next: inspect failing checks for PR #{plan.pr_number} and rerun merge plan",
         ]
     if plan.checks_status == "pending":
@@ -414,12 +415,14 @@ def _merge_check_blockage_lines(plan: MergePlan) -> list[str]:
                 f"{plan.pending_checks} pending check(s), "
                 f"{plan.successful_checks} successful check(s)"
             ),
+            f"inspect command: gh pr checks {plan.pr_number} --repo <repo>",
             "next: wait for CI completion and rerun merge plan",
         ]
     if plan.checks_status == "unknown":
         return [
             "category: unknown-ci",
             "reason: GitHub check rollup is unavailable or ambiguous",
+            f"inspect command: gh pr checks {plan.pr_number} --repo <repo>",
             "next: inspect PR checks manually if this persists",
         ]
     return []

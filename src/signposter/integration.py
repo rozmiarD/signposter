@@ -283,6 +283,46 @@ def plan_integration_for_pr(repo: str, pr_number: int) -> IntegrationPlan:
     )
 
 
+def _main_ci_inspection_command(
+    plan: IntegrationPlan,
+    *,
+    repo: str | None = None,
+) -> str:
+    repo_arg = repo or "<repo>"
+    commit_arg = plan.merge_commit or "<merge-commit>"
+    return (
+        f"gh run list -R {repo_arg} --branch main --commit {commit_arg} "
+        "--limit 1 --json status,conclusion,databaseId"
+    )
+
+
+def _integration_ci_blockage_lines(
+    plan: IntegrationPlan,
+    *,
+    repo: str | None = None,
+) -> list[str]:
+    if plan.main_ci_status == "pass":
+        return []
+    if plan.main_ci_status == "failing":
+        category = "failing-main-ci"
+        reason = "selected main CI run completed without success"
+        next_action = "inspect main CI failure and rerun integration plan"
+    elif plan.main_ci_status == "pending":
+        category = "waiting-main-ci"
+        reason = "selected main CI run is still pending"
+        next_action = "wait for main CI completion and rerun integration plan"
+    else:
+        category = "unknown-main-ci"
+        reason = "main CI run is unavailable or ambiguous"
+        next_action = "inspect main CI manually if this persists"
+    return [
+        f"category: {category}",
+        f"reason: {reason}",
+        f"inspect command: {_main_ci_inspection_command(plan, repo=repo)}",
+        f"next: {next_action}",
+    ]
+
+
 def format_integration_plan(plan: IntegrationPlan) -> str:
     """Compact deterministic output for post-merge integration planning."""
     lines = [f"Signposter Integration Plan — PR #{plan.pr_number}\n"]
@@ -306,6 +346,11 @@ def format_integration_plan(plan: IntegrationPlan) -> str:
 
     lines.append("\nChecks:")
     lines.append(f"  main CI: {plan.main_ci_status}")
+    ci_blockage = _integration_ci_blockage_lines(plan)
+    if ci_blockage:
+        lines.append("\nMain CI blockage:")
+        for line in ci_blockage:
+            lines.append(f"  {line}")
 
     lines.append("\nStatus:")
     lines.append(f"  {plan.status}")
@@ -608,6 +653,12 @@ def format_integration_apply_dry_run(plan: IntegrationPlan, repo: str | None = N
     lines.append(f"  close issue: {'yes' if plan.close_issue else 'no'}")
     lines.append(f"  close reason: {plan.close_reason}")
     lines.append(f"  main CI: {plan.main_ci_status}")
+
+    ci_blockage = _integration_ci_blockage_lines(plan, repo=repo)
+    if ci_blockage:
+        lines.append("\nMain CI blockage:")
+        for line in ci_blockage:
+            lines.append(f"  {line}")
 
     if "required labels missing" in apply_status.lower():
         lines.append("\nLabel preflight:")
