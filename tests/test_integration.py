@@ -50,6 +50,39 @@ def test_integration_plan_ready_for_merged_pr():
         mock_ci.assert_called_once_with("test/repo", "abc123def456")
 
 
+def test_integration_plan_ready_with_pr_body_related_issue_fallback():
+    with patch("signposter.integration._fetch_pr_merge_details") as mock_pr, \
+         patch("signposter.integration.fetch_issue_by_number") as mock_issue, \
+         patch("signposter.integration._fetch_main_ci_status") as mock_ci:
+
+        mock_pr.return_value = {
+            "number": 5,
+            "title": "docs change",
+            "state": "MERGED",
+            "baseRefName": "main",
+            "headRefName": "feature/body-link-fallback",
+            "mergeCommit": {"oid": "abc123def456"},
+            "body": "Related issue: #4",
+        }
+
+        class FakeIssue:
+            labels = ["state:done", "area:docs"]
+
+        mock_issue.return_value = FakeIssue()
+        mock_ci.return_value = "pass"
+
+        with patch("signposter.integration.fetch_issue_context") as mock_ctx:
+            mock_ctx.return_value = {"state": "OPEN"}
+
+            plan = plan_integration_for_pr("test/repo", 5)
+
+        assert plan.status == "ready"
+        assert plan.associated_issue == 4
+        assert plan.current_workflow_state == "state:done"
+        assert plan.close_issue is True
+        mock_ci.assert_called_once_with("test/repo", "abc123def456")
+
+
 def test_integration_plan_blocks_when_pr_not_merged():
     with patch("signposter.integration._fetch_pr_merge_details") as mock_pr:
         mock_pr.return_value = {
