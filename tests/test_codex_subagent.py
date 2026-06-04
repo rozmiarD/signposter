@@ -4,6 +4,8 @@ import pytest
 
 from signposter.codex_subagent import (
     format_codex_subagent_dispatch_contract,
+    format_codex_subagent_output_normalization,
+    normalize_codex_subagent_output,
     plan_codex_subagent_dispatch,
 )
 from signposter.dispatch import classify_candidate
@@ -114,8 +116,77 @@ def test_format_codex_subagent_dispatch_contract_is_read_only(tmp_path) -> None:
     assert "prompt_transport: stdin" in output
     assert "--session-key" not in output
     assert "takeover:" in output
+    assert "Output normalization:" in output
+    assert "missing summary requires takeover before gate" in output
     assert "No GitHub mutation was performed." in output
     assert "No Codex CLI execution was performed." in output
+
+
+def test_normalize_codex_subagent_output_marks_success_complete(tmp_path) -> None:
+    contract = plan_codex_subagent_dispatch(
+        task_scope="bounded task",
+        prompt_artifact=tmp_path / "prompt.md",
+        working_dir=tmp_path,
+        raw_artifact=tmp_path / "raw.txt",
+        summary_artifact=tmp_path / "summary.md",
+        last_message_artifact=tmp_path / "last-message.txt",
+        role_execution=_role_execution(),
+        session_key="signposter-test-subagent",
+    )
+
+    result = normalize_codex_subagent_output(
+        contract,
+        execution_status="success",
+        exit_code=0,
+        raw_exists=True,
+        summary_exists=True,
+        last_message_exists=True,
+    )
+
+    assert result.task_execution_complete is True
+    assert result.acceptance == "pass"
+    assert result.takeover_required is False
+    assert "ready for bounded summary use" in result.guidance[-1]
+
+    output = format_codex_subagent_output_normalization(result)
+    assert "Status:\n  complete" in output
+    assert "task_execution_complete: yes" in output
+    assert "Raw output remains local." in output
+    assert "No GitHub mutation was performed." in output
+
+
+def test_normalize_codex_subagent_output_blocks_missing_summary(tmp_path) -> None:
+    contract = plan_codex_subagent_dispatch(
+        task_scope="bounded task",
+        prompt_artifact=tmp_path / "prompt.md",
+        working_dir=tmp_path,
+        raw_artifact=tmp_path / "raw.txt",
+        summary_artifact=tmp_path / "summary.md",
+        last_message_artifact=tmp_path / "last-message.txt",
+        role_execution=_role_execution(),
+        session_key="signposter-test-subagent",
+    )
+
+    result = normalize_codex_subagent_output(
+        contract,
+        execution_status="runtime-stall",
+        exit_code=1,
+        raw_exists=True,
+        summary_exists=False,
+        last_message_exists=False,
+    )
+
+    assert result.task_execution_complete is False
+    assert result.acceptance == "needs-work"
+    assert result.takeover_required is True
+    assert "subagent output requires takeover before gate evaluation" in result.guidance
+    assert "summary artifact is missing" in result.guidance
+
+    output = format_codex_subagent_output_normalization(result)
+    assert "Status:\n  blocked" in output
+    assert "takeover_required: yes" in output
+    assert "summary.md (exists: no)" in output
+    assert "No Codex CLI execution was performed by this formatter." in output
 
 
 def test_cli_subagent_plan_codex_renders_read_only_contract(
