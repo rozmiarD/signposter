@@ -750,6 +750,73 @@ No unrelated files were changed.
     assert "strong scoped completion evidence" in decision.reason
 
 
+def test_ci_gate_docs_only_passes_structured_preflight_fields_without_legacy_phrases():
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+# Signposter Execution Summary
+
+**Repository:** ExatronOmega/signposter
+**Issue:** #398
+**Agent:** human/operator
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+## Scoped completion evidence
+
+PASS - scoped worker task completed with validation evidence.
+
+## Docs-only preflight fields
+
+Docs-only scope: yes
+Changed files are documentation-only: yes
+Code behavior unchanged: yes
+Scope stayed inside requested documentation task: yes
+Dirty guard: clean
+
+## Files changed
+
+- `docs/operator-lifecycle-runbook.md`
+
+## Implemented behavior / verified behavior
+
+- Documentation-only artifact fields are explicit and bounded.
+
+## Validation evidence
+
+Targeted validation passed:
+
+- `python -m pytest tests/test_gate.py -q`
+
+Full validation passed:
+
+- `ruff check .`
+- `pytest tests/ -q`
+
+## Safety
+
+No GitHub mutation was performed by the implemented code.
+No OpenClaw execution was performed by the implemented code.
+No issue was closed by the implemented code.
+No merge was performed by the implemented code.
+No unrelated files were changed.
+
+## Gate recommendation
+
+PASS - scoped worker task completed with validation evidence.
+"""
+
+    assert "No code changes" not in summary
+    assert "No scope broadening" not in summary
+
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "pass"
+    assert "scoped" in decision.reason
+
+
 def test_ci_gate_docs_only_allows_no_scope_broadening_phrase():
     """Docs-only evidence must not be rejected by the phrase 'no scope broadening'."""
     from signposter.gate import evaluate_ci_gate
