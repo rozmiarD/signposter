@@ -14,10 +14,12 @@ TRANSITION_COMMENT_MAX_CHARS = 240
 _ANSI_ESCAPE_RE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 _AUTO_CLOSE_KEYWORD_RE = re.compile(
     r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s*"
+    r"(?:issue\s*:?\s*)?"
     r"(?:"
-    r"(?:issue\s+)?#\d+\b"
+    r"#\d+\b"
     r"|(?:https?://)?github\.com/[^/\s]+/[^/\s]+/(?:issues|pull)/\d+\b"
     r"|(?:https?://)?github\.com/[^#\s]+/[^#\s]+#\d+\b"
+    r"|[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#\d+\b"
     r")",
     re.IGNORECASE,
 )

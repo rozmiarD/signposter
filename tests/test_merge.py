@@ -18,9 +18,12 @@ def test_has_auto_close_keywords():
     assert _has_auto_close_keywords("Closed #42") is True
     assert _has_auto_close_keywords("Fixes #100") is True
     assert _has_auto_close_keywords("Fixed issue #100") is True
+    assert _has_auto_close_keywords("Fixed issue: #100") is True
+    assert _has_auto_close_keywords("Fixes foo/bar#7") is True
     assert _has_auto_close_keywords("Resolves github.com/foo/bar#7") is True
     assert _has_auto_close_keywords("Resolve https://github.com/foo/bar/issues/7") is True
     assert _has_auto_close_keywords("Related issue: #4") is False
+    assert _has_auto_close_keywords("Fix docs for issue #4") is False
     assert _has_auto_close_keywords(None) is False
 
 
