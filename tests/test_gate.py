@@ -370,6 +370,43 @@ def test_run_gate_dry_run_blocks_malformed_worker_artifact(tmp_path):
     assert "Worker artifact preflight:" in output
     assert "summary artifact is missing required fields" in output
     assert "guidance:" in output
+    assert "Blocked evidence sections:" in output
+    assert "Worker summary schema: repair missing fields shown above." in output
+
+
+def test_format_gate_report_maps_ci_block_to_repair_sections():
+    result = {
+        "repo": "test/repo",
+        "issue": 73,
+        "issue_title": "CI gate evidence",
+        "current_state": "OPEN",
+        "labels": ["state:active", "gate:ci", "phase:build"],
+        "summary_path": "artifacts/runs/issue-73-worker.summary.md",
+        "raw_path": None,
+        "has_state_active": True,
+        "has_gate_review": False,
+        "has_gate_ci": True,
+        "has_gate_human": False,
+        "gate_type": "ci",
+        "decision": "needs-work",
+        "reason": (
+            "Worker exited 0 but did not provide enough scoped completion evidence "
+            "for the CI gate."
+        ),
+        "confidence": "low",
+        "proposed_transition": "state:active (worker should be re-run with more evidence)",
+        "proposed_command": None,
+        "valid_for_gate": True,
+        "worker_artifact_validation": None,
+    }
+
+    output = format_gate_report(result)
+
+    assert "Blocked evidence sections:" in output
+    assert "## Scoped completion evidence" in output
+    assert "## Validation evidence" in output
+    assert "## Safety" in output
+    assert "## Gate recommendation" in output
 
 
 def test_complete_gate_blocks_malformed_worker_artifact(tmp_path):
