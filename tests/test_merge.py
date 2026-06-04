@@ -255,6 +255,7 @@ def test_format_merge_plan_surfaces_failing_ci_blockage():
     assert "Check blockage:" in output
     assert "category: failing-ci" in output
     assert "reason: 1 failing check(s), 0 pending check(s)" in output
+    assert "inspect command: gh pr checks 5 --repo <repo>" in output
     assert "next: inspect failing checks for PR #5 and rerun merge plan" in output
 
 
@@ -297,6 +298,7 @@ def test_format_merge_plan_surfaces_pending_ci_blockage():
 
     assert "category: waiting-ci" in output
     assert "reason: 2 pending check(s), 1 successful check(s)" in output
+    assert "inspect command: gh pr checks 5 --repo <repo>" in output
     assert "next: wait for CI completion and rerun merge plan" in output
 
 
