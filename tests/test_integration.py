@@ -664,6 +664,27 @@ def test_fetch_main_ci_status_filters_by_commit_when_provided(monkeypatch):
     assert captured["args"][captured["args"].index("--commit") + 1] == "abc123"
 
 
+def test_fetch_main_ci_status_unknown_when_merge_commit_run_is_missing(monkeypatch):
+    from signposter.integration import _fetch_main_ci_status
+
+    captured: dict[str, list[str]] = {}
+
+    class FakeProc:
+        returncode = 0
+        stdout = "[]"
+        stderr = ""
+
+    def fake_run(args, **kwargs):
+        captured["args"] = args
+        return FakeProc()
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    assert _fetch_main_ci_status("test/repo", "newmerge123") == "unknown"
+    assert "--commit" in captured["args"]
+    assert captured["args"][captured["args"].index("--commit") + 1] == "newmerge123"
+
+
 def test_fetch_main_ci_status_failing_on_latest_failure(monkeypatch):
     from signposter.integration import _fetch_main_ci_status
 
