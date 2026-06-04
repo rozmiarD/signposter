@@ -157,6 +157,56 @@ def test_control_plane_status_surfaces_active_issue_stuck_diagnostics() -> None:
     assert "resume=needs inspection" in output
 
 
+def test_control_plane_status_composes_active_task_with_waiting_dependency() -> None:
+    planner = {
+        "planner_status": "active",
+        "status_counts": {
+            "total": 3,
+            "ready": 0,
+            "active": 1,
+            "waiting": 1,
+            "merged": 1,
+            "blocked": 0,
+        },
+        "next": {"next": None},
+        "active_tasks": [
+            {
+                "key": "H050-052",
+                "github_issue": 422,
+                "state": "active",
+            }
+        ],
+    }
+    scheduler = SchedulerNext(
+        repo="ExatronOmega/signposter",
+        status="ready",
+        issue=None,
+        reason="no ready issue while active task is in progress",
+        skipped=["#422: state:active", "#423: waiting on H050-052"],
+        notes=[],
+        active_notes=[
+            "#422: worktree=present, prompt=present, summary=missing, "
+            "activity_age=fresh, category=resumable, resume=continue worker"
+        ],
+        active_counts={"resumable": 1},
+    )
+
+    result = build_control_plane_status(
+        repo="ExatronOmega/signposter",
+        planner_run=planner,
+        scheduler_next=scheduler,
+    )
+
+    output = format_control_plane_status(result)
+
+    assert result.status == "ready"
+    assert "Current task:\n  active: #422\n  next: none\n  stop reason: none" in output
+    assert "counts: total=3 ready=0 active=1 waiting=1 merged=1 blocked=0" in output
+    assert "#423: waiting on H050-052" not in output
+    assert "active diagnostics:" in output
+    assert "#422: worktree=present, prompt=present, summary=missing" in output
+
+
 def test_control_plane_status_surfaces_blocked_state() -> None:
     scheduler = SchedulerNext(
         repo="ExatronOmega/signposter",

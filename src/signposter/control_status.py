@@ -251,13 +251,21 @@ def format_control_plane_status(result: ControlPlaneStatus) -> str:
         next_task = result.planner.get("next", {}).get("next")
         lines.append(f"  status: {result.planner.get('planner_status', 'unknown')}")
         if counts:
+            count_parts = [
+                f"total={counts.get('total', 0)}",
+                f"ready={counts.get('ready', 0)}",
+                f"active={counts.get('active', 0)}",
+            ]
+            if "waiting" in counts:
+                count_parts.append(f"waiting={counts.get('waiting', 0)}")
+            count_parts.extend(
+                [
+                    f"merged={counts.get('merged', 0)}",
+                    f"blocked={counts.get('blocked', 0)}",
+                ]
+            )
             lines.append(
-                "  counts: "
-                f"total={counts.get('total', 0)} "
-                f"ready={counts.get('ready', 0)} "
-                f"active={counts.get('active', 0)} "
-                f"merged={counts.get('merged', 0)} "
-                f"blocked={counts.get('blocked', 0)}"
+                "  counts: " + " ".join(count_parts)
             )
         if next_task:
             lines.append(
