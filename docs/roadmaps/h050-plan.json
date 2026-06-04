@@ -1,0 +1,2341 @@
+{
+  "version": "planner.v0.1",
+  "goal": "H050 - enterprise-grade Signposter hardening focused on planner idempotence, lifecycle recovery, evidence quality, GitHub workflow safety, operator clarity, token efficiency, documentation truth, and smoke coverage.",
+  "mode": "supervised",
+  "status": "draft",
+  "mutation_policy": "local draft only; no GitHub mutation; no execution backend",
+  "required_capabilities": [
+    "planner seed idempotence",
+    "lifecycle stuck-state recovery",
+    "bounded evidence and comment safety",
+    "GitHub mutation guardrails",
+    "operator status and handoff clarity",
+    "token-efficient routing metadata",
+    "documentation truth maintenance",
+    "full lifecycle smoke coverage"
+  ],
+  "issues": [
+    {
+      "key": "H050-001",
+      "title": "Repository truth and H049 carryover audit",
+      "body": "Purpose: Repository truth and H049 carryover audit.\nConcrete scope: Inspect current modules, docs, tests, labels, workflows, and H049 remaining debt; write a bounded audit note.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: git diff --check -- docs/audits/h050-001-repository-truth-audit.md",
+      "phase": "build",
+      "risk": "low",
+      "role": "worker",
+      "area": "core",
+      "depends_on": [],
+      "acceptance": [
+        "H050-001: scoped behavior or audit result is delivered with evidence.",
+        "H050-001: output is deterministic and operator-readable.",
+        "H050-001: safety semantics remain unchanged unless explicitly tested.",
+        "H050-001: validation command succeeds: git diff --check -- docs/audits/h050-001-repository-truth-audit.md"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-002",
+      "title": "Documentation truth gap audit",
+      "body": "Purpose: Documentation truth gap audit.\nConcrete scope: Compare README and docs against implemented commands and identify stale or misleading sections.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: git diff --check -- docs/audits/h050-002-documentation-truth-gap-audit.md",
+      "phase": "build",
+      "risk": "low",
+      "role": "worker",
+      "area": "docs",
+      "depends_on": [
+        "H050-001"
+      ],
+      "acceptance": [
+        "H050-002: scoped behavior or audit result is delivered with evidence.",
+        "H050-002: output is deterministic and operator-readable.",
+        "H050-002: safety semantics remain unchanged unless explicitly tested.",
+        "H050-002: validation command succeeds: git diff --check -- docs/audits/h050-002-documentation-truth-gap-audit.md"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-003",
+      "title": "Command surface smoke inventory",
+      "body": "Purpose: Command surface smoke inventory.\nConcrete scope: Run and record compact help/status inventory for planner, lifecycle, run, worktree, review, merge, integration, cleanup, and status commands.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_cli_help.py -q",
+      "phase": "build",
+      "risk": "low",
+      "role": "worker",
+      "area": "cli",
+      "depends_on": [
+        "H050-001"
+      ],
+      "acceptance": [
+        "H050-003: scoped behavior or audit result is delivered with evidence.",
+        "H050-003: output is deterministic and operator-readable.",
+        "H050-003: safety semantics remain unchanged unless explicitly tested.",
+        "H050-003: validation command succeeds: python -m pytest tests/test_cli_help.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-004",
+      "title": "Test coverage gap map",
+      "body": "Purpose: Test coverage gap map.\nConcrete scope: Map planner, lifecycle, gate, review, merge, integration, cleanup, artifact, and orchestrator test gaps into a bounded audit.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: git diff --check -- docs/audits/h050-004-test-coverage-gap-map.md",
+      "phase": "build",
+      "risk": "low",
+      "role": "worker",
+      "area": "tests",
+      "depends_on": [
+        "H050-001"
+      ],
+      "acceptance": [
+        "H050-004: scoped behavior or audit result is delivered with evidence.",
+        "H050-004: output is deterministic and operator-readable.",
+        "H050-004: safety semantics remain unchanged unless explicitly tested.",
+        "H050-004: validation command succeeds: git diff --check -- docs/audits/h050-004-test-coverage-gap-map.md"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-005",
+      "title": "H050 roadmap grounding audit",
+      "body": "Purpose: H050 roadmap grounding audit.\nConcrete scope: Reconcile the first audits into a source-of-truth H050 grounding note and confirm no duplicate roadmap work.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: git diff --check -- docs/audits/h050-005-roadmap-grounding.md",
+      "phase": "build",
+      "risk": "low",
+      "role": "worker",
+      "area": "core",
+      "depends_on": [
+        "H050-002",
+        "H050-003",
+        "H050-004"
+      ],
+      "acceptance": [
+        "H050-005: scoped behavior or audit result is delivered with evidence.",
+        "H050-005: output is deterministic and operator-readable.",
+        "H050-005: safety semantics remain unchanged unless explicitly tested.",
+        "H050-005: validation command succeeds: git diff --check -- docs/audits/h050-005-roadmap-grounding.md"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-006",
+      "title": "Planner seed manifest compatibility audit",
+      "body": "Purpose: Planner seed manifest compatibility audit.\nConcrete scope: Audit seed manifest compatibility checks for partial, applied, duplicate, and mismatched manifests.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_planner.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "scheduler",
+      "depends_on": [
+        "H050-005"
+      ],
+      "acceptance": [
+        "H050-006: scoped behavior or audit result is delivered with evidence.",
+        "H050-006: output is deterministic and operator-readable.",
+        "H050-006: safety semantics remain unchanged unless explicitly tested.",
+        "H050-006: validation command succeeds: python -m pytest tests/test_planner.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-007",
+      "title": "Planner seed dry-run output determinism",
+      "body": "Purpose: Planner seed dry-run output determinism.\nConcrete scope: Add or tighten tests so seed dry-run output clearly separates preview from apply and remains deterministic.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_planner.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "scheduler",
+      "depends_on": [
+        "H050-006"
+      ],
+      "acceptance": [
+        "H050-007: scoped behavior or audit result is delivered with evidence.",
+        "H050-007: output is deterministic and operator-readable.",
+        "H050-007: safety semantics remain unchanged unless explicitly tested.",
+        "H050-007: validation command succeeds: python -m pytest tests/test_planner.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-008",
+      "title": "Planner seed idempotence resume coverage",
+      "body": "Purpose: Planner seed idempotence resume coverage.\nConcrete scope: Cover reuse of partial and completed seed manifests without duplicate GitHub issue creation.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_planner.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "scheduler",
+      "depends_on": [
+        "H050-006"
+      ],
+      "acceptance": [
+        "H050-008: scoped behavior or audit result is delivered with evidence.",
+        "H050-008: output is deterministic and operator-readable.",
+        "H050-008: safety semantics remain unchanged unless explicitly tested.",
+        "H050-008: validation command succeeds: python -m pytest tests/test_planner.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-009",
+      "title": "Planner seed partial-apply recovery guard",
+      "body": "Purpose: Planner seed partial-apply recovery guard.\nConcrete scope: Ensure seed apply stops on first critical creation error and reports partial manifest state clearly.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_planner.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "scheduler",
+      "depends_on": [
+        "H050-007",
+        "H050-008"
+      ],
+      "acceptance": [
+        "H050-009: scoped behavior or audit result is delivered with evidence.",
+        "H050-009: output is deterministic and operator-readable.",
+        "H050-009: safety semantics remain unchanged unless explicitly tested.",
+        "H050-009: validation command succeeds: python -m pytest tests/test_planner.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-010",
+      "title": "Seed label preflight clarity",
+      "body": "Purpose: Seed label preflight clarity.\nConcrete scope: Improve or audit seed label preflight wording so missing labels block before any issue creation.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_planner.py -q",
+      "phase": "build",
+      "risk": "low",
+      "role": "worker",
+      "area": "scheduler",
+      "depends_on": [
+        "H050-009"
+      ],
+      "acceptance": [
+        "H050-010: scoped behavior or audit result is delivered with evidence.",
+        "H050-010: output is deterministic and operator-readable.",
+        "H050-010: safety semantics remain unchanged unless explicitly tested.",
+        "H050-010: validation command succeeds: python -m pytest tests/test_planner.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-011",
+      "title": "Planner unseeded task status handling",
+      "body": "Purpose: Planner unseeded task status handling.\nConcrete scope: Harden planner status counts and wording for unseeded, open, ready, waiting, active, done, merged, and blocked tasks.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_planner.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "scheduler",
+      "depends_on": [
+        "H050-010"
+      ],
+      "acceptance": [
+        "H050-011: scoped behavior or audit result is delivered with evidence.",
+        "H050-011: output is deterministic and operator-readable.",
+        "H050-011: safety semantics remain unchanged unless explicitly tested.",
+        "H050-011: validation command succeeds: python -m pytest tests/test_planner.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-012",
+      "title": "Planner next root and waiting consistency",
+      "body": "Purpose: Planner next root and waiting consistency.\nConcrete scope: Cover root-ready and dependency-waiting selection for seed manifests synced with GitHub.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_planner.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "scheduler",
+      "depends_on": [
+        "H050-011"
+      ],
+      "acceptance": [
+        "H050-012: scoped behavior or audit result is delivered with evidence.",
+        "H050-012: output is deterministic and operator-readable.",
+        "H050-012: safety semantics remain unchanged unless explicitly tested.",
+        "H050-012: validation command succeeds: python -m pytest tests/test_planner.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-013",
+      "title": "Planner advance duplicate-ready guard",
+      "body": "Purpose: Planner advance duplicate-ready guard.\nConcrete scope: Ensure planner advance does not re-add state:ready or promote dependent tasks prematurely.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_planner.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "scheduler",
+      "depends_on": [
+        "H050-012"
+      ],
+      "acceptance": [
+        "H050-013: scoped behavior or audit result is delivered with evidence.",
+        "H050-013: output is deterministic and operator-readable.",
+        "H050-013: safety semantics remain unchanged unless explicitly tested.",
+        "H050-013: validation command succeeds: python -m pytest tests/test_planner.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-014",
+      "title": "Planner stale GitHub issue detection",
+      "body": "Purpose: Planner stale GitHub issue detection.\nConcrete scope: Surface stale, missing, or mismatched GitHub issue mappings in planner status without guessing.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_planner.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "scheduler",
+      "depends_on": [
+        "H050-013"
+      ],
+      "acceptance": [
+        "H050-014: scoped behavior or audit result is delivered with evidence.",
+        "H050-014: output is deterministic and operator-readable.",
+        "H050-014: safety semantics remain unchanged unless explicitly tested.",
+        "H050-014: validation command succeeds: python -m pytest tests/test_planner.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-015",
+      "title": "Planner roadmap status artifact",
+      "body": "Purpose: Planner roadmap status artifact.\nConcrete scope: Add or document a compact roadmap status artifact for handoff and future loop recovery.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_planner.py -q",
+      "phase": "build",
+      "risk": "low",
+      "role": "worker",
+      "area": "scheduler",
+      "depends_on": [
+        "H050-014"
+      ],
+      "acceptance": [
+        "H050-015: scoped behavior or audit result is delivered with evidence.",
+        "H050-015: output is deterministic and operator-readable.",
+        "H050-015: safety semantics remain unchanged unless explicitly tested.",
+        "H050-015: validation command succeeds: python -m pytest tests/test_planner.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-016",
+      "title": "Lifecycle terminal-state consistency audit",
+      "body": "Purpose: Lifecycle terminal-state consistency audit.\nConcrete scope: Audit state:done, state:merged, closed issue, merged PR, integration, and cleanup consistency rules.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: git diff --check -- docs/audits/h050-016-lifecycle-terminal-state-audit.md",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "core",
+      "depends_on": [
+        "H050-015"
+      ],
+      "acceptance": [
+        "H050-016: scoped behavior or audit result is delivered with evidence.",
+        "H050-016: output is deterministic and operator-readable.",
+        "H050-016: safety semantics remain unchanged unless explicitly tested.",
+        "H050-016: validation command succeeds: git diff --check -- docs/audits/h050-016-lifecycle-terminal-state-audit.md"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-017",
+      "title": "Lifecycle next blocked wording coverage",
+      "body": "Purpose: Lifecycle next blocked wording coverage.\nConcrete scope: Add coverage that lifecycle next reports blocked states without misleading ready/apply wording.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_lifecycle.py tests/test_orchestrator.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "core",
+      "depends_on": [
+        "H050-016"
+      ],
+      "acceptance": [
+        "H050-017: scoped behavior or audit result is delivered with evidence.",
+        "H050-017: output is deterministic and operator-readable.",
+        "H050-017: safety semantics remain unchanged unless explicitly tested.",
+        "H050-017: validation command succeeds: python -m pytest tests/test_lifecycle.py tests/test_orchestrator.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-018",
+      "title": "Active issue stale-age surface",
+      "body": "Purpose: Active issue stale-age surface.\nConcrete scope: Surface active issues that have no recent progress evidence in status/orchestrator output.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_orchestrator.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "core",
+      "depends_on": [
+        "H050-017"
+      ],
+      "acceptance": [
+        "H050-018: scoped behavior or audit result is delivered with evidence.",
+        "H050-018: output is deterministic and operator-readable.",
+        "H050-018: safety semantics remain unchanged unless explicitly tested.",
+        "H050-018: validation command succeeds: python -m pytest tests/test_orchestrator.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-019",
+      "title": "Takeover plan for missing worker summary",
+      "body": "Purpose: Takeover plan for missing worker summary.\nConcrete scope: Plan the smallest safe recovery when an active issue has a worktree and prompt but no usable worker summary.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_orchestrator.py tests/test_runner.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "core",
+      "depends_on": [
+        "H050-018"
+      ],
+      "acceptance": [
+        "H050-019: scoped behavior or audit result is delivered with evidence.",
+        "H050-019: output is deterministic and operator-readable.",
+        "H050-019: safety semantics remain unchanged unless explicitly tested.",
+        "H050-019: validation command succeeds: python -m pytest tests/test_orchestrator.py tests/test_runner.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-020",
+      "title": "Worker prompt and worktree recovery hints",
+      "body": "Purpose: Worker prompt and worktree recovery hints.\nConcrete scope: Improve recovery hints for active issues with prompt/worktree mismatches while preserving apply guards.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_runner.py tests/test_worktree.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "runner",
+      "depends_on": [
+        "H050-019"
+      ],
+      "acceptance": [
+        "H050-020: scoped behavior or audit result is delivered with evidence.",
+        "H050-020: output is deterministic and operator-readable.",
+        "H050-020: safety semantics remain unchanged unless explicitly tested.",
+        "H050-020: validation command succeeds: python -m pytest tests/test_runner.py tests/test_worktree.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-021",
+      "title": "Reviewer artifact stale diagnostic coverage",
+      "body": "Purpose: Reviewer artifact stale diagnostic coverage.\nConcrete scope: Detect or document stale reviewer diagnostics and required manual takeover fields.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_review.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "runner",
+      "depends_on": [
+        "H050-020"
+      ],
+      "acceptance": [
+        "H050-021: scoped behavior or audit result is delivered with evidence.",
+        "H050-021: output is deterministic and operator-readable.",
+        "H050-021: safety semantics remain unchanged unless explicitly tested.",
+        "H050-021: validation command succeeds: python -m pytest tests/test_review.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-022",
+      "title": "PR red-CI blocked-state surface",
+      "body": "Purpose: PR red-CI blocked-state surface.\nConcrete scope: Ensure PR/CI blockage is displayed as blocked with actionable next inspection command.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_merge.py tests/test_integration.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "github",
+      "depends_on": [
+        "H050-021"
+      ],
+      "acceptance": [
+        "H050-022: scoped behavior or audit result is delivered with evidence.",
+        "H050-022: output is deterministic and operator-readable.",
+        "H050-022: safety semantics remain unchanged unless explicitly tested.",
+        "H050-022: validation command succeeds: python -m pytest tests/test_merge.py tests/test_integration.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-023",
+      "title": "Integration pending issue-closure surface",
+      "body": "Purpose: Integration pending issue-closure surface.\nConcrete scope: Harden output for merged PRs whose issues remain open and require integration apply.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_integration.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "github",
+      "depends_on": [
+        "H050-022"
+      ],
+      "acceptance": [
+        "H050-023: scoped behavior or audit result is delivered with evidence.",
+        "H050-023: output is deterministic and operator-readable.",
+        "H050-023: safety semantics remain unchanged unless explicitly tested.",
+        "H050-023: validation command succeeds: python -m pytest tests/test_integration.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-024",
+      "title": "Cleanup pending stale-worktree surface",
+      "body": "Purpose: Cleanup pending stale-worktree surface.\nConcrete scope: Harden cleanup plan output for merged/integrated tasks with leftover local worktree or branch.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_cleanup.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "github",
+      "depends_on": [
+        "H050-023"
+      ],
+      "acceptance": [
+        "H050-024: scoped behavior or audit result is delivered with evidence.",
+        "H050-024: output is deterministic and operator-readable.",
+        "H050-024: safety semantics remain unchanged unless explicitly tested.",
+        "H050-024: validation command succeeds: python -m pytest tests/test_cleanup.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-025",
+      "title": "Recovery status compact formatter",
+      "body": "Purpose: Recovery status compact formatter.\nConcrete scope: Create or improve a compact recovery summary used by lifecycle/orchestrator status outputs.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_orchestrator.py tests/test_lifecycle.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "core",
+      "depends_on": [
+        "H050-024"
+      ],
+      "acceptance": [
+        "H050-025: scoped behavior or audit result is delivered with evidence.",
+        "H050-025: output is deterministic and operator-readable.",
+        "H050-025: safety semantics remain unchanged unless explicitly tested.",
+        "H050-025: validation command succeeds: python -m pytest tests/test_orchestrator.py tests/test_lifecycle.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-026",
+      "title": "Human gate structured evidence audit",
+      "body": "Purpose: Human gate structured evidence audit.\nConcrete scope: Audit human-gate evidence parsing and identify brittle wording that should become structured fields.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: strong reasoning worker; human gate semantics.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_gate.py -q",
+      "phase": "build",
+      "risk": "high",
+      "role": "worker",
+      "area": "core",
+      "depends_on": [
+        "H050-025"
+      ],
+      "acceptance": [
+        "H050-026: scoped behavior or audit result is delivered with evidence.",
+        "H050-026: output is deterministic and operator-readable.",
+        "H050-026: safety semantics remain unchanged unless explicitly tested.",
+        "H050-026: validation command succeeds: python -m pytest tests/test_gate.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-027",
+      "title": "CI gate trigger-word regression hardening",
+      "body": "Purpose: CI gate trigger-word regression hardening.\nConcrete scope: Add regressions for positive summaries that mention negative-signal examples without indicating real blockers.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_gate.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "core",
+      "depends_on": [
+        "H050-026"
+      ],
+      "acceptance": [
+        "H050-027: scoped behavior or audit result is delivered with evidence.",
+        "H050-027: output is deterministic and operator-readable.",
+        "H050-027: safety semantics remain unchanged unless explicitly tested.",
+        "H050-027: validation command succeeds: python -m pytest tests/test_gate.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-028",
+      "title": "Docs-only worker artifact preflight fields",
+      "body": "Purpose: Docs-only worker artifact preflight fields.\nConcrete scope: Codify exact required docs-only worker summary fields and avoid brittle accidental blocker words.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_gate.py tests/test_runner.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "runner",
+      "depends_on": [
+        "H050-027"
+      ],
+      "acceptance": [
+        "H050-028: scoped behavior or audit result is delivered with evidence.",
+        "H050-028: output is deterministic and operator-readable.",
+        "H050-028: safety semantics remain unchanged unless explicitly tested.",
+        "H050-028: validation command succeeds: python -m pytest tests/test_gate.py tests/test_runner.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-029",
+      "title": "Worker summary validation command",
+      "body": "Purpose: Worker summary validation command.\nConcrete scope: Add or audit a command that validates worker summary schema before report/gate.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_runner.py tests/test_gate.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "runner",
+      "depends_on": [
+        "H050-028"
+      ],
+      "acceptance": [
+        "H050-029: scoped behavior or audit result is delivered with evidence.",
+        "H050-029: output is deterministic and operator-readable.",
+        "H050-029: safety semantics remain unchanged unless explicitly tested.",
+        "H050-029: validation command succeeds: python -m pytest tests/test_runner.py tests/test_gate.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-030",
+      "title": "Reviewer schema error wording",
+      "body": "Purpose: Reviewer schema error wording.\nConcrete scope: Make reviewer artifact validation errors concise and field-specific for operator takeover.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_review.py -q",
+      "phase": "build",
+      "risk": "low",
+      "role": "worker",
+      "area": "runner",
+      "depends_on": [
+        "H050-029"
+      ],
+      "acceptance": [
+        "H050-030: scoped behavior or audit result is delivered with evidence.",
+        "H050-030: output is deterministic and operator-readable.",
+        "H050-030: safety semantics remain unchanged unless explicitly tested.",
+        "H050-030: validation command succeeds: python -m pytest tests/test_review.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-031",
+      "title": "Artifact safety redaction coverage",
+      "body": "Purpose: Artifact safety redaction coverage.\nConcrete scope: Strengthen tests that secrets, tokens, and large raw logs are not posted to GitHub comments.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: strong reasoning worker; trust boundary.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_artifact_safety.py tests/test_report.py -q",
+      "phase": "build",
+      "risk": "high",
+      "role": "worker",
+      "area": "core",
+      "depends_on": [
+        "H050-030"
+      ],
+      "acceptance": [
+        "H050-031: scoped behavior or audit result is delivered with evidence.",
+        "H050-031: output is deterministic and operator-readable.",
+        "H050-031: safety semantics remain unchanged unless explicitly tested.",
+        "H050-031: validation command succeeds: python -m pytest tests/test_artifact_safety.py tests/test_report.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-032",
+      "title": "Bounded excerpt ellipsis determinism",
+      "body": "Purpose: Bounded excerpt ellipsis determinism.\nConcrete scope: Ensure bounded excerpts use deterministic line/char truncation and clear omitted markers.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_report.py tests/test_comments.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "core",
+      "depends_on": [
+        "H050-031"
+      ],
+      "acceptance": [
+        "H050-032: scoped behavior or audit result is delivered with evidence.",
+        "H050-032: output is deterministic and operator-readable.",
+        "H050-032: safety semantics remain unchanged unless explicitly tested.",
+        "H050-032: validation command succeeds: python -m pytest tests/test_report.py tests/test_comments.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-033",
+      "title": "Report comment duplicate behavior audit",
+      "body": "Purpose: Report comment duplicate behavior audit.\nConcrete scope: Audit whether repeated report comments should append, update, or remain explicit multiple evidence comments.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: git diff --check -- docs/audits/h050-033-report-comment-duplicate-audit.md",
+      "phase": "build",
+      "risk": "low",
+      "role": "worker",
+      "area": "github",
+      "depends_on": [
+        "H050-032"
+      ],
+      "acceptance": [
+        "H050-033: scoped behavior or audit result is delivered with evidence.",
+        "H050-033: output is deterministic and operator-readable.",
+        "H050-033: safety semantics remain unchanged unless explicitly tested.",
+        "H050-033: validation command succeeds: git diff --check -- docs/audits/h050-033-report-comment-duplicate-audit.md"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-034",
+      "title": "Raw artifact locality tests",
+      "body": "Purpose: Raw artifact locality tests.\nConcrete scope: Add tests proving raw artifacts stay local while GitHub receives bounded derived summaries.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_report.py tests/test_artifacts.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "core",
+      "depends_on": [
+        "H050-033"
+      ],
+      "acceptance": [
+        "H050-034: scoped behavior or audit result is delivered with evidence.",
+        "H050-034: output is deterministic and operator-readable.",
+        "H050-034: safety semantics remain unchanged unless explicitly tested.",
+        "H050-034: validation command succeeds: python -m pytest tests/test_report.py tests/test_artifacts.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-035",
+      "title": "Gate blocked-evidence section map",
+      "body": "Purpose: Gate blocked-evidence section map.\nConcrete scope: Map gate blockers to exact evidence sections so operator output explains what to repair.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_gate.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "core",
+      "depends_on": [
+        "H050-034"
+      ],
+      "acceptance": [
+        "H050-035: scoped behavior or audit result is delivered with evidence.",
+        "H050-035: output is deterministic and operator-readable.",
+        "H050-035: safety semantics remain unchanged unless explicitly tested.",
+        "H050-035: validation command succeeds: python -m pytest tests/test_gate.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-036",
+      "title": "PR plan title and body determinism",
+      "body": "Purpose: PR plan title and body determinism.\nConcrete scope: Tighten PR plan tests for title/body stability, related issue wording, and no implied closure.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_pr.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "github",
+      "depends_on": [
+        "H050-035"
+      ],
+      "acceptance": [
+        "H050-036: scoped behavior or audit result is delivered with evidence.",
+        "H050-036: output is deterministic and operator-readable.",
+        "H050-036: safety semantics remain unchanged unless explicitly tested.",
+        "H050-036: validation command succeeds: python -m pytest tests/test_pr.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-037",
+      "title": "PR auto-close guard expansion",
+      "body": "Purpose: PR auto-close guard expansion.\nConcrete scope: Expand auto-close keyword coverage for PR body and merge safety without blocking harmless text.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: strong reasoning worker; GitHub mutation boundary.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_pr.py tests/test_merge.py -q",
+      "phase": "build",
+      "risk": "high",
+      "role": "worker",
+      "area": "github",
+      "depends_on": [
+        "H050-036"
+      ],
+      "acceptance": [
+        "H050-037: scoped behavior or audit result is delivered with evidence.",
+        "H050-037: output is deterministic and operator-readable.",
+        "H050-037: safety semantics remain unchanged unless explicitly tested.",
+        "H050-037: validation command succeeds: python -m pytest tests/test_pr.py tests/test_merge.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-038",
+      "title": "PR linkage confidence fallback tests",
+      "body": "Purpose: PR linkage confidence fallback tests.\nConcrete scope: Cover branch-pattern and body-link fallback confidence for lifecycle, merge, integration, and cleanup.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_lifecycle.py tests/test_merge.py tests/test_integration.py tests/test_cleanup.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "github",
+      "depends_on": [
+        "H050-037"
+      ],
+      "acceptance": [
+        "H050-038: scoped behavior or audit result is delivered with evidence.",
+        "H050-038: output is deterministic and operator-readable.",
+        "H050-038: safety semantics remain unchanged unless explicitly tested.",
+        "H050-038: validation command succeeds: python -m pytest tests/test_lifecycle.py tests/test_merge.py tests/test_integration.py tests/test_cleanup.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-039",
+      "title": "Merge override note consistency",
+      "body": "Purpose: Merge override note consistency.\nConcrete scope: Ensure medium/high risk and scope override notes are consistent across merge plan/apply.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_merge.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "github",
+      "depends_on": [
+        "H050-038"
+      ],
+      "acceptance": [
+        "H050-039: scoped behavior or audit result is delivered with evidence.",
+        "H050-039: output is deterministic and operator-readable.",
+        "H050-039: safety semantics remain unchanged unless explicitly tested.",
+        "H050-039: validation command succeeds: python -m pytest tests/test_merge.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-040",
+      "title": "Merge apply critical-stop coverage",
+      "body": "Purpose: Merge apply critical-stop coverage.\nConcrete scope: Add tests that merge apply stops before later mutation when a critical merge command returns an error.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: strong reasoning worker; mutation safety.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_merge.py -q",
+      "phase": "build",
+      "risk": "high",
+      "role": "worker",
+      "area": "github",
+      "depends_on": [
+        "H050-039"
+      ],
+      "acceptance": [
+        "H050-040: scoped behavior or audit result is delivered with evidence.",
+        "H050-040: output is deterministic and operator-readable.",
+        "H050-040: safety semantics remain unchanged unless explicitly tested.",
+        "H050-040: validation command succeeds: python -m pytest tests/test_merge.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-041",
+      "title": "Integration stale main-CI guard",
+      "body": "Purpose: Integration stale main-CI guard.\nConcrete scope: Audit and test that integration uses the intended merge commit CI result rather than stale unrelated CI.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: strong reasoning worker; CI safety.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_integration.py -q",
+      "phase": "build",
+      "risk": "high",
+      "role": "worker",
+      "area": "github",
+      "depends_on": [
+        "H050-040"
+      ],
+      "acceptance": [
+        "H050-041: scoped behavior or audit result is delivered with evidence.",
+        "H050-041: output is deterministic and operator-readable.",
+        "H050-041: safety semantics remain unchanged unless explicitly tested.",
+        "H050-041: validation command succeeds: python -m pytest tests/test_integration.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-042",
+      "title": "Integration apply idempotence for merged issue",
+      "body": "Purpose: Integration apply idempotence for merged issue.\nConcrete scope: Ensure repeated integration plan/apply on already merged and closed issue reports completed/no-op safely.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_integration.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "github",
+      "depends_on": [
+        "H050-041"
+      ],
+      "acceptance": [
+        "H050-042: scoped behavior or audit result is delivered with evidence.",
+        "H050-042: output is deterministic and operator-readable.",
+        "H050-042: safety semantics remain unchanged unless explicitly tested.",
+        "H050-042: validation command succeeds: python -m pytest tests/test_integration.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-043",
+      "title": "Cleanup apply idempotence after remote branch removal",
+      "body": "Purpose: Cleanup apply idempotence after remote branch removal.\nConcrete scope: Cover cleanup when remote branch is already gone but local worktree or branch remains.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_cleanup.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "github",
+      "depends_on": [
+        "H050-042"
+      ],
+      "acceptance": [
+        "H050-043: scoped behavior or audit result is delivered with evidence.",
+        "H050-043: output is deterministic and operator-readable.",
+        "H050-043: safety semantics remain unchanged unless explicitly tested.",
+        "H050-043: validation command succeeds: python -m pytest tests/test_cleanup.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-044",
+      "title": "Branch collision recovery plan",
+      "body": "Purpose: Branch collision recovery plan.\nConcrete scope: Harden worktree/PR planning output when branch names collide locally or remotely.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_worktree.py tests/test_pr.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "github",
+      "depends_on": [
+        "H050-043"
+      ],
+      "acceptance": [
+        "H050-044: scoped behavior or audit result is delivered with evidence.",
+        "H050-044: output is deterministic and operator-readable.",
+        "H050-044: safety semantics remain unchanged unless explicitly tested.",
+        "H050-044: validation command succeeds: python -m pytest tests/test_worktree.py tests/test_pr.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-045",
+      "title": "Worktree existing-path blocked output",
+      "body": "Purpose: Worktree existing-path blocked output.\nConcrete scope: Ensure existing path or dirty worktree blocks worktree apply with exact recovery guidance.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_worktree.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "github",
+      "depends_on": [
+        "H050-044"
+      ],
+      "acceptance": [
+        "H050-045: scoped behavior or audit result is delivered with evidence.",
+        "H050-045: output is deterministic and operator-readable.",
+        "H050-045: safety semantics remain unchanged unless explicitly tested.",
+        "H050-045: validation command succeeds: python -m pytest tests/test_worktree.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-046",
+      "title": "Local validation discovery audit",
+      "body": "Purpose: Local validation discovery audit.\nConcrete scope: Audit how Signposter discovers or documents ruff, pytest, targeted tests, and docs-only checks.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: git diff --check -- docs/audits/h050-046-local-validation-discovery-audit.md",
+      "phase": "build",
+      "risk": "low",
+      "role": "worker",
+      "area": "tests",
+      "depends_on": [
+        "H050-045"
+      ],
+      "acceptance": [
+        "H050-046: scoped behavior or audit result is delivered with evidence.",
+        "H050-046: output is deterministic and operator-readable.",
+        "H050-046: safety semantics remain unchanged unless explicitly tested.",
+        "H050-046: validation command succeeds: git diff --check -- docs/audits/h050-046-local-validation-discovery-audit.md"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-047",
+      "title": "CI run selection helper smoke",
+      "body": "Purpose: CI run selection helper smoke.\nConcrete scope: Add a small tested helper or documented smoke for selecting CI by branch or merge commit.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_integration.py tests/test_merge.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "ci",
+      "depends_on": [
+        "H050-046"
+      ],
+      "acceptance": [
+        "H050-047: scoped behavior or audit result is delivered with evidence.",
+        "H050-047: output is deterministic and operator-readable.",
+        "H050-047: safety semantics remain unchanged unless explicitly tested.",
+        "H050-047: validation command succeeds: python -m pytest tests/test_integration.py tests/test_merge.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-048",
+      "title": "Failed CI diagnosis formatter",
+      "body": "Purpose: Failed CI diagnosis formatter.\nConcrete scope: Add or audit compact CI diagnosis output that points to failing job/log command without dumping raw logs.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_integration.py tests/test_merge.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "ci",
+      "depends_on": [
+        "H050-047"
+      ],
+      "acceptance": [
+        "H050-048: scoped behavior or audit result is delivered with evidence.",
+        "H050-048: output is deterministic and operator-readable.",
+        "H050-048: safety semantics remain unchanged unless explicitly tested.",
+        "H050-048: validation command succeeds: python -m pytest tests/test_integration.py tests/test_merge.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-049",
+      "title": "Validation result artifact schema",
+      "body": "Purpose: Validation result artifact schema.\nConcrete scope: Define or audit a lightweight schema for recording local validation commands and results in worker summaries.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_runner.py tests/test_artifacts.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "tests",
+      "depends_on": [
+        "H050-048"
+      ],
+      "acceptance": [
+        "H050-049: scoped behavior or audit result is delivered with evidence.",
+        "H050-049: output is deterministic and operator-readable.",
+        "H050-049: safety semantics remain unchanged unless explicitly tested.",
+        "H050-049: validation command succeeds: python -m pytest tests/test_runner.py tests/test_artifacts.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-050",
+      "title": "Validation provenance in summaries",
+      "body": "Purpose: Validation provenance in summaries.\nConcrete scope: Ensure worker/reviewer summaries preserve command provenance without inflating GitHub comments.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_runner.py tests/test_review.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "tests",
+      "depends_on": [
+        "H050-049"
+      ],
+      "acceptance": [
+        "H050-050: scoped behavior or audit result is delivered with evidence.",
+        "H050-050: output is deterministic and operator-readable.",
+        "H050-050: safety semantics remain unchanged unless explicitly tested.",
+        "H050-050: validation command succeeds: python -m pytest tests/test_runner.py tests/test_review.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-051",
+      "title": "Plain signposter status current-task view",
+      "body": "Purpose: Plain signposter status current-task view.\nConcrete scope: Improve or audit the default status surface so it shows current active task, next task, and stop reason compactly.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_control_status.py tests/test_cli.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "cli",
+      "depends_on": [
+        "H050-050"
+      ],
+      "acceptance": [
+        "H050-051: scoped behavior or audit result is delivered with evidence.",
+        "H050-051: output is deterministic and operator-readable.",
+        "H050-051: safety semantics remain unchanged unless explicitly tested.",
+        "H050-051: validation command succeeds: python -m pytest tests/test_control_status.py tests/test_cli.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-052",
+      "title": "Status active and next task composition",
+      "body": "Purpose: Status active and next task composition.\nConcrete scope: Test status output when one task is active and another is waiting behind dependencies.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_control_status.py tests/test_orchestrator.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "cli",
+      "depends_on": [
+        "H050-051"
+      ],
+      "acceptance": [
+        "H050-052: scoped behavior or audit result is delivered with evidence.",
+        "H050-052: output is deterministic and operator-readable.",
+        "H050-052: safety semantics remain unchanged unless explicitly tested.",
+        "H050-052: validation command succeeds: python -m pytest tests/test_control_status.py tests/test_orchestrator.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-053",
+      "title": "Status stale worktree warning",
+      "body": "Purpose: Status stale worktree warning.\nConcrete scope: Surface stale worktree or branch warnings in status without mutating local git state.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_control_status.py tests/test_cleanup.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "cli",
+      "depends_on": [
+        "H050-052"
+      ],
+      "acceptance": [
+        "H050-053: scoped behavior or audit result is delivered with evidence.",
+        "H050-053: output is deterministic and operator-readable.",
+        "H050-053: safety semantics remain unchanged unless explicitly tested.",
+        "H050-053: validation command succeeds: python -m pytest tests/test_control_status.py tests/test_cleanup.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-054",
+      "title": "Dashboard planner count compactness",
+      "body": "Purpose: Dashboard planner count compactness.\nConcrete scope: Keep planner/dashboard counts compact and deterministic for large 80-task manifests.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_planner.py tests/test_control_status.py -q",
+      "phase": "build",
+      "risk": "low",
+      "role": "worker",
+      "area": "cli",
+      "depends_on": [
+        "H050-053"
+      ],
+      "acceptance": [
+        "H050-054: scoped behavior or audit result is delivered with evidence.",
+        "H050-054: output is deterministic and operator-readable.",
+        "H050-054: safety semantics remain unchanged unless explicitly tested.",
+        "H050-054: validation command succeeds: python -m pytest tests/test_planner.py tests/test_control_status.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-055",
+      "title": "Operator log template standardization",
+      "body": "Purpose: Operator log template standardization.\nConcrete scope: Document a concise operator log template covering node, branch, gate, command, result, and next action.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: git diff --check -- docs/operator-log-template.md",
+      "phase": "build",
+      "risk": "low",
+      "role": "worker",
+      "area": "docs",
+      "depends_on": [
+        "H050-054"
+      ],
+      "acceptance": [
+        "H050-055: scoped behavior or audit result is delivered with evidence.",
+        "H050-055: output is deterministic and operator-readable.",
+        "H050-055: safety semantics remain unchanged unless explicitly tested.",
+        "H050-055: validation command succeeds: git diff --check -- docs/operator-log-template.md"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-056",
+      "title": "Handoff snapshot command gap audit",
+      "body": "Purpose: Handoff snapshot command gap audit.\nConcrete scope: Audit whether existing handoff/status surfaces can produce a complete handoff snapshot.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: git diff --check -- docs/audits/h050-056-handoff-snapshot-gap-audit.md",
+      "phase": "build",
+      "risk": "low",
+      "role": "worker",
+      "area": "docs",
+      "depends_on": [
+        "H050-055"
+      ],
+      "acceptance": [
+        "H050-056: scoped behavior or audit result is delivered with evidence.",
+        "H050-056: output is deterministic and operator-readable.",
+        "H050-056: safety semantics remain unchanged unless explicitly tested.",
+        "H050-056: validation command succeeds: git diff --check -- docs/audits/h050-056-handoff-snapshot-gap-audit.md"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-057",
+      "title": "Handoff snapshot implementation slice",
+      "body": "Purpose: Handoff snapshot implementation slice.\nConcrete scope: If audit justifies it, implement the smallest read-only handoff snapshot surface; otherwise record a validated no-op.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_handoff.py tests/test_cli.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "cli",
+      "depends_on": [
+        "H050-056"
+      ],
+      "acceptance": [
+        "H050-057: scoped behavior or audit result is delivered with evidence.",
+        "H050-057: output is deterministic and operator-readable.",
+        "H050-057: safety semantics remain unchanged unless explicitly tested.",
+        "H050-057: validation command succeeds: python -m pytest tests/test_handoff.py tests/test_cli.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-058",
+      "title": "Role policy current-state audit",
+      "body": "Purpose: Role policy current-state audit.\nConcrete scope: Audit role policy and backend defaults against actual available execution paths and cost goals.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_role_policy.py tests/test_role_routing.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "core",
+      "depends_on": [
+        "H050-057"
+      ],
+      "acceptance": [
+        "H050-058: scoped behavior or audit result is delivered with evidence.",
+        "H050-058: output is deterministic and operator-readable.",
+        "H050-058: safety semantics remain unchanged unless explicitly tested.",
+        "H050-058: validation command succeeds: python -m pytest tests/test_role_policy.py tests/test_role_routing.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-059",
+      "title": "Runtime availability status output",
+      "body": "Purpose: Runtime availability status output.\nConcrete scope: Make backend availability and unsupported-model diagnostics visible without requiring execution.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_backend_status.py tests/test_codex_cli_backend.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "runner",
+      "depends_on": [
+        "H050-058"
+      ],
+      "acceptance": [
+        "H050-059: scoped behavior or audit result is delivered with evidence.",
+        "H050-059: output is deterministic and operator-readable.",
+        "H050-059: safety semantics remain unchanged unless explicitly tested.",
+        "H050-059: validation command succeeds: python -m pytest tests/test_backend_status.py tests/test_codex_cli_backend.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-060",
+      "title": "Model fallback transparency",
+      "body": "Purpose: Model fallback transparency.\nConcrete scope: Ensure fallback or takeover is explicit in dry-run output and artifacts, never silent.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_runner.py tests/test_role_routing.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "runner",
+      "depends_on": [
+        "H050-059"
+      ],
+      "acceptance": [
+        "H050-060: scoped behavior or audit result is delivered with evidence.",
+        "H050-060: output is deterministic and operator-readable.",
+        "H050-060: safety semantics remain unchanged unless explicitly tested.",
+        "H050-060: validation command succeeds: python -m pytest tests/test_runner.py tests/test_role_routing.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-061",
+      "title": "Token usage aggregation by role coverage",
+      "body": "Purpose: Token usage aggregation by role coverage.\nConcrete scope: Strengthen token usage aggregation tests by role, backend, model, and missing-usage fallback.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_token_usage.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "runner",
+      "depends_on": [
+        "H050-060"
+      ],
+      "acceptance": [
+        "H050-061: scoped behavior or audit result is delivered with evidence.",
+        "H050-061: output is deterministic and operator-readable.",
+        "H050-061: safety semantics remain unchanged unless explicitly tested.",
+        "H050-061: validation command succeeds: python -m pytest tests/test_token_usage.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-062",
+      "title": "Worker prompt budget warning coverage",
+      "body": "Purpose: Worker prompt budget warning coverage.\nConcrete scope: Ensure worker prompt budget warnings are compact and do not omit required scope or safety data.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_runner.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "runner",
+      "depends_on": [
+        "H050-061"
+      ],
+      "acceptance": [
+        "H050-062: scoped behavior or audit result is delivered with evidence.",
+        "H050-062: output is deterministic and operator-readable.",
+        "H050-062: safety semantics remain unchanged unless explicitly tested.",
+        "H050-062: validation command succeeds: python -m pytest tests/test_runner.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-063",
+      "title": "Reviewer prompt budget warning coverage",
+      "body": "Purpose: Reviewer prompt budget warning coverage.\nConcrete scope: Ensure reviewer prompt budget warnings preserve structured review contract and omitted-section notes.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_review.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "runner",
+      "depends_on": [
+        "H050-062"
+      ],
+      "acceptance": [
+        "H050-063: scoped behavior or audit result is delivered with evidence.",
+        "H050-063: output is deterministic and operator-readable.",
+        "H050-063: safety semantics remain unchanged unless explicitly tested.",
+        "H050-063: validation command succeeds: python -m pytest tests/test_review.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-064",
+      "title": "Planner prompt compactness audit",
+      "body": "Purpose: Planner prompt compactness audit.\nConcrete scope: Audit planner prompt/template surfaces for token efficiency and duplicated safety prose.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: git diff --check -- docs/audits/h050-064-planner-prompt-compactness-audit.md",
+      "phase": "build",
+      "risk": "low",
+      "role": "worker",
+      "area": "scheduler",
+      "depends_on": [
+        "H050-063"
+      ],
+      "acceptance": [
+        "H050-064: scoped behavior or audit result is delivered with evidence.",
+        "H050-064: output is deterministic and operator-readable.",
+        "H050-064: safety semantics remain unchanged unless explicitly tested.",
+        "H050-064: validation command succeeds: git diff --check -- docs/audits/h050-064-planner-prompt-compactness-audit.md"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-065",
+      "title": "Subagent output normalization coverage",
+      "body": "Purpose: Subagent output normalization coverage.\nConcrete scope: If subagent dispatch is present, test output normalization; otherwise record the current non-default boundary.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_codex_subagent.py tests/test_runner.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "runner",
+      "depends_on": [
+        "H050-064"
+      ],
+      "acceptance": [
+        "H050-065: scoped behavior or audit result is delivered with evidence.",
+        "H050-065: output is deterministic and operator-readable.",
+        "H050-065: safety semantics remain unchanged unless explicitly tested.",
+        "H050-065: validation command succeeds: python -m pytest tests/test_codex_subagent.py tests/test_runner.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-066",
+      "title": "Subagent timeout classification",
+      "body": "Purpose: Subagent timeout classification.\nConcrete scope: Classify subagent timeouts as takeover-required diagnostics without losing raw local evidence.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_codex_subagent.py tests/test_runner.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "runner",
+      "depends_on": [
+        "H050-065"
+      ],
+      "acceptance": [
+        "H050-066: scoped behavior or audit result is delivered with evidence.",
+        "H050-066: output is deterministic and operator-readable.",
+        "H050-066: safety semantics remain unchanged unless explicitly tested.",
+        "H050-066: validation command succeeds: python -m pytest tests/test_codex_subagent.py tests/test_runner.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-067",
+      "title": "README current-state update",
+      "body": "Purpose: README current-state update.\nConcrete scope: Update README stale bootstrap claims to match implemented Signposter lifecycle without overpromising autonomy.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: git diff --check -- README.md",
+      "phase": "build",
+      "risk": "low",
+      "role": "worker",
+      "area": "docs",
+      "depends_on": [
+        "H050-066"
+      ],
+      "acceptance": [
+        "H050-067: scoped behavior or audit result is delivered with evidence.",
+        "H050-067: output is deterministic and operator-readable.",
+        "H050-067: safety semantics remain unchanged unless explicitly tested.",
+        "H050-067: validation command succeeds: git diff --check -- README.md"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-068",
+      "title": "Workflow document current lifecycle update",
+      "body": "Purpose: Workflow document current lifecycle update.\nConcrete scope: Update docs/workflow.md from skeleton wording to current planner/lifecycle workflow truth.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: git diff --check -- docs/workflow.md",
+      "phase": "build",
+      "risk": "low",
+      "role": "worker",
+      "area": "docs",
+      "depends_on": [
+        "H050-067"
+      ],
+      "acceptance": [
+        "H050-068: scoped behavior or audit result is delivered with evidence.",
+        "H050-068: output is deterministic and operator-readable.",
+        "H050-068: safety semantics remain unchanged unless explicitly tested.",
+        "H050-068: validation command succeeds: git diff --check -- docs/workflow.md"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-069",
+      "title": "Artifact docs schema update",
+      "body": "Purpose: Artifact docs schema update.\nConcrete scope: Update artifact docs with worker/reviewer schema fields, takeover preservation, and redaction boundaries.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: git diff --check -- docs/artifacts-reference.md",
+      "phase": "build",
+      "risk": "low",
+      "role": "worker",
+      "area": "docs",
+      "depends_on": [
+        "H050-068"
+      ],
+      "acceptance": [
+        "H050-069: scoped behavior or audit result is delivered with evidence.",
+        "H050-069: output is deterministic and operator-readable.",
+        "H050-069: safety semantics remain unchanged unless explicitly tested.",
+        "H050-069: validation command succeeds: git diff --check -- docs/artifacts-reference.md"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-070",
+      "title": "Troubleshooting cross-link update",
+      "body": "Purpose: Troubleshooting cross-link update.\nConcrete scope: Cross-link troubleshooting, runbook, artifacts, and architecture docs without repeating full workflows.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: git diff --check -- docs/troubleshooting.md docs/operator-lifecycle-runbook.md",
+      "phase": "build",
+      "risk": "low",
+      "role": "worker",
+      "area": "docs",
+      "depends_on": [
+        "H050-069"
+      ],
+      "acceptance": [
+        "H050-070: scoped behavior or audit result is delivered with evidence.",
+        "H050-070: output is deterministic and operator-readable.",
+        "H050-070: safety semantics remain unchanged unless explicitly tested.",
+        "H050-070: validation command succeeds: git diff --check -- docs/troubleshooting.md docs/operator-lifecycle-runbook.md"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-071",
+      "title": "Architecture debt register",
+      "body": "Purpose: Architecture debt register.\nConcrete scope: Create or update a bounded architecture debt register with owner surfaces, risks, and next-test hooks.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: git diff --check -- docs/architecture-debt.md",
+      "phase": "build",
+      "risk": "low",
+      "role": "worker",
+      "area": "docs",
+      "depends_on": [
+        "H050-070"
+      ],
+      "acceptance": [
+        "H050-071: scoped behavior or audit result is delivered with evidence.",
+        "H050-071: output is deterministic and operator-readable.",
+        "H050-071: safety semantics remain unchanged unless explicitly tested.",
+        "H050-071: validation command succeeds: git diff --check -- docs/architecture-debt.md"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-072",
+      "title": "Docs-only lifecycle smoke fixture",
+      "body": "Purpose: Docs-only lifecycle smoke fixture.\nConcrete scope: Add or tighten a full docs-only lifecycle smoke fixture from worker summary through integration/cleanup.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_full_lifecycle_happy_path.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "tests",
+      "depends_on": [
+        "H050-071"
+      ],
+      "acceptance": [
+        "H050-072: scoped behavior or audit result is delivered with evidence.",
+        "H050-072: output is deterministic and operator-readable.",
+        "H050-072: safety semantics remain unchanged unless explicitly tested.",
+        "H050-072: validation command succeeds: python -m pytest tests/test_full_lifecycle_happy_path.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-073",
+      "title": "Code-change lifecycle smoke fixture",
+      "body": "Purpose: Code-change lifecycle smoke fixture.\nConcrete scope: Add or tighten a representative code-change lifecycle smoke fixture with PR review and merge gates.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_full_lifecycle_happy_path.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "tests",
+      "depends_on": [
+        "H050-072"
+      ],
+      "acceptance": [
+        "H050-073: scoped behavior or audit result is delivered with evidence.",
+        "H050-073: output is deterministic and operator-readable.",
+        "H050-073: safety semantics remain unchanged unless explicitly tested.",
+        "H050-073: validation command succeeds: python -m pytest tests/test_full_lifecycle_happy_path.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-074",
+      "title": "Validated no-op integration regression",
+      "body": "Purpose: Validated no-op integration regression.\nConcrete scope: Strengthen validated no-op completion and integration regressions for terminal state consistency.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_full_lifecycle_happy_path.py tests/test_integration.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "tests",
+      "depends_on": [
+        "H050-073"
+      ],
+      "acceptance": [
+        "H050-074: scoped behavior or audit result is delivered with evidence.",
+        "H050-074: output is deterministic and operator-readable.",
+        "H050-074: safety semantics remain unchanged unless explicitly tested.",
+        "H050-074: validation command succeeds: python -m pytest tests/test_full_lifecycle_happy_path.py tests/test_integration.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-075",
+      "title": "Side-task return regression",
+      "body": "Purpose: Side-task return regression.\nConcrete scope: Strengthen side-task insertion and return-to-mainline regression coverage on manifests.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: deterministic worker; escalate only for ambiguity.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_planner.py -q",
+      "phase": "build",
+      "risk": "medium",
+      "role": "worker",
+      "area": "tests",
+      "depends_on": [
+        "H050-074"
+      ],
+      "acceptance": [
+        "H050-075: scoped behavior or audit result is delivered with evidence.",
+        "H050-075: output is deterministic and operator-readable.",
+        "H050-075: safety semantics remain unchanged unless explicitly tested.",
+        "H050-075: validation command succeeds: python -m pytest tests/test_planner.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-076",
+      "title": "Stuck recovery end-to-end regression",
+      "body": "Purpose: Stuck recovery end-to-end regression.\nConcrete scope: Add or tighten an end-to-end stuck recovery regression covering active issue, artifacts, PR, integration, and cleanup.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: strong reasoning worker; recovery semantics.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_orchestrator.py tests/test_full_lifecycle_happy_path.py -q",
+      "phase": "build",
+      "risk": "high",
+      "role": "worker",
+      "area": "tests",
+      "depends_on": [
+        "H050-075"
+      ],
+      "acceptance": [
+        "H050-076: scoped behavior or audit result is delivered with evidence.",
+        "H050-076: output is deterministic and operator-readable.",
+        "H050-076: safety semantics remain unchanged unless explicitly tested.",
+        "H050-076: validation command succeeds: python -m pytest tests/test_orchestrator.py tests/test_full_lifecycle_happy_path.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-077",
+      "title": "Planner seed/apply dry-run safety smoke",
+      "body": "Purpose: Planner seed/apply dry-run safety smoke.\nConcrete scope: Add or tighten smoke coverage that planner seed/apply dry-run never creates GitHub issues and apply is explicit.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: strong reasoning worker; mutation safety.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_planner.py -q",
+      "phase": "build",
+      "risk": "high",
+      "role": "worker",
+      "area": "tests",
+      "depends_on": [
+        "H050-076"
+      ],
+      "acceptance": [
+        "H050-077: scoped behavior or audit result is delivered with evidence.",
+        "H050-077: output is deterministic and operator-readable.",
+        "H050-077: safety semantics remain unchanged unless explicitly tested.",
+        "H050-077: validation command succeeds: python -m pytest tests/test_planner.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-078",
+      "title": "H050 hardening audit",
+      "body": "Purpose: H050 hardening audit.\nConcrete scope: Audit H050 delivered changes for safety, duplication, stuck recovery, gates, comments, validation, and docs truth.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: strong reasoning worker; final audit.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: ruff check . && python -m pytest tests/ -q",
+      "phase": "build",
+      "risk": "high",
+      "role": "worker",
+      "area": "core",
+      "depends_on": [
+        "H050-077"
+      ],
+      "acceptance": [
+        "H050-078: scoped behavior or audit result is delivered with evidence.",
+        "H050-078: output is deterministic and operator-readable.",
+        "H050-078: safety semantics remain unchanged unless explicitly tested.",
+        "H050-078: validation command succeeds: ruff check . && python -m pytest tests/ -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-079",
+      "title": "Next-roadmap bootstrap contract",
+      "body": "Purpose: Next-roadmap bootstrap contract.\nConcrete scope: Define and validate the contract that final roadmap tasks must use to create the next 80-node DAG.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: strong reasoning worker; roadmap transition.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: python -m pytest tests/test_planner.py -q",
+      "phase": "build",
+      "risk": "high",
+      "role": "worker",
+      "area": "scheduler",
+      "depends_on": [
+        "H050-078"
+      ],
+      "acceptance": [
+        "H050-079: scoped behavior or audit result is delivered with evidence.",
+        "H050-079: output is deterministic and operator-readable.",
+        "H050-079: safety semantics remain unchanged unless explicitly tested.",
+        "H050-079: validation command succeeds: python -m pytest tests/test_planner.py -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "H050-080",
+      "title": "H050 final audit and H051 bootstrap",
+      "body": "Purpose: H050 final audit and H051 bootstrap.\nConcrete scope: Run final H050 audit, create H051 or next deterministic 80-node roadmap, validate it, seed if safe, and identify the first next task.\nNon-goals: no broad rewrite, no unrelated formatting churn, no manual issue closure.\nRoute/model: role:worker via Signposter lifecycle; expected tier: strong reasoning worker; final roadmap transition.\nMutation boundary: dry-run first; GitHub mutation only through guarded Signposter --apply paths.\nValidation: ruff check . && python -m pytest tests/ -q",
+      "phase": "build",
+      "risk": "high",
+      "role": "worker",
+      "area": "core",
+      "depends_on": [
+        "H050-078",
+        "H050-079"
+      ],
+      "acceptance": [
+        "H050-080: scoped behavior or audit result is delivered with evidence.",
+        "H050-080: output is deterministic and operator-readable.",
+        "H050-080: safety semantics remain unchanged unless explicitly tested.",
+        "H050-080: validation command succeeds: ruff check . && python -m pytest tests/ -q"
+      ],
+      "stop_conditions": [
+        "ruff check fails",
+        "targeted pytest fails",
+        "full pytest fails",
+        "CI fails",
+        "GitHub mutation is requested without --apply",
+        "execution backend is requested without explicit execution permission",
+        "PR body contains auto-close keywords",
+        "merge or integration plan is not ready"
+      ],
+      "allowed_mutations": []
+    }
+  ]
+}
