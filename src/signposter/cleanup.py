@@ -337,6 +337,15 @@ def apply_cleanup(
             plan = refreshed_plan
 
     # Mutation path — strictly guarded
+    if _is_already_fully_cleaned(plan):
+        return {
+            "mode": "apply_completed",
+            "plan": plan,
+            "success": True,
+            "results": ["cleanup already completed"],
+            "branch_deleted": False,
+        }
+
     if plan.status != "ready":
         return {
             "mode": "apply_blocked",
@@ -433,6 +442,25 @@ def format_cleanup_apply_result(result: dict) -> str:
         lines.append("  No local worktree was removed.")
         lines.append("  No local branch was deleted.")
         lines.append("  No GitHub mutation was performed.")
+        return "\n".join(lines)
+
+    if result.get("mode") == "apply_completed":
+        lines = [f"Signposter Cleanup Apply — PR #{pr}\n"]
+        lines.append("Local cleanup:")
+        lines.append("  status: already completed")
+        lines.append("  worktree: already absent")
+        lines.append("  local branch: already absent")
+
+        lines.append("\nStatus:")
+        lines.append("  completed")
+
+        lines.append("\nNotes:")
+        lines.append("  No local worktree was removed.")
+        lines.append("  No local branch was deleted.")
+        lines.append("  No GitHub mutation was performed.")
+        lines.append("  Issue was not modified.")
+        lines.append("  PR was not modified.")
+
         return "\n".join(lines)
 
     if result.get("success"):
