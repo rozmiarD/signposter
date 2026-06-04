@@ -265,6 +265,19 @@ def build_worker_summary(
     lines.extend(f"- `{cmd}`" for cmd in targeted_validation)
     lines.extend(["", "Full validation passed:", ""])
     lines.extend(f"- `{cmd}`" for cmd in full_validation)
+    lines.extend(
+        [
+            "",
+            "## Validation result records",
+            "",
+            "Schema: signposter.validation-result.v1",
+            "Fields: scope, status, command",
+            "",
+            "Records:",
+        ]
+    )
+    lines.extend(_validation_result_record_lines("targeted", targeted_validation))
+    lines.extend(_validation_result_record_lines("full", full_validation))
     lines.extend(["", "Manual CLI smoke passed:", ""])
     lines.extend(f"- `{cmd}`" for cmd in manual_smoke)
     lines.extend(
@@ -285,6 +298,19 @@ def build_worker_summary(
         ]
     )
     return "\n".join(lines) + "\n"
+
+
+def _validation_result_record_lines(scope: str, commands: list[str]) -> list[str]:
+    lines: list[str] = []
+    for command in commands:
+        lines.extend(
+            [
+                f"- scope: {scope}",
+                "  status: passed",
+                f"  command: `{command}`",
+            ]
+        )
+    return lines
 
 
 def audit_run_artifacts(
