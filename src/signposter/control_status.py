@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import re
+import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from signposter.bug_ledger import BugLedgerEntry
@@ -19,6 +22,7 @@ class ControlPlaneStatus:
     orchestrator: OrchestratorNext | None
     agreement: dict[str, Any]
     refresh: dict[str, Any]
+    local_warnings: tuple[str, ...]
     bugs: tuple[BugLedgerEntry, ...]
     notes: tuple[str, ...]
 
@@ -30,6 +34,7 @@ def build_control_plane_status(
     scheduler_next: SchedulerNext | None = None,
     orchestrator_next: OrchestratorNext | None = None,
     refresh_command: str | None = None,
+    local_warnings: tuple[str, ...] = (),
     bugs: tuple[BugLedgerEntry, ...] = (),
 ) -> ControlPlaneStatus:
     """Build a bounded status object from existing source-of-truth results."""
@@ -73,6 +78,7 @@ def build_control_plane_status(
                 "workflow polling"
             ),
         },
+        local_warnings=local_warnings,
         bugs=bugs,
         notes=(
             "Read-only control-plane status.",
@@ -200,6 +206,60 @@ def _unique_issues(values: list[int]) -> tuple[int, ...]:
     return tuple(unique)
 
 
+_WORKER_BRANCH_RE = re.compile(r"^work/issue-(?P<issue>\d+)-")
+
+
+def collect_local_worker_state_warnings(
+    *,
+    planner_run: dict[str, Any] | None = None,
+    scheduler_next: SchedulerNext | None = None,
+    worktree_base: Path | str = Path("..") / "signposter-work",
+) -> tuple[str, ...]:
+    """Return read-only stale local worker state warnings for status output."""
+    active_issues = set(
+        _unique_issues(
+            [
+                *_planner_active_issues(planner_run),
+                *_scheduler_active_issues(scheduler_next),
+            ]
+        )
+    )
+    warnings: list[str] = []
+    base = Path(worktree_base)
+    if base.exists():
+        for path in sorted(base.iterdir(), key=lambda item: item.name):
+            if not path.is_dir() or not path.name.isdigit():
+                continue
+            issue = int(path.name)
+            if issue not in active_issues:
+                warnings.append(f"stale worktree: {path}")
+
+    for branch in _list_local_worker_branches():
+        match = _WORKER_BRANCH_RE.match(branch)
+        if match is None:
+            continue
+        issue = int(match.group("issue"))
+        if issue not in active_issues:
+            warnings.append(f"stale local branch: {branch}")
+
+    return tuple(warnings)
+
+
+def _list_local_worker_branches() -> tuple[str, ...]:
+    try:
+        result = subprocess.run(
+            ["git", "branch", "--format=%(refname:short)", "--list", "work/issue-*"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except Exception:
+        return ()
+    if result.returncode != 0:
+        return ()
+    return tuple(line.strip() for line in result.stdout.splitlines() if line.strip())
+
+
 def format_control_plane_status(result: ControlPlaneStatus) -> str:
     """Format a compact operator-facing status view."""
     lines = [
@@ -310,6 +370,18 @@ def format_control_plane_status(result: ControlPlaneStatus) -> str:
                 f"{result.orchestrator.takeover_category} — "
                 f"{result.orchestrator.takeover_reason or 'unspecified'}"
             )
+
+    lines.extend(["", "Local worker state:"])
+    if result.local_warnings:
+        lines.append("  warnings:")
+        lines.extend(f"    {warning}" for warning in result.local_warnings[:5])
+        if len(result.local_warnings) > 5:
+            lines.append(f"    ... {len(result.local_warnings) - 5} more")
+        lines.append(
+            "  safety: read-only warning; cleanup remains guarded by cleanup apply --apply"
+        )
+    else:
+        lines.append("  warnings: none")
 
     lines.extend(["", "Bug ledger:"])
     if not result.bugs:

@@ -8,6 +8,7 @@ from signposter.bug_ledger import BugLedgerEntry
 from signposter.cli import main
 from signposter.control_status import (
     build_control_plane_status,
+    collect_local_worker_state_warnings,
     format_control_plane_status,
 )
 from signposter.scan import LabeledItem
@@ -205,6 +206,57 @@ def test_control_plane_status_composes_active_task_with_waiting_dependency() -> 
     assert "#423: waiting on H050-052" not in output
     assert "active diagnostics:" in output
     assert "#422: worktree=present, prompt=present, summary=missing" in output
+
+
+def test_control_plane_status_surfaces_stale_local_worker_state_warnings() -> None:
+    result = build_control_plane_status(
+        repo="ExatronOmega/signposter",
+        local_warnings=(
+            "stale worktree: ../signposter-work/41",
+            "stale local branch: work/issue-41-old-task",
+        ),
+    )
+
+    output = format_control_plane_status(result)
+
+    assert "Local worker state:" in output
+    assert "warnings:" in output
+    assert "stale worktree: ../signposter-work/41" in output
+    assert "stale local branch: work/issue-41-old-task" in output
+    assert "cleanup remains guarded by cleanup apply --apply" in output
+    assert "No GitHub mutation was performed." in output
+
+
+def test_collect_local_worker_state_warnings_ignores_active_issue(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    worktree_base = tmp_path / "signposter-work"
+    worktree_base.mkdir()
+    (worktree_base / "2").mkdir()
+    (worktree_base / "3").mkdir()
+    scheduler = SchedulerNext(
+        repo="ExatronOmega/signposter",
+        status="ready",
+        issue=None,
+        reason="active issue in progress",
+        skipped=["#2: state:active"],
+        notes=[],
+    )
+    monkeypatch.setattr(
+        "signposter.control_status._list_local_worker_branches",
+        lambda: ("work/issue-2-active", "work/issue-3-stale"),
+    )
+
+    warnings = collect_local_worker_state_warnings(
+        scheduler_next=scheduler,
+        worktree_base=worktree_base,
+    )
+
+    assert f"stale worktree: {worktree_base / '2'}" not in warnings
+    assert f"stale worktree: {worktree_base / '3'}" in warnings
+    assert "stale local branch: work/issue-2-active" not in warnings
+    assert "stale local branch: work/issue-3-stale" in warnings
 
 
 def test_control_plane_status_surfaces_blocked_state() -> None:
@@ -429,6 +481,10 @@ def test_control_plane_status_cli_combines_sources(
     )
     monkeypatch.setattr("signposter.cli.load_bug_ledger", lambda path: (bug,))
     monkeypatch.setattr(
+        "signposter.cli.collect_local_worker_state_warnings",
+        lambda **kwargs: ("stale worktree: ../signposter-work/156",),
+    )
+    monkeypatch.setattr(
         "sys.argv",
         [
             "signposter",
@@ -449,6 +505,7 @@ def test_control_plane_status_cli_combines_sources(
     assert exc_info.value.code in (None, 0)
     assert "Signposter Control Plane Status" in output
     assert "Refresh:" in output
+    assert "stale worktree: ../signposter-work/156" in output
     assert "command: signposter control-plane status --repo ExatronOmega/signposter" in output
     assert f"--manifest {manifest}" in output
     assert "--sync-github" in output
