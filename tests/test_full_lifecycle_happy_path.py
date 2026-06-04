@@ -9,6 +9,79 @@ from signposter.merge import plan_merge_for_pr
 from signposter.pr import plan_pr_for_issue
 
 
+def _review_gate_result(*, gate_pass: bool = True, risk: str = "low"):
+    return type(
+        "Gate",
+        (),
+        {
+            "gate_pass": gate_pass,
+            "opinion": type(
+                "Opinion",
+                (),
+                {"verdict": "APPROVE", "confidence": 0.95, "risk": risk},
+            )(),
+        },
+    )()
+
+
+def _plan_merge_with(
+    *,
+    review_decision: str | None = "APPROVED",
+    approving_reviewers: list[str] | None = None,
+    checks_status: str = "pass",
+    mergeable: str = "MERGEABLE",
+    gate_pass: bool = True,
+):
+    repo = "test/repo"
+    pr = 43
+    branch = "work/issue-42-token-budget-report"
+    body = "Related issue: #42"
+    approving_reviewers = (
+        ["AlphaExatron"] if approving_reviewers is None else approving_reviewers
+    )
+
+    with (
+        patch("signposter.merge._run_gh_pr_view") as mock_view,
+        patch("signposter.merge._fetch_pr_reviews_and_author") as mock_reviews,
+        patch("signposter.merge.evaluate_review_gate") as mock_gate,
+        patch("signposter.merge._fetch_pr_checks_for_merge") as mock_checks,
+    ):
+        mock_view.return_value = {
+            "title": "test: lifecycle blocked path",
+            "state": "OPEN",
+            "baseRefName": "main",
+            "headRefName": branch,
+            "mergeable": mergeable,
+            "reviewDecision": review_decision,
+            "body": body,
+            "files": [{"path": "tests/test_full_lifecycle_happy_path.py"}],
+            "additions": 20,
+            "deletions": 2,
+        }
+        mock_reviews.return_value = {
+            "pr_author": "ExatronOmega",
+            "review_decision": review_decision,
+            "approving_reviewers": approving_reviewers,
+        }
+        mock_gate.return_value = _review_gate_result(
+            gate_pass=gate_pass,
+            risk="medium",
+        )
+        mock_checks.return_value = {
+            "status": checks_status,
+            "successful": 1 if checks_status == "pass" else 0,
+            "failing": 1 if checks_status == "failing" else 0,
+            "pending": 1 if checks_status == "pending" else 0,
+        }
+
+        return plan_merge_for_pr(
+            repo,
+            pr,
+            allow_medium_risk=True,
+            allow_medium_scope=True,
+        )
+
+
 def test_full_lifecycle_happy_path_plans_pr_merge_integration_cleanup() -> None:
     """Mock the normal issue-to-PR-to-cleanup path without mutating GitHub or git."""
     repo = "test/repo"
@@ -188,3 +261,52 @@ def test_full_lifecycle_happy_path_plans_pr_merge_integration_cleanup() -> None:
     assert lifecycle.pr_number == pr
     assert lifecycle.integrated is True
     assert lifecycle.cleanup_complete is True
+
+
+def test_full_lifecycle_blocked_paths_stop_before_mutation() -> None:
+    failing_gate = _plan_merge_with(gate_pass=False)
+    assert failing_gate.status == "blocked — local reviewer gate is not pass"
+    assert "No merge was performed." in failing_gate.notes
+
+    red_ci = _plan_merge_with(checks_status="failing")
+    assert red_ci.status == "blocked — checks are failing"
+    assert "No issue was closed." in red_ci.notes
+
+    missing_approval = _plan_merge_with(approving_reviewers=[])
+    assert missing_approval.status == "blocked — no non-author approval found"
+
+    merge_blocked = _plan_merge_with(mergeable="CONFLICTING")
+    assert merge_blocked.status == "blocked — PR is not mergeable (CONFLICTING)"
+
+    with patch("signposter.integration._fetch_pr_merge_details") as mock_pr:
+        mock_pr.return_value = {
+            "number": 43,
+            "title": "not merged",
+            "state": "OPEN",
+            "baseRefName": "main",
+            "headRefName": "work/issue-42-token-budget-report",
+            "mergeCommit": None,
+            "body": "Related issue: #42",
+        }
+        integration_blocked = plan_integration_for_pr("test/repo", 43)
+
+    assert integration_blocked.status == "blocked — PR is not merged (state: OPEN)"
+    assert "No GitHub mutation was performed." in integration_blocked.notes
+
+    with (
+        patch("signposter.cleanup._run_gh_pr_view") as mock_cleanup_pr,
+        patch("signposter.cleanup.fetch_issue_context") as mock_cleanup_ctx,
+    ):
+        mock_cleanup_pr.return_value = {
+            "state": "MERGED",
+            "headRefName": "work/issue-42-token-budget-report",
+            "body": "Related issue: #42",
+        }
+        mock_cleanup_ctx.return_value = {
+            "state": "OPEN",
+            "labels": [{"name": "state:done"}],
+        }
+        cleanup_blocked = plan_cleanup_for_pr("test/repo", 43)
+
+    assert "blocked — associated issue #42 is not CLOSED" in cleanup_blocked.status
+    assert "No GitHub mutation was performed." in cleanup_blocked.notes
