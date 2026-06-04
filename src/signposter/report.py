@@ -257,24 +257,33 @@ def _make_bounded_excerpt(text: str, max_lines: int = 20, max_chars: int = 1500)
     if not text:
         return "(no output captured)"
 
-    # Sanitize ANSI before any excerpt processing (GitHub comments must be clean)
     text = strip_ansi(text)
     lines = text.splitlines()
-    # Take first N lines, but also respect total char budget
-    selected = []
-    total_chars = 0
-    for line in lines[:max_lines]:
-        if total_chars + len(line) + 1 > max_chars:
+    line_limit = max(0, max_lines)
+    char_limit = max(0, max_chars)
+    selected: list[str] = []
+    used_chars = 0
+
+    for line in lines[:line_limit]:
+        separator_chars = 1 if selected else 0
+        remaining_chars = char_limit - used_chars - separator_chars
+        if remaining_chars <= 0:
             break
-        selected.append(line[:300])  # truncate extremely long lines
-        total_chars += len(line) + 1
+
+        selected.append(line[:remaining_chars])
+        used_chars += separator_chars + len(selected[-1])
+        if len(line) > remaining_chars:
+            break
 
     excerpt = "\n".join(selected)
-    if len(text) > max_chars or len(lines) > max_lines:
-        excerpt += (
-            f"\n... (omitted; excerpt limited to {max_lines} lines / "
-            f"{max_chars} chars)"
+    omitted_lines = max(len(lines) - len(selected), 0)
+    omitted_chars = max(len(text) - len(excerpt), 0)
+    if omitted_lines or omitted_chars:
+        marker = (
+            f"... (omitted; excerpt limited to {line_limit} lines / {char_limit} chars; "
+            f"omitted {omitted_lines} lines / {omitted_chars} chars)"
         )
+        excerpt = f"{excerpt}\n{marker}" if excerpt else marker
     return excerpt or "(no content)"
 
 

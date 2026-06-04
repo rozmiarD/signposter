@@ -403,7 +403,44 @@ def test_make_bounded_excerpt_uses_clear_omission_marker():
 
     assert "line 0" in excerpt
     assert "line 3" not in excerpt
-    assert "... (omitted; excerpt limited to 3 lines / 100 chars)" in excerpt
+    assert (
+        "... (omitted; excerpt limited to 3 lines / 100 chars; "
+        "omitted 22 lines / 169 chars)"
+    ) in excerpt
+
+
+def test_make_bounded_excerpt_reports_line_and_char_omissions():
+    raw = "alpha\nbravo\ncharlie\ndelta"
+
+    excerpt = _make_bounded_excerpt(raw, max_lines=2, max_chars=20)
+
+    assert excerpt.splitlines() == [
+        "alpha",
+        "bravo",
+        "... (omitted; excerpt limited to 2 lines / 20 chars; omitted 2 lines / 14 chars)",
+    ]
+
+
+def test_make_bounded_excerpt_truncates_single_long_line_by_char_budget():
+    raw = "abcdef\nsecond"
+
+    excerpt = _make_bounded_excerpt(raw, max_lines=5, max_chars=3)
+
+    assert excerpt.splitlines() == [
+        "abc",
+        "... (omitted; excerpt limited to 5 lines / 3 chars; omitted 1 lines / 10 chars)",
+    ]
+
+
+def test_make_bounded_excerpt_zero_budget_still_reports_omission():
+    raw = "alpha\nbravo"
+
+    excerpt = _make_bounded_excerpt(raw, max_lines=0, max_chars=0)
+
+    assert excerpt == (
+        "... (omitted; excerpt limited to 0 lines / 0 chars; "
+        "omitted 2 lines / 11 chars)"
+    )
 
 
 def test_format_comment_excerpt_has_no_ansi():
