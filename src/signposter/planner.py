@@ -1261,6 +1261,45 @@ def build_planner_status_counts(tasks: list[dict[str, Any]]) -> dict[str, int]:
     return counts
 
 
+def build_planner_status_artifact(
+    status: dict[str, Any],
+    *,
+    manifest_path: str,
+) -> dict[str, Any]:
+    """Build a compact JSON-safe roadmap status artifact for handoff/recovery."""
+    tasks = []
+    for task in status.get("tasks", []):
+        item = {
+            "key": task.get("key"),
+            "github_issue": task.get("github_issue"),
+            "state": task.get("state"),
+            "depends_on": task.get("depends_on", []),
+        }
+        mapping_status = task.get("mapping_status")
+        if mapping_status:
+            item["mapping_status"] = mapping_status
+        mapping_reason = task.get("mapping_reason")
+        if mapping_reason:
+            item["mapping_reason"] = mapping_reason
+        tasks.append(item)
+
+    return {
+        "version": "planner.status-artifact.v0.1",
+        "repo": status.get("repo", ""),
+        "manifest": manifest_path,
+        "manifest_status": status.get("manifest_status", "unknown"),
+        "status": status.get("status", "unknown"),
+        "task_counts": build_planner_status_counts(status.get("tasks", [])),
+        "tasks": tasks,
+        "notes": [
+            "Compact roadmap status artifact for handoff and loop recovery.",
+            "No GitHub mutation was performed.",
+            "No manifest mutation was performed.",
+            "No task execution was performed.",
+        ],
+    }
+
+
 def _planner_run_reconcile_hints(next_plan: dict[str, Any]) -> list[str]:
     """Build bounded reconcile hints from deterministic next-task analysis."""
     hints: list[str] = []

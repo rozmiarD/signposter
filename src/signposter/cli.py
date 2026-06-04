@@ -117,6 +117,7 @@ from signposter.planner import (
     build_planner_seed_plan,
     build_planner_side_task_plan,
     build_planner_status,
+    build_planner_status_artifact,
     build_planner_step_from_next,
     format_planner_advance_apply_result,
     format_planner_advance_plan,
@@ -824,6 +825,12 @@ def main() -> None:
         "--sync-github",
         action="store_true",
         help="Fetch current GitHub issue states for seeded planner issues",
+    )
+    planner_status_parser.add_argument(
+        "--out",
+        default=None,
+        type=Path,
+        help="Optional output path for compact roadmap status JSON artifact",
     )
     planner_status_parser.set_defaults(func=run_planner_status)
 
@@ -3782,6 +3789,24 @@ def run_planner_status(args: argparse.Namespace) -> int:
     )
     status = build_planner_status(manifest, issue_states)
     print(format_planner_status(status))
+    if args.out is not None:
+        artifact = build_planner_status_artifact(
+            status,
+            manifest_path=str(args.manifest),
+        )
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(
+            json.dumps(artifact, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        print()
+        print("Artifact:")
+        print(f"  roadmap status: {args.out}")
+        print()
+        print("Artifact notes:")
+        print("  Local file only.")
+        print("  No GitHub mutation was performed.")
+        print("  No manifest mutation was performed.")
     return 0
 
 def run_planner_advance(args: argparse.Namespace) -> int:
