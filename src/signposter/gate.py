@@ -58,12 +58,16 @@ def build_gate_heuristic_audit() -> GateHeuristicAudit:
             "actual Python exception output requires traceback framing, not the word alone",
             "scoped code/test/no-op paths require validation and safety statements",
             "validated no-op completion requires explicit unchanged-tree evidence",
-            "human gate accepts explicit approval/scope/validation fields plus safety evidence",
+            "human gate structured fields: Human approval, Scope reviewed/match, "
+            "Validation status/local validation",
+            "human gate structured safety fields: GitHub mutation, Execution backend, "
+            "Issue closure, Merge performed",
         ),
         phrase_matchers=(
             "review gate blocks on phrases such as critical blocker and missing evidence",
             "ci gate blocks on critical blocker, execution failed, and contextual error:",
             "human gate blocks on phrases such as approval denied and validation failed",
+            "human gate legacy positive fallback requires approval wording plus proceed wording",
             "positive review fallback still requires multiple positive reviewer phrases",
         ),
         false_positive_risks=(
@@ -75,11 +79,13 @@ def build_gate_heuristic_audit() -> GateHeuristicAudit:
             "well-formed but semantically weak manual summaries can pass schema preflight",
             "phrase-based review positives may miss valid approvals with different wording",
             "structured scoped evidence is strong but still text-based rather than section parsed",
+            "human gate legacy phrase fallback remains less precise than structured fields",
         ),
         recommendations=(
             "prefer section-aware parsing for safety/result/failure sections",
             "keep actual Python exception detection framed around traceback structure",
             "move broad phrase blockers behind explicit failure-context checks",
+            "prefer structured human gate fields over legacy approval/proceed phrases",
             "preserve conservative default when evidence is unclear",
         ),
         notes=(
@@ -430,11 +436,51 @@ def _has_human_validation_evidence(text: str) -> bool:
 
 def _has_human_safety_evidence(text: str) -> bool:
     return (
-        "no github mutation" in text
-        and "no openclaw execution" in text
-        and ("no issue close" in text or "no issue was closed" in text)
-        and ("no merge" in text or "no merge was performed" in text)
+        (
+            "no github mutation" in text
+            and "no openclaw execution" in text
+            and ("no issue close" in text or "no issue was closed" in text)
+            and ("no merge" in text or "no merge was performed" in text)
+        )
+        or _has_structured_human_safety_evidence(text)
     )
+
+
+def _has_structured_human_safety_evidence(text: str) -> bool:
+    no_values = (
+        "no",
+        "none",
+        "false",
+        "not performed",
+        "not run",
+        "not executed",
+    )
+    github_mutation = _line_value_has_allowed_value(
+        text,
+        ("github mutation", "github mutations"),
+        no_values,
+    )
+    execution_backend = _line_value_has_allowed_value(
+        text,
+        (
+            "openclaw execution",
+            "codex execution",
+            "execution backend",
+            "backend execution",
+        ),
+        no_values,
+    )
+    issue_closure = _line_value_has_allowed_value(
+        text,
+        ("issue closure", "issue close", "issue closed"),
+        no_values,
+    )
+    merge_performed = _line_value_has_allowed_value(
+        text,
+        ("merge", "merge performed"),
+        no_values,
+    )
+    return github_mutation and execution_backend and issue_closure and merge_performed
 
 
 def evaluate_human_gate(
@@ -1062,7 +1108,7 @@ def run_gate_dry_run(
         "confidence": decision.confidence,
         "proposed_transition": decision.proposed_transition,
         "proposed_command": proposed_cmd,
-        "valid_for_gate": has_active and gate_type in {"review", "ci"},
+        "valid_for_gate": has_active and gate_type in {"review", "ci", "human"},
         "worker_artifact_validation": (
             _worker_artifact_validation_payload(worker_artifact_validation)
             if worker_artifact_validation is not None
