@@ -591,6 +591,17 @@ def test_orchestrator_stuck_state_recovery_smoke_surfaces_takeover_and_ci_blocke
     assert "resume path: resume existing worktree and prompt" in output
     assert "manual fallback: write a manual worker summary" in output
     assert "mutation policy: this plan is read-only" in output
+    assert planned.recovery_commands == (
+        "signposter run --repo ExatronOmega/signposter --issue 46 --execute --worktree",
+        "signposter artifact write-worker-summary --repo ExatronOmega/signposter "
+        "--issue 46 --apply",
+        "signposter artifact validate-worker-summary --issue 46",
+        "signposter report --repo ExatronOmega/signposter --issue 46 --apply",
+        "signposter gate --repo ExatronOmega/signposter --issue 46",
+    )
+    assert "Recovery commands:" in output
+    assert "signposter run --repo ExatronOmega/signposter --issue 46 --execute --worktree" in output
+    assert "signposter artifact write-worker-summary --repo ExatronOmega/signposter" in output
 
     run_command = Mock()
     with (

@@ -60,6 +60,7 @@ class OrchestratorNext:
     notes: list[str]
     activity_updated_at: str | None = None
     activity_age: str | None = None
+    recovery_commands: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -190,6 +191,11 @@ def plan_orchestrator_next(
         lifecycle,
         issue_updated_at=activity_updated_at,
     )
+    recovery_commands = _plan_takeover_recovery_commands(
+        repo=repo,
+        lifecycle=lifecycle,
+        takeover_category=takeover_category,
+    )
 
     notes = [
         "Read-only orchestrator planning only.",
@@ -215,6 +221,7 @@ def plan_orchestrator_next(
         notes=notes,
         activity_updated_at=activity_updated_at,
         activity_age=activity_age,
+        recovery_commands=recovery_commands,
     )
 
 
@@ -898,6 +905,9 @@ def format_orchestrator_next(result: OrchestratorNext) -> str:
         if takeover_plan:
             lines.extend(["", "Takeover plan:"])
             lines.extend(f"  {line}" for line in takeover_plan)
+        if result.recovery_commands:
+            lines.extend(["", "Recovery commands:"])
+            lines.extend(f"  {command}" for command in result.recovery_commands)
 
     lines.extend(["", "Status:", f"  {result.status}"])
     lines.extend(["", "Notes:"])
@@ -935,6 +945,45 @@ def _format_takeover_plan_lines(category: str) -> list[str]:
         f"manual fallback: {manual_fallback}",
         "mutation policy: this plan is read-only; apply/execute flags remain required",
     ]
+
+
+def _plan_takeover_recovery_commands(
+    *,
+    repo: str,
+    lifecycle: LifecycleNext,
+    takeover_category: str | None,
+) -> tuple[str, ...]:
+    """Return read-only recovery commands for explicit takeover planning."""
+    if takeover_category is None or lifecycle.issue_number is None:
+        return ()
+
+    issue = lifecycle.issue_number
+    if takeover_category == "resume-existing-worktree":
+        return (
+            f"signposter run --repo {repo} --issue {issue} --execute --worktree",
+            f"signposter artifact write-worker-summary --repo {repo} --issue {issue} --apply",
+            f"signposter artifact validate-worker-summary --issue {issue}",
+            f"signposter report --repo {repo} --issue {issue} --apply",
+            f"signposter gate --repo {repo} --issue {issue}",
+        )
+
+    if takeover_category == "regenerate-prompt":
+        return (
+            f"signposter run --repo {repo} --issue {issue} --write-prompt",
+            f"signposter run --repo {repo} --issue {issue} --execute --worktree",
+            f"signposter artifact write-worker-summary --repo {repo} --issue {issue} --apply",
+            f"signposter gate --repo {repo} --issue {issue}",
+        )
+
+    if takeover_category == "manual-worker-fallback":
+        return (
+            f"signposter worktree plan --repo {repo} --issue {issue}",
+            f"signposter artifact write-worker-summary --repo {repo} --issue {issue} --apply",
+            f"signposter report --repo {repo} --issue {issue} --apply",
+            f"signposter gate --repo {repo} --issue {issue}",
+        )
+
+    return (f"signposter lifecycle status --repo {repo} --issue {issue}",)
 
 
 def format_orchestrator_step(result: OrchestratorStep) -> str:
