@@ -21,6 +21,7 @@ from signposter.planner import (
     build_planner_seed_plan,
     build_planner_side_task_plan,
     build_planner_status,
+    build_planner_status_artifact,
     build_planner_status_counts,
     build_planner_step_from_next,
     evaluate_worker_issue_body_size,
@@ -2098,6 +2099,59 @@ def test_build_planner_status_surfaces_stale_and_mismatched_issue_mappings(
     assert "GitHub title: Unexpected title" in output
 
 
+def test_build_planner_status_artifact_is_compact_and_recovery_oriented(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+
+    status = build_planner_status(
+        manifest,
+        {
+            10: "closed",
+            11: {
+                "state": "open",
+                "github_state": "open",
+                "workflow_state": None,
+                "mapping_status": "mismatched",
+                "mapping_reason": "GitHub issue title does not match planner manifest",
+            },
+        },
+    )
+
+    artifact = build_planner_status_artifact(
+        status,
+        manifest_path=str(manifest_path),
+    )
+
+    assert artifact["version"] == "planner.status-artifact.v0.1"
+    assert artifact["manifest"] == str(manifest_path)
+    assert artifact["task_counts"]["blocked"] == 1
+    assert artifact["tasks"][0] == {
+        "key": "WATCH-001",
+        "github_issue": 10,
+        "state": "closed",
+        "depends_on": [],
+    }
+    assert artifact["tasks"][1]["mapping_status"] == "mismatched"
+    assert "body_file" not in artifact["tasks"][0]
+    assert "github_url" not in artifact["tasks"][0]
+    assert "No GitHub mutation was performed." in artifact["notes"]
+
+
 def test_build_planner_status_counts_groups_lifecycle_buckets() -> None:
     counts = build_planner_status_counts(
         [
@@ -2222,6 +2276,58 @@ def test_cli_planner_status_prints_local_manifest_status(
     assert exc_info.value.code in (None, 0)
     assert "Signposter Planner Status" in captured
     assert "WATCH-001 — issue: #10 — state: unknown" in captured
+    assert "No GitHub mutation was performed." in captured
+
+
+def test_cli_planner_status_out_writes_compact_status_artifact(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    out_path = tmp_path / "artifacts" / "roadmap-status.json"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    manifest["issues"][0]["github_issue"] = 10
+    manifest["issues"][0]["github_url"] = "https://github.com/ExatronOmega/signposter/issues/10"
+    write_planner_seed_manifest(manifest, manifest_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "status",
+            "--manifest",
+            str(manifest_path),
+            "--out",
+            str(out_path),
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+    artifact = json.loads(out_path.read_text(encoding="utf-8"))
+
+    assert exc_info.value.code in (None, 0)
+    assert artifact["version"] == "planner.status-artifact.v0.1"
+    assert artifact["manifest"] == str(manifest_path)
+    assert artifact["task_counts"]["total"] == 5
+    assert artifact["tasks"][0]["key"] == "WATCH-001"
+    assert "Artifact:" in captured
+    assert f"roadmap status: {out_path}" in captured
+    assert "Local file only." in captured
     assert "No GitHub mutation was performed." in captured
 
 
