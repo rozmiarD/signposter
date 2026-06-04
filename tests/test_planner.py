@@ -1045,6 +1045,85 @@ def test_apply_planner_seed_manifest_uses_fake_runner_and_updates_manifest(
     ]
 
 
+def test_apply_planner_seed_manifest_completed_manifest_is_noop(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=1):
+        issue["github_issue"] = 200 + index
+        issue["github_url"] = (
+            f"https://github.com/ExatronOmega/signposter/issues/{200 + index}"
+        )
+    write_planner_seed_manifest(manifest, manifest_path)
+    runner = _FakeGhIssueCreateRunner()
+
+    result = apply_planner_seed_manifest(manifest_path, runner)
+
+    saved = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert result["status"] == "applied"
+    assert result["created"] == []
+    assert result["errors"] == []
+    assert runner.calls == []
+    assert saved["status"] == "applied"
+    assert saved["issues"][0]["github_issue"] == 201
+    assert saved["issues"][4]["github_issue"] == 205
+
+
+def test_apply_planner_seed_manifest_partial_manifest_skips_existing_issues(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    write_planner_seed_issue_bodies(seed_plan, body_dir)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "partial"
+    for index, issue in enumerate(manifest["issues"][:2], start=1):
+        issue["github_issue"] = 300 + index
+        issue["github_url"] = (
+            f"https://github.com/ExatronOmega/signposter/issues/{300 + index}"
+        )
+    write_planner_seed_manifest(manifest, manifest_path)
+    runner = _FakeGhIssueCreateRunner()
+
+    result = apply_planner_seed_manifest(manifest_path, runner)
+
+    saved = json.loads(manifest_path.read_text(encoding="utf-8"))
+    created_keys = [created["key"] for created in result["created"]]
+    created_titles = [
+        command[command.index("--title") + 1] for command in runner.calls
+    ]
+    assert result["status"] == "applied"
+    assert created_keys == ["WATCH-003", "WATCH-004", "WATCH-005"]
+    assert created_titles == [
+        issue["github_title"] for issue in seed_plan["issues"][2:]
+    ]
+    assert all("WATCH-001" not in title for title in created_titles)
+    assert all("WATCH-002" not in title for title in created_titles)
+    assert saved["issues"][0]["github_issue"] == 301
+    assert saved["issues"][1]["github_issue"] == 302
+    assert saved["issues"][2]["github_issue"] == 101
+    assert saved["issues"][2]["github_depends_on"] == [302]
+
+
 def test_apply_planner_seed_manifest_blocks_missing_body_files(tmp_path: Path) -> None:
     plan_path = tmp_path / "plan.json"
     body_dir = tmp_path / "issue-bodies"
