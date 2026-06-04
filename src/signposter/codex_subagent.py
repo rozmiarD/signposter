@@ -69,6 +69,20 @@ class CodexSubagentOutputNormalization:
     guidance: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class CodexSubagentTakeoverPlan:
+    """Deterministic recovery plan for incomplete subagent work."""
+
+    status: str
+    reason: str
+    takeover_required: bool
+    artifact_repair_required: bool
+    validation_required: bool
+    required_actions: tuple[str, ...]
+    forbidden_actions: tuple[str, ...]
+    output: CodexSubagentOutputNormalization
+
+
 def plan_codex_subagent_dispatch(
     *,
     task_scope: str,
@@ -184,6 +198,68 @@ def normalize_codex_subagent_output(
     )
 
 
+def plan_codex_subagent_takeover(
+    output: CodexSubagentOutputNormalization,
+    *,
+    validation_evidence_present: bool,
+) -> CodexSubagentTakeoverPlan:
+    """Build a safe takeover plan from normalized subagent output."""
+    artifact_repair_required = not output.raw_exists or not output.summary_exists
+    validation_required = not validation_evidence_present
+    takeover_required = output.takeover_required or validation_required
+
+    if not takeover_required:
+        status = "not-required"
+        reason = "subagent output is complete and validation evidence is present"
+        actions = ("continue normal gate evaluation",)
+    elif artifact_repair_required or output.execution_status in {
+        "timeout",
+        "runtime-stall",
+        "malformed-output",
+        "unsupported-model",
+        "runtime-error",
+    }:
+        status = "ready"
+        reason = "takeover can proceed with preserved local evidence and manual summary repair"
+        actions = (
+            "preserve any existing raw and summary artifacts under non-canonical names",
+            "inspect the worktree and existing artifacts before editing",
+            "repair or replace the canonical bounded summary artifact",
+            "run targeted validation for the recovered work",
+            "run full validation before report, PR, or merge",
+            "continue through Signposter gate and complete surfaces only after evidence is ready",
+        )
+    else:
+        status = "blocked"
+        reason = "takeover state is unclear; inspect artifacts before continuing"
+        actions = (
+            "inspect local raw, summary, last-message, worktree, and issue comments",
+            "do not report, complete, merge, or close until evidence is understood",
+        )
+
+    if validation_required and "run targeted validation for the recovered work" not in actions:
+        actions = actions + (
+            "run targeted validation for the recovered work",
+            "run full validation before report, PR, or merge",
+        )
+
+    return CodexSubagentTakeoverPlan(
+        status=status,
+        reason=reason,
+        takeover_required=takeover_required,
+        artifact_repair_required=artifact_repair_required,
+        validation_required=validation_required,
+        required_actions=actions,
+        forbidden_actions=(
+            "no GitHub mutation until the corresponding Signposter plan is ready",
+            "no issue close outside integration",
+            "no merge before gate, CI, review, and approval requirements pass",
+            "no raw backend output posting to GitHub",
+        ),
+        output=output,
+    )
+
+
 def format_codex_subagent_output_normalization(
     result: CodexSubagentOutputNormalization,
 ) -> str:
@@ -229,6 +305,41 @@ def format_codex_subagent_output_normalization(
             "  No GitHub mutation was performed.",
             "  No OpenClaw execution was performed.",
             "  No Codex CLI execution was performed by this formatter.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def format_codex_subagent_takeover_plan(plan: CodexSubagentTakeoverPlan) -> str:
+    """Render a compact stuck-subagent takeover plan."""
+    lines = [
+        "Signposter Codex Subagent Takeover Plan",
+        "",
+        "Status:",
+        f"  {plan.status}",
+        "",
+        "Reason:",
+        f"  {plan.reason}",
+        "",
+        "State:",
+        f"  execution_status: {plan.output.execution_status}",
+        f"  takeover_required: {'yes' if plan.takeover_required else 'no'}",
+        f"  artifact_repair_required: {'yes' if plan.artifact_repair_required else 'no'}",
+        f"  validation_required: {'yes' if plan.validation_required else 'no'}",
+        "",
+        "Required actions:",
+    ]
+    lines.extend(f"  - {action}" for action in plan.required_actions)
+    lines.extend(["", "Forbidden actions:"])
+    lines.extend(f"  - {action}" for action in plan.forbidden_actions)
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "  Raw output remains local.",
+            "  No GitHub mutation was performed.",
+            "  No OpenClaw execution was performed.",
+            "  No Codex CLI execution was performed by this planner.",
         ]
     )
     return "\n".join(lines)
