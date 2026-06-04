@@ -21,6 +21,7 @@ def test_control_plane_status_formats_empty_read_only_view() -> None:
 
     assert result.status == "ready"
     assert "Signposter Control Plane Status" in output
+    assert "Current task:\n  active: none\n  next: none\n  stop reason: none" in output
     assert "Agreement:\n  status: not evaluated" in output
     assert "Refresh:\n  mode: single-snapshot" in output
     assert "auto-refresh: off" in output
@@ -101,6 +102,10 @@ def test_control_plane_status_formats_active_sources() -> None:
     assert result.status == "ready"
     assert "Agreement:" in output
     assert "status: aligned" in output
+    assert "Current task:" in output
+    assert "active: none" in output
+    assert "next: H045E (#157, state=ready)" in output
+    assert "stop reason: none" in output
     assert "planner issue: #157" in output
     assert "scheduler issue: #157" in output
     assert "active issues: none" in output
@@ -140,6 +145,10 @@ def test_control_plane_status_surfaces_active_issue_stuck_diagnostics() -> None:
     output = format_control_plane_status(result)
 
     assert result.status == "ready"
+    assert "Current task:" in output
+    assert "active: #2" in output
+    assert "next: none" in output
+    assert "stop reason: none" in output
     assert "active issues: #2" in output
     assert "active: stale-active=1" in output
     assert "active diagnostics:" in output
@@ -175,6 +184,10 @@ def test_control_plane_status_surfaces_blocked_state() -> None:
 
     assert result.status == "blocked"
     assert "Status:\n  blocked" in output
+    assert "Current task:" in output
+    assert "active: none" in output
+    assert "next: none" in output
+    assert "stop reason: OpenClaw execution requires explicit --execute" in output
     assert "stop: OpenClaw execution requires explicit --execute" in output
     assert "takeover: runtime-stall — worker artifact incomplete" in output
 
@@ -223,6 +236,10 @@ def test_control_plane_status_blocks_disagreed_targets() -> None:
     output = format_control_plane_status(result)
 
     assert result.status == "blocked"
+    assert "Current task:" in output
+    assert "active: none" in output
+    assert "next: H045E (#157, state=ready)" in output
+    assert "stop reason: evaluated sources point at different issues" in output
     assert "Agreement:" in output
     assert "status: disagreement" in output
     assert "planner issue: #157" in output
@@ -282,6 +299,10 @@ def test_control_plane_status_blocks_ready_target_when_active_work_differs() -> 
     output = format_control_plane_status(result)
 
     assert result.status == "blocked"
+    assert "Current task:" in output
+    assert "active: #236" in output
+    assert "next: H049-032 (#239, state=ready)" in output
+    assert "stop reason: evaluated sources point at different issues" in output
     assert "status: disagreement" in output
     assert "planner issue: #239" in output
     assert "scheduler issue: #239" in output

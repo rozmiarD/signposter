@@ -17,9 +17,11 @@ def test_plain_signposter_remains_help_only_with_status_hint(
         main()
 
     output = capsys.readouterr().out
+    normalized = " ".join(output.split())
 
     assert exc_info.value.code == 0
     assert "usage: signposter" in output
     assert "Operator status:" in output
     assert "signposter control-plane status --repo OWNER/REPO" in output
+    assert "current task, next task, and stop reason" in normalized
     assert "Bare `signposter` remains help-only" in output
