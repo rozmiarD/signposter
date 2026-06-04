@@ -128,6 +128,13 @@ def test_format_integration_plan_contains_key_sections():
     assert "associated issue: #4" in output
     assert "proposed workflow state: state:merged" in output
     assert "close reason: completed" in output
+    assert "Pending issue closure:" in output
+    assert "category: pending-issue-closure" in output
+    assert "reason: PR #5 is merged but issue #4 remains open" in output
+    assert (
+        "apply command: signposter integration apply --repo <repo> --pr 5 --apply"
+        in output
+    )
     assert "No issue was closed" in output
     assert "Status:" in output
     assert "ready" in output
@@ -573,6 +580,12 @@ def test_integration_apply_dry_run_ready_when_main_ci_pass():
     output = format_integration_apply_dry_run(plan)
 
     assert "main CI: pass" in output
+    assert "Pending issue closure:" in output
+    assert (
+        "apply command: signposter integration apply --repo <repo> --pr 5 --apply"
+        in output
+    )
+    assert "next: run integration apply only after the dry-run remains ready" in output
     assert "Status:\n  ready" in output
 
 
