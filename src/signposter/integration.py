@@ -467,6 +467,8 @@ def integration_apply_status(plan: IntegrationPlan, repo: str | None = None) -> 
 
     Also runs the centralized label preflight (H023C) when repo is provided.
     """
+    if plan.status == "completed":
+        return "completed"
     if plan.status != "ready":
         return f"blocked — integration plan is not ready ({plan.status})"
     if plan.associated_issue is None:
@@ -534,6 +536,14 @@ def apply_integration(
         }
 
     # Mutation path - very strictly guarded
+    if plan.status == "completed":
+        return {
+            "mode": "apply_completed",
+            "plan": plan,
+            "success": True,
+            "results": ["integration already completed"],
+        }
+
     if plan.status != "ready":
         return {
             "mode": "apply_blocked",

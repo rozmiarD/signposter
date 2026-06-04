@@ -273,8 +273,9 @@ def test_integration_apply_already_integrated_does_not_mutate():
         result = apply_integration("test/repo", 5, apply=True)
 
     mock_run.assert_not_called()
-    assert result["mode"] == "apply_blocked"
-    assert "completed" in result.get("error", "")
+    assert result["mode"] == "apply_completed"
+    assert result["success"] is True
+    assert result["results"] == ["integration already completed"]
 
 
 def test_integration_apply_refuses_when_not_state_done():
@@ -773,7 +774,11 @@ def test_integration_apply_refuses_when_required_labels_missing(monkeypatch):
 
 def test_integration_apply_dry_run_completed_plan_shows_no_mutations():
     """Completed integration plans must not list concrete pending mutations."""
-    from signposter.integration import IntegrationPlan, format_integration_apply_dry_run
+    from signposter.integration import (
+        IntegrationPlan,
+        format_integration_apply_dry_run,
+        integration_apply_status,
+    )
 
     plan = IntegrationPlan(
         pr_number=7,
@@ -803,6 +808,61 @@ def test_integration_apply_dry_run_completed_plan_shows_no_mutations():
 
     # Must clearly say no pending mutations
     assert "none — integration already completed" in output
+    assert "blocked" not in output
+    assert integration_apply_status(plan) == "completed"
+
+
+def test_cli_integration_apply_dry_run_completed_returns_success(monkeypatch, capsys):
+    from signposter.cli import main
+
+    plan = IntegrationPlan(
+        pr_number=7,
+        pr_title="test",
+        pr_state="MERGED",
+        merge_commit="abc123",
+        base_branch="main",
+        head_branch="work/issue-6-xxx",
+        associated_issue=6,
+        issue_state="CLOSED",
+        current_workflow_state="state:merged",
+        proposed_workflow_state="state:merged",
+        close_issue=True,
+        close_reason="completed",
+        main_ci_status="pass",
+        status="completed",
+        notes=[],
+    )
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "integration",
+            "apply",
+            "--repo",
+            "test/repo",
+            "--pr",
+            "7",
+        ],
+    )
+
+    with patch(
+        "signposter.cli.apply_integration",
+        return_value={
+            "mode": "dry_run",
+            "plan": plan,
+            "apply_status": "completed",
+            "would_execute": False,
+        },
+    ), pytest.raises(SystemExit) as exc:
+        main()
+
+    out = capsys.readouterr().out
+    assert exc.value.code == 0
+    assert "none — integration already completed" in out
+    assert "Status:" in out
+    assert "completed" in out
 
 
 def test_integration_apply_dry_run_not_ready_shows_no_mutations():
