@@ -64,6 +64,42 @@ def _has_auto_close_keywords(body: str | None) -> bool:
     return contains_auto_close_keyword(body)
 
 
+def merge_override_notes(
+    *,
+    allow_medium_scope: bool = False,
+    allow_large_scope: bool = False,
+    allow_medium_risk: bool = False,
+    allow_high_risk: bool = False,
+    context: str,
+) -> list[str]:
+    """Return deterministic override notes for plan or apply surfaces."""
+    if context == "planning":
+        suffix = "for planning only."
+    elif context == "apply":
+        suffix = "for merge apply."
+    else:
+        raise ValueError(f"unsupported merge override note context: {context}")
+
+    notes: list[str] = []
+    if allow_high_risk:
+        notes.append(f"High-risk override explicitly allowed by operator {suffix}")
+    if allow_medium_risk:
+        notes.append(f"Medium-risk override explicitly allowed by operator {suffix}")
+    if allow_medium_scope:
+        notes.append(f"Medium-scope override explicitly allowed by operator {suffix}")
+    if allow_large_scope:
+        notes.append(f"Large-scope override explicitly allowed by operator {suffix}")
+    return notes
+
+
+def _merge_plan_override_notes(plan: MergePlan) -> list[str]:
+    return [
+        note
+        for note in plan.notes
+        if "override explicitly allowed by operator" in note
+    ]
+
+
 def _extract_issue_from_branch_or_body(head_branch: str, body: str | None) -> int | None:
     return detect_pr_issue_linkage(head_branch, body).associated_issue
 
@@ -156,14 +192,15 @@ def plan_merge_for_pr(
         "Local worktree cleanup is not part of this command.",
     ]
 
-    if allow_high_risk:
-        notes.append("High-risk override explicitly allowed by operator for planning only.")
-    if allow_medium_risk:
-        notes.append("Medium-risk override explicitly allowed by operator for planning only.")
-    if allow_medium_scope:
-        notes.append("Medium-scope override explicitly allowed by operator for planning only.")
-    if allow_large_scope:
-        notes.append("Large-scope override explicitly allowed by operator for planning only.")
+    notes.extend(
+        merge_override_notes(
+            allow_medium_scope=allow_medium_scope,
+            allow_large_scope=allow_large_scope,
+            allow_medium_risk=allow_medium_risk,
+            allow_high_risk=allow_high_risk,
+            context="planning",
+        )
+    )
 
     try:
         pr_data = _run_gh_pr_view(
@@ -616,5 +653,7 @@ def format_merge_apply_dry_run(plan: MergePlan) -> str:
     lines.append(
         "  Remote branch deletion would only happen after successful merge via --delete-branch."
     )
+    for note in _merge_plan_override_notes(plan):
+        lines.append(f"  {note}")
 
     return "\n".join(lines)

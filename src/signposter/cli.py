@@ -82,6 +82,7 @@ from signposter.merge import (
     apply_merge,
     format_merge_apply_dry_run,
     format_merge_plan,
+    merge_override_notes,
     plan_merge_for_pr,
 )
 from signposter.orchestrator import (
@@ -2314,6 +2315,14 @@ def run_merge_apply(args: argparse.Namespace) -> int:
             print(
                 "  Remote branch deletion was requested via gh pr merge --delete-branch."
             )
+            for note in merge_override_notes(
+                allow_medium_scope=allow_medium_scope,
+                allow_large_scope=allow_large_scope,
+                allow_medium_risk=allow_medium_risk,
+                allow_high_risk=allow_high_risk,
+                context="apply",
+            ):
+                print(f"  {note}")
             return 0 if success else 1
         else:
             # apply_blocked
