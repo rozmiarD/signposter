@@ -713,6 +713,113 @@ def test_cli_merge_apply_success_includes_apply_override_notes(monkeypatch, caps
     assert "for planning only" not in output
 
 
+def test_apply_merge_stops_after_failed_merge_command():
+    from signposter.merge import apply_merge
+
+    fake_plan = MergePlan(
+        pr_number=5, title="test", state="OPEN", base_branch="main",
+        head_branch="work/issue-4-xxx", mergeable="MERGEABLE",
+        review_decision="APPROVED", checks_status="pass",
+        successful_checks=1, failing_checks=0, pending_checks=0,
+        github_approved=True, approving_reviewers=["AlphaExatron"],
+        has_non_author_approval=True, pr_author="ExatronOmega",
+        reviewer_gate_pass=True, reviewer_verdict="APPROVE",
+        reviewer_confidence=0.95, reviewer_risk="low",
+        associated_issue=4, has_auto_close_keywords=False,
+        files_changed=1, additions=8, deletions=0,
+        risk_level="low", size="small",
+        merge_method="squash", delete_branch_after_merge=True,
+        command_preview="gh pr merge 5 -R test/repo --squash --delete-branch",
+        status="ready",
+        notes=[],
+    )
+
+    failed = type(
+        "Result",
+        (),
+        {
+            "returncode": 1,
+            "stdout": "",
+            "stderr": "merge failed before branch deletion",
+        },
+    )()
+
+    with patch("signposter.merge.plan_merge_for_pr", return_value=fake_plan), \
+         patch("signposter.merge.subprocess.run", return_value=failed) as run:
+        result = apply_merge("test/repo", 5, apply=True)
+
+    assert run.call_count == 1
+    assert run.call_args.args[0] == [
+        "gh", "pr", "merge", "5",
+        "-R", "test/repo",
+        "--squash",
+        "--delete-branch",
+    ]
+    assert result["mode"] == "apply"
+    assert result["success"] is False
+    assert "gh pr merge failed" in result["error"]
+    assert "merge failed before branch deletion" in result["error"]
+
+
+def test_cli_merge_apply_failure_reports_no_later_mutations(monkeypatch, capsys):
+    from signposter.cli import main
+
+    fake_plan = MergePlan(
+        pr_number=5, title="test", state="OPEN", base_branch="main",
+        head_branch="work/issue-4-xxx", mergeable="MERGEABLE",
+        review_decision="APPROVED", checks_status="pass",
+        successful_checks=1, failing_checks=0, pending_checks=0,
+        github_approved=True, approving_reviewers=["AlphaExatron"],
+        has_non_author_approval=True, pr_author="ExatronOmega",
+        reviewer_gate_pass=True, reviewer_verdict="APPROVE",
+        reviewer_confidence=0.95, reviewer_risk="low",
+        associated_issue=4, has_auto_close_keywords=False,
+        files_changed=1, additions=8, deletions=0,
+        risk_level="low", size="small",
+        merge_method="squash", delete_branch_after_merge=True,
+        command_preview="gh pr merge 5 -R test/repo --squash --delete-branch",
+        status="ready",
+        notes=[],
+    )
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "merge",
+            "apply",
+            "--repo",
+            "test/repo",
+            "--pr",
+            "5",
+            "--apply",
+        ],
+    )
+
+    with patch(
+        "signposter.cli.apply_merge",
+        return_value={
+            "mode": "apply",
+            "plan": fake_plan,
+            "success": False,
+            "command": "gh pr merge 5 -R test/repo --squash --delete-branch",
+            "stdout": "",
+            "stderr": "merge failed before branch deletion",
+            "error": "gh pr merge failed: merge failed before branch deletion",
+        },
+    ), pytest.raises(SystemExit) as exc:
+        main()
+
+    output = capsys.readouterr().out
+
+    assert exc.value.code == 1
+    assert "status: failed" in output
+    assert "stderr: merge failed before branch deletion" in output
+    assert "No issue was closed by Signposter." in output
+    assert "No local worktree was removed." in output
+
+
 def test_cli_merge_apply_dry_run_returns_blocked_exit_for_blocked_plan(
     monkeypatch, capsys
 ):
