@@ -46,6 +46,29 @@ class CodexSubagentDispatchContract:
         return self.invocation.session_key
 
 
+@dataclass(frozen=True)
+class CodexSubagentOutputNormalization:
+    """Normalized, gate-friendly view of one subagent output set."""
+
+    backend: str
+    role_name: str
+    execution_agent: str
+    model: str
+    reasoning_effort: str
+    execution_status: str
+    exit_code: int
+    task_execution_complete: bool
+    acceptance: str
+    takeover_required: bool
+    raw_artifact: Path
+    summary_artifact: Path
+    last_message_artifact: Path
+    raw_exists: bool
+    summary_exists: bool
+    last_message_exists: bool
+    guidance: tuple[str, ...]
+
+
 def plan_codex_subagent_dispatch(
     *,
     task_scope: str,
@@ -115,6 +138,102 @@ def plan_codex_subagent_dispatch(
     )
 
 
+def normalize_codex_subagent_output(
+    contract: CodexSubagentDispatchContract,
+    *,
+    execution_status: str,
+    exit_code: int,
+    raw_exists: bool,
+    summary_exists: bool,
+    last_message_exists: bool,
+) -> CodexSubagentOutputNormalization:
+    """Normalize observed subagent artifacts into a compact completion state."""
+    status = execution_status.strip().lower()
+    complete = status == "success" and exit_code == 0 and raw_exists and summary_exists
+    guidance: list[str] = []
+
+    if status != "success" or exit_code != 0:
+        guidance.append("subagent output requires takeover before gate evaluation")
+    if not raw_exists:
+        guidance.append("raw artifact is missing")
+    if not summary_exists:
+        guidance.append("summary artifact is missing")
+    if not last_message_exists:
+        guidance.append("last-message artifact is missing or was not produced")
+    if complete:
+        guidance.append("subagent output is normalized and ready for bounded summary use")
+
+    return CodexSubagentOutputNormalization(
+        backend=contract.backend,
+        role_name=contract.role_name,
+        execution_agent=contract.execution_agent,
+        model=contract.model,
+        reasoning_effort=contract.reasoning_effort,
+        execution_status=status,
+        exit_code=exit_code,
+        task_execution_complete=complete,
+        acceptance="pass" if complete else "needs-work",
+        takeover_required=not complete,
+        raw_artifact=contract.raw_artifact,
+        summary_artifact=contract.summary_artifact,
+        last_message_artifact=contract.last_message_artifact,
+        raw_exists=raw_exists,
+        summary_exists=summary_exists,
+        last_message_exists=last_message_exists,
+        guidance=tuple(guidance),
+    )
+
+
+def format_codex_subagent_output_normalization(
+    result: CodexSubagentOutputNormalization,
+) -> str:
+    """Render normalized subagent output state without raw log content."""
+    lines = [
+        "Signposter Codex Subagent Output Normalization",
+        "",
+        "Status:",
+        "  complete" if result.task_execution_complete else "  blocked",
+        "",
+        "Role:",
+        f"  role: {result.role_name}",
+        f"  agent: {result.execution_agent}",
+        f"  model: {result.model}",
+        f"  reasoning: {result.reasoning_effort}",
+        "",
+        "Execution:",
+        f"  status: {result.execution_status}",
+        f"  exit_code: {result.exit_code}",
+        f"  task_execution_complete: {'yes' if result.task_execution_complete else 'no'}",
+        f"  acceptance: {result.acceptance}",
+        f"  takeover_required: {'yes' if result.takeover_required else 'no'}",
+        "",
+        "Artifacts:",
+        f"  raw: {result.raw_artifact} (exists: {'yes' if result.raw_exists else 'no'})",
+        (
+            f"  summary: {result.summary_artifact} "
+            f"(exists: {'yes' if result.summary_exists else 'no'})"
+        ),
+        (
+            f"  last_message: {result.last_message_artifact} "
+            f"(exists: {'yes' if result.last_message_exists else 'no'})"
+        ),
+        "",
+        "Guidance:",
+    ]
+    lines.extend(f"  - {item}" for item in result.guidance)
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "  Raw output remains local.",
+            "  No GitHub mutation was performed.",
+            "  No OpenClaw execution was performed.",
+            "  No Codex CLI execution was performed by this formatter.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def format_codex_subagent_dispatch_contract(
     contract: CodexSubagentDispatchContract,
 ) -> str:
@@ -149,6 +268,11 @@ def format_codex_subagent_dispatch_contract(
         f"  working_dir: {contract.working_dir}",
         f"  timeout_seconds: {contract.timeout_seconds}",
         f"  takeover: {contract.takeover_condition}",
+        "",
+        "Output normalization:",
+        "  success requires execution_status=success, exit_code=0, raw exists, and summary exists",
+        "  non-success, missing raw, or missing summary requires takeover before gate",
+        "  last-message artifact is useful for audit but raw/summary remain authoritative",
         "",
         "Forbidden actions:",
     ]
