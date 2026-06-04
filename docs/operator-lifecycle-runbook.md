@@ -2,271 +2,339 @@
 
 ## Purpose
 
-Concise local operator runbook for taking a low-risk issue through the full Signposter workflow from `state:ready` to merged, integrated, and cleaned up. This runbook reflects the hardened workflow after SMOKE-002 and subsequent safety improvements.
+This runbook describes the current Signposter operator flow for moving a scoped
+GitHub issue through worktree execution, evidence, gate, PR, review, merge,
+integration, cleanup, and planner advancement.
+
+Signposter is the control plane. Prefer Signposter planning surfaces over direct
+manual GitHub mutation. Use direct `gh` only when Signposter prints it as a
+planned bridge or the current surface is planning-only.
 
 ## Safety Rules
 
-- Dry-run / read-only by default on all commands.
-- GitHub mutations require explicit `--apply`.
-- OpenClaw execution requires explicit `--execute`.
-- Do **not** use auto-close keywords (`Closes`, `Fixes`, `Resolves`) in commits or PR bodies.
-- Issues close **only** via `integration apply`.
-- Keep raw artifacts local (`artifacts/runs/`).
-- Do not expose OpenClaw publicly.
+- Dry-run/read-only is the default.
+- GitHub mutation requires explicit `--apply`.
+- Execution backends require explicit execution permission.
+- Raw backend artifacts stay local under `artifacts/runs/`.
+- GitHub comments get bounded summaries only.
+- Do not use auto-close PR keywords such as `Closes`, `Fixes`, or `Resolves`.
+- `state:done` does not close an issue.
+- Issue closure belongs to `integration apply`.
+- Merge requires green CI, review gate pass, and non-author approval when policy
+  requires it.
+- High-risk and medium/high-scope paths require explicit override flags.
+- If a critical mutation fails, stop before later lifecycle mutations.
 
-## Safe PR–issue Linkage
-
-Supported default linkage:
-- Branch name pattern: `work/issue-N-slug`
-- PR body line: `Related issue: #N`
-
-Intentionally not used by default:
-- `Closes #N`, `Fixes #N`, `Resolves #N`
-- Formal GitHub "Development" links
-
-Why this model:
-- Merge must never close the issue.
-- Only `signposter integration apply` owns issue closure.
-- Lifecycle can still correctly detect the relationship via branch pattern + "Related issue" text (reported as `source: branch-pattern`, `formal GitHub development link: no/unknown`).
-
-## Happy Path
-
-### 1. Preflight
+## Common Variables
 
 ```bash
 REPO=ExatronOmega/signposter
-ISSUE=42
-
-git status
-git fetch origin
-signposter labels check --repo $REPO
-signposter labels ensure --repo $REPO
-signposter sync plan --repo $REPO
+ISSUE=284
+PR=368
+WORKTREE=../signposter-work/$ISSUE
 ```
 
-### 2. Issue Expectations
+Run commands from the repository root unless the command explicitly targets the
+isolated worktree.
 
-- Must have required workflow labels (see `signposter labels check`).
-- Expected starting state: `state:ready`.
-- Low-risk worker issue assumptions: docs-only or narrow scoped change, clear acceptance criteria, no high-risk signals.
+## Planner First
 
-### 3. Worktree Setup
+Use the manifest-scoped planner to identify the next roadmap task.
+
+```bash
+signposter planner run \
+  --manifest /tmp/signposter-h049-manifest.json \
+  --sync-github \
+  --dry-run
+```
+
+If a completed dependency can promote the next task, dry-run first:
+
+```bash
+signposter planner advance \
+  --manifest /tmp/signposter-h049-manifest.json \
+  --issue $ISSUE \
+  --sync-github \
+  --dry-run
+```
+
+Apply only when the plan lists the exact label mutation expected:
+
+```bash
+signposter planner advance \
+  --manifest /tmp/signposter-h049-manifest.json \
+  --issue $ISSUE \
+  --sync-github \
+  --apply
+```
+
+## Issue Start
+
+Confirm the issue is eligible and dependency-clear.
 
 ```bash
 signposter run --repo $REPO --issue $ISSUE --dry-run
 signposter worktree plan --repo $REPO --issue $ISSUE
-signposter worktree apply --repo $REPO --issue $ISSUE --apply
 ```
 
-### 4. Worker Execution
+Expected safe output:
+
+- issue is `state:ready`;
+- dependency status is clear;
+- worktree plan status is `ready`;
+- no branch or worktree was created by the plan.
+
+## Worktree, Claim, Prompt
+
+Create the isolated worktree only after the worktree plan is ready.
 
 ```bash
-signposter run --repo $REPO --issue $ISSUE --claim
-signposter run --repo $REPO --issue $ISSUE --write-prompt
+signposter worktree apply --repo $REPO --issue $ISSUE --apply
+signposter run --repo $REPO --issue $ISSUE --claim --write-prompt
+```
+
+The claim step mutates labels from `state:ready` to `state:active` and adds the
+planned gate label. Prompt generation writes a local artifact and does not run a
+backend.
+
+## Execution and Takeover
+
+Run the assigned backend only when execution is intended.
+
+```bash
 signposter run --repo $REPO --issue $ISSUE --execute --worktree
 ```
 
-### 5. Evidence Check
+If backend output is unavailable, malformed, or classified as a runtime problem:
+
+1. preserve the original raw and summary artifacts with a diagnostic suffix;
+2. continue from the existing worktree when safe;
+3. complete the scoped implementation manually;
+4. write a clean worker summary in the canonical artifact path;
+5. keep raw diagnostic output local.
+
+Manual worker summaries should include:
+
+- repository and issue;
+- agent/backend or takeover note;
+- exit code and completion status;
+- changed files;
+- validation evidence;
+- safety notes;
+- gate recommendation.
+
+## Local Validation
+
+Run targeted validation first, then full validation before push.
 
 ```bash
-WORKTREE=../signposter-work/$ISSUE
-git -C $WORKTREE status
-git -C $WORKTREE diff
+PYTHONPATH="$PWD/src" /home/probo/projects/signposter/.venv/bin/ruff check <changed-files>
+PYTHONPATH="$PWD/src" /home/probo/projects/signposter/.venv/bin/python -m pytest <targeted-tests> -q
 
-# Inspect worker output
-ls -l artifacts/runs/issue-$ISSUE-*.summary.md
-cat artifacts/runs/issue-$ISSUE-*.summary.md
+PYTHONPATH="$PWD/src" /home/probo/projects/signposter/.venv/bin/ruff check .
+PYTHONPATH="$PWD/src" /home/probo/projects/signposter/.venv/bin/python -m pytest tests/ -q
 ```
 
-### 6. Report / Gate / Complete
+For documentation-only changes, `git diff --check -- <doc-file>` is the targeted
+validation. Full ruff and pytest still run before push.
+
+## Report, Gate, Complete
+
+Post only a bounded runner report to GitHub.
 
 ```bash
-signposter report --repo $REPO --issue $ISSUE --apply
-signposter gate --repo $REPO --issue $ISSUE
+signposter report \
+  --repo $REPO \
+  --issue $ISSUE \
+  --summary artifacts/runs/issue-$ISSUE-worker.summary.md \
+  --apply
+```
 
-# NOTE: complete --apply now requires a passing gate decision
+Evaluate the gate before completing the issue.
+
+```bash
+signposter gate --repo $REPO --issue $ISSUE --dry-run
 signposter complete --repo $REPO --issue $ISSUE --apply
 ```
 
-### 7. Handoff / Commit / Push
+`complete --apply` changes `state:active` to `state:done`. It does not close the
+issue.
 
-```bash
-signposter handoff plan --repo $REPO --issue $ISSUE
+## Commit, Push, PR
 
-git -C $WORKTREE add .
-git -C $WORKTREE commit -m "docs: <concise description>
-
-- Scope followed 100%
-- README.md only
-- Dirty guard: clean
-"
-git -C $WORKTREE push -u origin HEAD
-```
-
-### 8. PR Creation
+Plan PR metadata before creating a PR.
 
 ```bash
 signposter pr plan --repo $REPO --issue $ISSUE
-
-gh pr create \
-  -R $REPO \
-  --head $(git -C $WORKTREE rev-parse --abbrev-ref HEAD) \
-  --base main \
-  --title "docs: <title>" \
-  --body "$(cat artifacts/prompts/issue-$ISSUE.md)"
-# Do NOT include Closes/Fixes/Resolves keywords
 ```
 
-### 9. Review
+Commit only intended files from the issue worktree.
 
 ```bash
-signposter review plan --repo $REPO --pr $PR
+git -C $WORKTREE status --short
+git -C $WORKTREE add <changed-files>
+git -C $WORKTREE commit -m "<type>: <concise description>"
+git -C $WORKTREE push -u origin HEAD
+```
+
+Create the PR using the title and body shape from `signposter pr plan`. The PR
+body should include `Related issue: #N` and must not include auto-close keywords.
+
+## CI
+
+After pushing a branch or merging a PR, select the GitHub Actions run by branch
+or commit and watch it to completion.
+
+```bash
+gh pr checks $PR --repo $REPO
+```
+
+For main after merge:
+
+```bash
+MERGE_COMMIT="$(gh pr view "$PR" --repo "$REPO" --json mergeCommit --jq '.mergeCommit.oid')"
+RUN_ID="$(gh run list -R "$REPO" --branch main --commit "$MERGE_COMMIT" --limit 1 --json databaseId --jq '.[0].databaseId')"
+gh run watch -R "$REPO" "$RUN_ID" --exit-status
+```
+
+Do not merge on red CI.
+
+## Review
+
+Generate and execute the reviewer prompt through Signposter where available.
+
+```bash
 signposter review write-prompt --repo $REPO --pr $PR
 signposter review execute --repo $REPO --pr $PR
+```
+
+For high-risk prompt generation:
+
+```bash
+signposter review write-prompt --repo $REPO --pr $PR --allow-high-risk
+```
+
+If reviewer execution is unavailable, preserve runtime diagnostics and write a
+parser-compatible manual reviewer artifact. Validate before submit:
+
+```bash
+signposter review validate-artifact --pr $PR --summary-output
 signposter review gate --repo $REPO --pr $PR
+```
+
+Use explicit risk overrides when required:
+
+```bash
+signposter review gate --repo $REPO --pr $PR --allow-medium-risk
+signposter review gate --repo $REPO --pr $PR --allow-high-risk
+```
+
+Submit approval only after the review gate passes:
+
+```bash
 signposter review submit --repo $REPO --pr $PR --apply
 ```
 
-### 10. Merge
+## Merge
+
+Plan merge first.
 
 ```bash
 signposter merge plan --repo $REPO --pr $PR
-signposter merge apply --repo $REPO --pr $PR --apply
-
-# Wait for main CI to pass on the merge commit
 ```
 
-### 11. Integration
+If the plan is blocked only by an explicit operator-approved scope or risk
+override, repeat the plan with the matching flag:
+
+```bash
+signposter merge plan --repo $REPO --pr $PR --allow-medium-scope
+signposter merge plan --repo $REPO --pr $PR --allow-medium-risk
+signposter merge plan --repo $REPO --pr $PR --allow-high-risk
+```
+
+Apply only when merge plan status is `ready`.
+
+```bash
+signposter merge apply --repo $REPO --pr $PR --apply
+```
+
+Pass the same explicit override flags to `merge apply` when the ready plan used
+them.
+
+## Integration
+
+Integration owns issue closure after merge and main CI pass.
 
 ```bash
 signposter integration plan --repo $REPO --pr $PR
 signposter integration apply --repo $REPO --pr $PR --apply
 ```
 
-### 12. Cleanup
+Expected result:
+
+- remove `state:done`;
+- add `state:merged`;
+- close the issue as completed.
+
+Validated no-op tasks use the no-PR integration surface:
+
+```bash
+signposter integration noop-plan --repo $REPO --issue $ISSUE
+signposter integration noop-apply --repo $REPO --issue $ISSUE --apply
+```
+
+## Cleanup
+
+Cleanup owns local worktree and local branch removal only.
 
 ```bash
 signposter cleanup plan --repo $REPO --pr $PR
 signposter cleanup apply --repo $REPO --pr $PR --apply
 ```
 
-### 13. Final Verification
+Cleanup does not mutate the issue or PR.
+
+## Final Verification
 
 ```bash
 signposter lifecycle status --repo $REPO --issue $ISSUE
-signposter lifecycle status --repo $REPO --pr $PR
-
+git status --short --branch
 git worktree list
 git branch --list "*issue-$ISSUE*"
 ```
 
-## Recovery / Blocked States
+Complete lifecycle status should show:
 
-### Missing Labels
+- issue closed;
+- workflow state `state:merged`;
+- PR merged;
+- integration yes;
+- cleanup complete yes.
+
+## Recovery Checklist
+
+When a task appears stuck, inspect before taking over:
+
 ```bash
-signposter labels check --repo $REPO
-signposter labels ensure --repo $REPO
-signposter labels ensure --repo $REPO --apply
+signposter lifecycle status --repo $REPO --issue $ISSUE
+signposter lifecycle next --repo $REPO --issue $ISSUE
+signposter orchestrator next --repo $REPO --issue $ISSUE
+git -C $WORKTREE status --short --branch
+ls -l artifacts/runs/
+gh pr view $PR --repo $REPO --json state,mergeable,reviewDecision,statusCheckRollup
 ```
 
-### Push Rejected / Fetch First
-```bash
-signposter sync plan --repo $REPO
-signposter sync apply --repo $REPO --rebase --apply
-# Then retry push
-```
+Common recovery paths:
 
-### Gate NEEDS-WORK
-```bash
-# Inspect evidence
-cat artifacts/runs/issue-$ISSUE-*.summary.md
-cat artifacts/runs/issue-$ISSUE-*.raw.txt
+- active issue with worktree and prompt but no usable summary: resume existing
+  worktree, preserve artifacts, then write a clean manual worker summary if
+  needed;
+- active issue with worktree but no prompt: regenerate prompt before execution;
+- active issue with prompt but no worktree: repair or recreate worktree before
+  continuing;
+- PR with red CI: inspect CI logs, fix in the same branch, rerun validation, and
+  do not merge until CI is green;
+- merged PR with open issue: run integration plan/apply;
+- merged/integrated issue with local worktree or branch: run cleanup plan/apply.
 
-# Rerun worker or improve evidence, then re-report + gate
-# Do NOT run complete until gate returns PASS
-```
-
-### Worktree Dirty
-```bash
-git -C $WORKTREE status
-# Do not use --allow-dirty unless intentionally bypassing safety checks
-```
-
-### Already Integrated
-- `integration apply` reports `completed` (safe no-op).
-
-### Already Cleaned
-- `cleanup apply` reports `completed` (safe no-op).
-
-### Completed Issue Gate
-- `gate --issue N` on CLOSED + `state:merged` reports `NOT-APPLICABLE` / `completed`.
-
-## Variables
-
-- `REPO=ExatronOmega/signposter`
-- `ISSUE=N`
-- `PR=P`
-- `WORKTREE=../signposter-work/N`
-- `BRANCH=work/issue-N-slug`
-
-## Notes
-
-- SMOKE-002 validated the full end-to-end flow (issue #6 / PR #7).
-- SMOKE-003 validated the post-H027 lifecycle path (issue #8).
-- The workflow is intentionally manual and observable at every step.
-- All mutations are explicit and reversible until the final integration step.
-
-## Lifecycle watch operator usage
-
-`signposter lifecycle watch` is a read-only operator-facing status surface for a single issue. It emits the lifecycle watch contract output and does not perform polling-side effects, GitHub mutations, OpenClaw execution, manifest mutation, merge, integration, or cleanup.
-
-Ready-path example command:
-
-    signposter lifecycle watch --repo ExatronOmega/signposter --issue 13 --interval 5
-
-Expected ready-path shape:
-
-    Signposter Lifecycle Watch — Issue #13
-
-    Status:
-      ready
-
-    Notes:
-      No GitHub mutation was performed.
-      No OpenClaw execution was performed.
-      Interval requested: 5s (polling not in this surface)
-
-Blocked-path example command:
-
-    signposter lifecycle watch --issue 13 --interval 5
-
-Expected blocked-path shape:
-
-    Signposter Lifecycle Watch
-
-    Status:
-      blocked
-
-    Reason:
-      --repo and --issue are required
-
-    Notes:
-      No GitHub mutation was performed.
-      No OpenClaw execution was performed.
-
-Operator rules:
-
-- Treat `lifecycle watch` as read-only evidence, not as an execution step.
-- Do not expect it to claim issues, create worktrees, run OpenClaw, merge PRs, integrate issues, or clean local branches.
-- Use `lifecycle status` for the broader cross-phase lifecycle summary.
-- Use `lifecycle next` for the next recommended safe operator action.
-- Use planner commands for dependency advancement and task selection.
-- Keep issue closure owned by the integration flow, not by watch/status commands.
-
-Safety guarantees:
-
-- No GitHub mutation is performed.
-- No OpenClaw execution is performed.
-- No manifest mutation is performed.
-- No local cleanup is performed.
-- Missing preconditions produce a blocked contract output.
+Do not continue later mutations after an earlier critical mutation failed.
