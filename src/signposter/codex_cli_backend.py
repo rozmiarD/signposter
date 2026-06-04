@@ -343,6 +343,7 @@ def _format_codex_cli_summary(
         role=invocation.agent,
         model=invocation.model,
         reasoning_effort=invocation.reasoning_effort,
+        backend="codex-cli",
         output_text=output,
     )
     lines = [
