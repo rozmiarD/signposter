@@ -288,6 +288,11 @@ def test_render_prompt_worker_uses_compact_format():
     assert "# Signposter Worker Prompt" in content
     assert "## Context" in content
     assert "## Selected Role Policy" in content
+    assert "## Prompt Budget Report" in content
+    assert "prompt mode: compact-worker" in content
+    assert "Issue body: full" in content
+    assert "Recent comments: full" in content
+    assert "escalation reason: none" in content
     assert "backend: codex-cli" in content
     assert "expected output format:" in content
     assert "artifact requirements:" in content
@@ -317,6 +322,8 @@ def test_render_prompt_planner_uses_compact_format():
 
     assert "# Signposter Planner Prompt" in content
     assert "## Context" in content
+    assert "## Prompt Budget Report" in content
+    assert "prompt mode: compact-planner" in content
     assert "## Output Contract" in content
     assert "## Role Profile" not in content
     assert "Keep the plan scoped to this issue." in content
@@ -340,6 +347,11 @@ def test_render_prompt_worker_marks_omitted_sections_for_large_context():
     content = render_prompt(plan, "test/repo", issue_context=issue_context)
 
     assert "...[omitted " in content
+    assert "## Prompt Budget Report" in content
+    assert "Issue body: bounded" in content
+    assert "Recent comments: bounded" in content
+    assert "escalation reason: bounded sections present to preserve token budget" in content
+    assert "source exceeded prompt budget" in content
 
 
 def test_compact_worker_issue_body_uses_tighter_budget_than_generic_body():

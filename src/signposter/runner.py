@@ -6,6 +6,7 @@ Determines how a selected claimable item would be executed via a backend.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -89,6 +90,17 @@ class RunnerPlan:
     selected_reasoning_effort: str = "low"
     selected_openclaw_agent: str = "worker"
     role_selection_reason: str = "default role selection"
+
+
+@dataclass(frozen=True)
+class PromptBudgetSection:
+    """Operator-visible prompt budget decision for one embedded section."""
+
+    name: str
+    status: str
+    budget: str
+    reason: str
+    omitted_marker: str | None = None
 
 
 def _contains_unsupported_model_signal(text: str, model: str) -> bool:
@@ -736,6 +748,70 @@ def _compact_evidence_text(
     )
 
 
+def _find_omission_marker(text: str) -> str | None:
+    match = re.search(r"\.\.\.\[omitted [^\]]+\]", text)
+    return match.group(0) if match else None
+
+
+def _prompt_budget_section(
+    *,
+    name: str,
+    source_text: str | None,
+    rendered_text: str,
+    max_lines: int,
+    max_chars: int,
+) -> PromptBudgetSection:
+    source = (source_text or "").strip()
+    budget = f"{max_lines} lines / {max_chars} chars"
+    if not source:
+        return PromptBudgetSection(
+            name=name,
+            status="empty",
+            budget=budget,
+            reason="empty fallback used",
+        )
+    omitted_marker = _find_omission_marker(rendered_text)
+    if omitted_marker:
+        return PromptBudgetSection(
+            name=name,
+            status="bounded",
+            budget=budget,
+            reason="source exceeded prompt budget",
+            omitted_marker=omitted_marker,
+        )
+    return PromptBudgetSection(
+        name=name,
+        status="full",
+        budget=budget,
+        reason="source fit within prompt budget",
+    )
+
+
+def _format_prompt_budget_report(
+    *, prompt_mode: str, sections: tuple[PromptBudgetSection, ...]
+) -> str:
+    bounded = [section for section in sections if section.status == "bounded"]
+    escalation_reason = (
+        "bounded sections present to preserve token budget"
+        if bounded
+        else "none"
+    )
+    lines = [
+        "## Prompt Budget Report",
+        f"- prompt mode: {prompt_mode}",
+        f"- escalation reason: {escalation_reason}",
+    ]
+    for section in sections:
+        line = (
+            f"- {section.name}: {section.status}; budget={section.budget}; "
+            f"reason={section.reason}"
+        )
+        if section.omitted_marker:
+            line += f"; omitted={section.omitted_marker}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def _ensure_evidence_dir(number: int) -> Path:
     """Ensure artifacts/evidence/issue-<number>/ exists."""
     path = Path(f"artifacts/evidence/issue-{number}")
@@ -872,12 +948,14 @@ def render_prompt(
         labels = [lbl["name"] for lbl in issue_context.get("labels", [])]
         labels_str = ", ".join(labels) if labels else "(none)"
         body = issue_context.get("body") or ""
+        body_source = body
         body_text = (
             _compact_worker_issue_body(body) if d.role == "worker" else _compact_issue_body(body)
         )
         state = issue_context.get("state", "unknown")
         comments = issue_context.get("comments", [])
         comments_text = ""
+        comments_source = ""
         if comments:
             recent = comments[-2:]
             comments_lines = []
@@ -886,6 +964,7 @@ def render_prompt(
                 body_snip = (c.get("body", "") or "").strip()
                 comments_lines.append(f"- @{author}: {body_snip}")
             comments_joined = "\n".join(comments_lines)
+            comments_source = comments_joined
             comments_text = (
                 _compact_worker_comments(comments_joined)
                 if d.role == "worker"
@@ -896,17 +975,60 @@ def render_prompt(
         issue_state = state
     else:
         labels_str = ", ".join(item.labels) if item.labels else "(none)"
+        body_source = "Issue body: not embedded (context fetch failed)"
         body_text = (
-            _compact_worker_issue_body("Issue body: not embedded (context fetch failed)")
+            _compact_worker_issue_body(body_source)
             if d.role == "worker"
-            else _compact_issue_body("Issue body: not embedded (context fetch failed)")
+            else _compact_issue_body(body_source)
         )
+        comments_source = "(not embedded)"
         comments_text = (
-            _compact_worker_comments("(not embedded)")
+            _compact_worker_comments(comments_source)
             if d.role == "worker"
-            else _compact_comments("(not embedded)")
+            else _compact_comments(comments_source)
         )
         issue_state = d.state or "unknown"
+
+    if d.role == "worker":
+        prompt_budget_report = _format_prompt_budget_report(
+            prompt_mode="compact-worker",
+            sections=(
+                _prompt_budget_section(
+                    name="Issue body",
+                    source_text=body_source,
+                    rendered_text=body_text,
+                    max_lines=PROMPT_COMPACTION_LIMITS["worker_issue_body_lines"],
+                    max_chars=PROMPT_COMPACTION_LIMITS["worker_issue_body_chars"],
+                ),
+                _prompt_budget_section(
+                    name="Recent comments",
+                    source_text=comments_source,
+                    rendered_text=comments_text,
+                    max_lines=PROMPT_COMPACTION_LIMITS["worker_comments_lines"],
+                    max_chars=PROMPT_COMPACTION_LIMITS["worker_comments_chars"],
+                ),
+            ),
+        )
+    else:
+        prompt_budget_report = _format_prompt_budget_report(
+            prompt_mode="standard",
+            sections=(
+                _prompt_budget_section(
+                    name="Issue body",
+                    source_text=body_source,
+                    rendered_text=body_text,
+                    max_lines=PROMPT_COMPACTION_LIMITS["issue_body_lines"],
+                    max_chars=PROMPT_COMPACTION_LIMITS["issue_body_chars"],
+                ),
+                _prompt_budget_section(
+                    name="Recent comments",
+                    source_text=comments_source,
+                    rendered_text=comments_text,
+                    max_lines=PROMPT_COMPACTION_LIMITS["comments_lines"],
+                    max_chars=PROMPT_COMPACTION_LIMITS["comments_chars"],
+                ),
+            ),
+        )
 
     role_profile = _get_role_profile(d.role)
 
@@ -937,29 +1059,52 @@ def render_prompt(
             labels_str=labels_str,
             body_text=body_text,
             comments_text=comments_text,
+            prompt_budget_report=prompt_budget_report,
             issue_state=issue_state,
             task_instruction=task_instruction,
             private_rule=private_rule,
         )
     if d.role == "planner" and not evidence_bundle:
+        planner_body_text = _compact_evidence_text(
+            body_text,
+            max_lines=PROMPT_COMPACTION_LIMITS["planner_body_lines"],
+            max_chars=PROMPT_COMPACTION_LIMITS["planner_body_chars"],
+            empty_fallback="Issue body: empty",
+        )
+        planner_comments_text = _compact_evidence_text(
+            comments_text,
+            max_lines=PROMPT_COMPACTION_LIMITS["planner_comments_lines"],
+            max_chars=PROMPT_COMPACTION_LIMITS["planner_comments_chars"],
+            empty_fallback="(no comments)",
+        )
+        planner_budget_report = _format_prompt_budget_report(
+            prompt_mode="compact-planner",
+            sections=(
+                _prompt_budget_section(
+                    name="Issue body",
+                    source_text=body_text,
+                    rendered_text=planner_body_text,
+                    max_lines=PROMPT_COMPACTION_LIMITS["planner_body_lines"],
+                    max_chars=PROMPT_COMPACTION_LIMITS["planner_body_chars"],
+                ),
+                _prompt_budget_section(
+                    name="Recent comments",
+                    source_text=comments_text,
+                    rendered_text=planner_comments_text,
+                    max_lines=PROMPT_COMPACTION_LIMITS["planner_comments_lines"],
+                    max_chars=PROMPT_COMPACTION_LIMITS["planner_comments_chars"],
+                ),
+            ),
+        )
         return _render_compact_planner_prompt(
             repo=repo,
             item=item,
             dispatch=d,
             plan=plan,
             labels_str=labels_str,
-            body_text=_compact_evidence_text(
-                body_text,
-                max_lines=PROMPT_COMPACTION_LIMITS["planner_body_lines"],
-                max_chars=PROMPT_COMPACTION_LIMITS["planner_body_chars"],
-                empty_fallback="Issue body: empty",
-            ),
-            comments_text=_compact_evidence_text(
-                comments_text,
-                max_lines=PROMPT_COMPACTION_LIMITS["planner_comments_lines"],
-                max_chars=PROMPT_COMPACTION_LIMITS["planner_comments_chars"],
-                empty_fallback="(no comments)",
-            ),
+            body_text=planner_body_text,
+            comments_text=planner_comments_text,
+            prompt_budget_report=planner_budget_report,
             issue_state=issue_state,
             task_instruction=task_instruction,
             private_rule=private_rule,
@@ -1046,6 +1191,8 @@ def render_prompt(
   and provide bounded summaries only
 - uncertainty handling: if uncertain, state exactly what is missing instead of guessing
 
+{prompt_budget_report}
+
 ## Private Repository Rule
 {private_rule}
 
@@ -1103,6 +1250,7 @@ def _render_compact_worker_prompt(
     labels_str: str,
     body_text: str,
     comments_text: str,
+    prompt_budget_report: str,
     issue_state: str,
     task_instruction: str,
     private_rule: str,
@@ -1141,6 +1289,8 @@ def _render_compact_worker_prompt(
   and provide bounded summaries only
 - uncertainty handling: if uncertain, state exactly what is missing instead of guessing
 
+{prompt_budget_report}
+
 ## Issue Body
 {body_text}
 
@@ -1175,6 +1325,7 @@ def _render_compact_planner_prompt(
     labels_str: str,
     body_text: str,
     comments_text: str,
+    prompt_budget_report: str,
     issue_state: str,
     task_instruction: str,
     private_rule: str,
@@ -1202,6 +1353,8 @@ def _render_compact_planner_prompt(
 - selected reasoning effort: {plan.selected_reasoning_effort}
 - Execution agent/profile: {plan.selected_openclaw_agent}
 - role selection reason: {plan.role_selection_reason}
+
+{prompt_budget_report}
 
 ## Issue Body
 {body_text}
