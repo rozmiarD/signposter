@@ -215,6 +215,30 @@ def test_worker_summary_plan_is_gate_compatible():
     assert "No unrelated files were changed" in plan.content
 
 
+def test_worker_summary_docs_only_plan_adds_preflight_fields(tmp_path):
+    plan = plan_worker_summary(
+        repo="test/repo",
+        issue=33,
+        changed_files=["docs/operator-lifecycle-runbook.md", "README.md"],
+        implemented_behavior=["Documentation-only worker artifact fields were verified."],
+        runs_dir=tmp_path,
+    )
+    write_manual_artifact(plan, apply=True)
+
+    validation = validate_worker_summary_artifact(33, runs_dir=tmp_path)
+    decision = evaluate_ci_gate(0, plan.content)
+
+    assert validation.status == "pass"
+    assert "Docs-only scope: yes" in plan.content
+    assert "Changed files are documentation-only: yes" in plan.content
+    assert "Code behavior unchanged: yes" in plan.content
+    assert "Scope stayed inside requested documentation task: yes" in plan.content
+    assert "Dirty guard: clean" in plan.content
+    assert "No code changes" not in plan.content
+    assert "No scope broadening" not in plan.content
+    assert decision.decision == "pass"
+
+
 def test_worker_summary_dry_run_does_not_write(tmp_path):
     plan = plan_worker_summary(
         repo="test/repo",
@@ -309,6 +333,49 @@ def test_validate_worker_summary_artifact_requires_schema_fields(tmp_path):
     assert "agent" in result.missing
     assert "dirty guard" in result.missing
     assert "gate recommendation" in result.missing
+
+
+def test_validate_worker_summary_artifact_requires_docs_only_fields(tmp_path):
+    plan = plan_worker_summary(
+        repo="test/repo",
+        issue=73,
+        changed_files=["docs/operator-lifecycle-runbook.md"],
+        runs_dir=tmp_path,
+    )
+    text = plan.content.replace(
+        "## Docs-only preflight fields\n\n"
+        "Docs-only scope: yes\n"
+        "Changed files are documentation-only: yes\n"
+        "Code behavior unchanged: yes\n"
+        "Scope stayed inside requested documentation task: yes\n"
+        "Dirty guard: clean\n\n",
+        "",
+    )
+    (tmp_path / "issue-73-worker.summary.md").write_text(text, encoding="utf-8")
+
+    result = validate_worker_summary_artifact(73, runs_dir=tmp_path)
+
+    assert result.status == "blocked"
+    assert "documentation-only file boundary" in result.missing
+    assert "non-code behavior boundary" in result.missing
+
+
+def test_validate_worker_summary_artifact_does_not_treat_discussion_as_docs_only(tmp_path):
+    plan = plan_worker_summary(
+        repo="test/repo",
+        issue=74,
+        changed_files=["src/signposter/artifact.py", "tests/test_artifact.py"],
+        implemented_behavior=[
+            "Docs-only summaries are discussed without changing this code task boundary.",
+        ],
+        runs_dir=tmp_path,
+    )
+    write_manual_artifact(plan, apply=True)
+
+    result = validate_worker_summary_artifact(74, runs_dir=tmp_path)
+
+    assert result.status == "pass"
+    assert result.missing == []
 
 
 def test_validate_worker_summary_artifact_blocks_unsafe_marker(tmp_path):

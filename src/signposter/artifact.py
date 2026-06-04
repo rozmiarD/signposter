@@ -108,6 +108,82 @@ _WORKER_PROMPT_REQUIRED_FIELDS = {
     "validation section": "## validation",
 }
 
+WORKER_SUMMARY_REQUIRED_FIELDS = {
+    "repository": "**repository:**",
+    "issue": "**issue:** #",
+    "agent": "**agent:**",
+    "exit code": "**exit code:** 0",
+    "dirty guard": "**dirty guard:** clean",
+    "task execution complete": "**task execution complete:** yes",
+    "acceptance": "**acceptance:** pass",
+    "scoped completion evidence": "scoped completion evidence",
+    "files changed": "## files changed",
+    "implemented behavior": "## implemented behavior",
+    "validation evidence": "validation evidence",
+    "targeted validation": "targeted validation passed",
+    "full validation": "full validation passed",
+    "safety section": "## safety",
+    "no github mutation safety note": "no github mutation was performed",
+    "no openclaw execution safety note": "no openclaw execution was performed",
+    "no issue close safety note": "no issue was closed",
+    "no merge safety note": "no merge was performed",
+    "no unrelated files safety note": "no unrelated files were changed",
+    "gate recommendation": "## gate recommendation",
+}
+
+DOCS_ONLY_WORKER_SUMMARY_REQUIRED_FIELDS = {
+    "docs-only scope": "docs-only scope: yes",
+    "documentation-only file boundary": "changed files are documentation-only: yes",
+    "non-code behavior boundary": "code behavior unchanged: yes",
+    "scoped docs boundary": "scope stayed inside requested documentation task: yes",
+    "plain dirty guard evidence": "dirty guard: clean",
+}
+
+_DOCS_ONLY_PATH_PREFIXES = ("docs/",)
+_DOCS_ONLY_PATH_SUFFIXES = (".md", ".rst", ".txt")
+
+
+def _is_docs_only_changed_files(changed_files: list[str]) -> bool:
+    normalized = [
+        path.strip().strip("`").lower()
+        for path in changed_files
+        if path and "<file>" not in path
+    ]
+    if not normalized:
+        return False
+
+    return all(
+        path.startswith(_DOCS_ONLY_PATH_PREFIXES)
+        or path.endswith(_DOCS_ONLY_PATH_SUFFIXES)
+        or path in {"readme", "readme.md"}
+        for path in normalized
+    )
+
+
+def _summary_changed_files(text: str) -> list[str]:
+    changed_files: list[str] = []
+    in_files_section = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        lowered = stripped.lower()
+        if lowered == "## files changed":
+            in_files_section = True
+            continue
+        if in_files_section and lowered.startswith("## "):
+            break
+        if in_files_section and stripped.startswith("-"):
+            value = stripped.removeprefix("-").strip().strip("`")
+            if value:
+                changed_files.append(value)
+    return changed_files
+
+
+def _requires_docs_only_worker_summary_fields(text: str) -> bool:
+    lowered = text.lower()
+    if "## docs-only preflight fields" in lowered:
+        return True
+    return _is_docs_only_changed_files(_summary_changed_files(text))
+
 
 def build_worker_summary(
     *,
@@ -131,6 +207,7 @@ def build_worker_summary(
     ]
     full_validation = full_validation or DEFAULT_FULL_VALIDATION
     manual_smoke = manual_smoke or ["Manual CLI smoke passed."]
+    docs_only = _is_docs_only_changed_files(changed_files)
 
     lines = [
         "# Signposter Execution Summary",
@@ -146,10 +223,27 @@ def build_worker_summary(
         "## Scoped completion evidence",
         "",
         "PASS - scoped worker task completed with validation evidence.",
-        "",
-        "## Files changed",
-        "",
     ]
+    if docs_only:
+        lines.extend(
+            [
+                "",
+                "## Docs-only preflight fields",
+                "",
+                "Docs-only scope: yes",
+                "Changed files are documentation-only: yes",
+                "Code behavior unchanged: yes",
+                "Scope stayed inside requested documentation task: yes",
+                "Dirty guard: clean",
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            "## Files changed",
+            "",
+        ]
+    )
     lines.extend(f"- `{path}`" for path in changed_files)
     lines.extend(
         [
@@ -753,29 +847,18 @@ def _worker_artifact_guidance(
 
 def _missing_worker_summary_fields(text: str) -> list[str]:
     lowered = text.lower()
-    required = {
-        "repository": "**repository:**",
-        "issue": "**issue:** #",
-        "agent": "**agent:**",
-        "exit code": "**exit code:** 0",
-        "dirty guard": "**dirty guard:** clean",
-        "task execution complete": "**task execution complete:** yes",
-        "acceptance": "**acceptance:** pass",
-        "scoped completion evidence": "scoped completion evidence",
-        "files changed": "## files changed",
-        "implemented behavior": "## implemented behavior",
-        "validation evidence": "validation evidence",
-        "targeted validation": "targeted validation passed",
-        "full validation": "full validation passed",
-        "safety section": "## safety",
-        "no github mutation safety note": "no github mutation was performed",
-        "no openclaw execution safety note": "no openclaw execution was performed",
-        "no issue close safety note": "no issue was closed",
-        "no merge safety note": "no merge was performed",
-        "no unrelated files safety note": "no unrelated files were changed",
-        "gate recommendation": "## gate recommendation",
-    }
-    return [name for name, needle in required.items() if needle not in lowered]
+    missing = [
+        name
+        for name, needle in WORKER_SUMMARY_REQUIRED_FIELDS.items()
+        if needle not in lowered
+    ]
+    if _requires_docs_only_worker_summary_fields(text):
+        missing.extend(
+            name
+            for name, needle in DOCS_ONLY_WORKER_SUMMARY_REQUIRED_FIELDS.items()
+            if needle not in lowered
+        )
+    return missing
 
 
 def format_worker_artifact_validation(result: WorkerArtifactValidation) -> str:
