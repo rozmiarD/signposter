@@ -211,6 +211,34 @@ def test_format_comment_without_structured_summary_bounds_large_raw_log():
     assert "omitted; excerpt limited" in body
 
 
+def test_format_comment_keeps_raw_artifact_local_with_bounded_raw_excerpt():
+    summary = "**Agent:** worker\n**Exit Code:** 0"
+    raw_tail = "RAW_ARTIFACT_TAIL_SHOULD_STAY_LOCAL"
+    raw = "\n".join(
+        [
+            "raw execution line 0",
+            *(f"raw execution line {i} {'x' * 90}" for i in range(1, 120)),
+            raw_tail,
+        ]
+    )
+
+    body = format_comment(
+        summary,
+        "ExatronOmega/signposter",
+        245,
+        summary_path="artifacts/runs/issue-245-worker.summary.md",
+        raw_path="artifacts/runs/issue-245-worker.raw.txt",
+        raw_content=raw,
+    )
+
+    assert "- **Raw output:** `artifacts/runs/issue-245-worker.raw.txt`" in body
+    assert "(full log, stored locally)" in body
+    assert "Full execution logs remain local only" in body
+    assert "raw execution line 0" in body
+    assert raw_tail not in body
+    assert "omitted; excerpt limited" in body
+
+
 def test_format_comment_bounds_oversized_metadata():
     huge_value = "x" * (REPORT_COMMENT_MAX_CHARS * 2)
     summary = f"""# Signposter Execution Summary
@@ -338,6 +366,58 @@ def test_report_main_dry_run_passes_dry_run_to_post_comment(
     assert "=== Signposter Report (dry-run mode)" in out
     assert "=== Dry-run: No GitHub mutation performed ===" in out
     assert mock_post.call_args.kwargs["dry_run"] is True
+
+
+@patch("signposter.report.post_comment")
+def test_report_main_posts_summary_evidence_not_raw_artifact(
+    mock_post,
+    tmp_path: Path,
+    capsys,
+):
+    summary = tmp_path / "issue-74-worker.summary.md"
+    raw = tmp_path / "issue-74-worker.raw.txt"
+    raw_tail = "RAW_ARTIFACT_TAIL_SHOULD_STAY_LOCAL"
+    summary.write_text(
+        build_worker_summary(
+            repo="test/repo",
+            issue=74,
+            changed_files=["src/signposter/report.py"],
+            implemented_behavior=["Report comment uses derived bounded evidence."],
+            targeted_validation=["python -m pytest tests/test_report.py -q"],
+        ),
+        encoding="utf-8",
+    )
+    raw.write_text(
+        "\n".join(
+            [
+                "raw execution line 0",
+                *(f"raw execution line {i}" for i in range(1, 200)),
+                raw_tail,
+            ]
+        ),
+        encoding="utf-8",
+    )
+    captured: dict[str, object] = {}
+
+    def fake_post(repo: str, issue: int, body: str, *, dry_run: bool) -> list[str]:
+        captured.update(repo=repo, issue=issue, body=body, dry_run=dry_run)
+        return ["gh issue comment 74 -R test/repo --body ..."]
+
+    mock_post.side_effect = fake_post
+
+    exit_code = report_main("test/repo", 74, summary, apply=True)
+
+    out = capsys.readouterr().out
+    body = str(captured["body"])
+    assert exit_code == 0
+    assert "=== Applied ===" in out
+    assert captured["dry_run"] is False
+    assert "- **Raw output:** `" in body
+    assert "(full log, stored locally)" in body
+    assert "Full execution logs remain local only" in body
+    assert "python -m pytest tests/test_report.py -q" in body
+    assert "raw execution line 0" not in body
+    assert raw_tail not in body
 
 
 @patch("signposter.report.post_comment")
