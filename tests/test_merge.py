@@ -600,6 +600,119 @@ def test_format_merge_apply_dry_run_contains_safety_notes():
     assert "--delete-branch" in output
 
 
+def test_merge_override_notes_distinguish_plan_and_apply_contexts():
+    from signposter.merge import merge_override_notes
+
+    planning = merge_override_notes(
+        allow_high_risk=True,
+        allow_medium_scope=True,
+        context="planning",
+    )
+    applying = merge_override_notes(
+        allow_high_risk=True,
+        allow_medium_scope=True,
+        context="apply",
+    )
+
+    assert "High-risk override explicitly allowed by operator for planning only." in planning
+    assert "Medium-scope override explicitly allowed by operator for planning only." in planning
+    assert "High-risk override explicitly allowed by operator for merge apply." in applying
+    assert "Medium-scope override explicitly allowed by operator for merge apply." in applying
+
+
+def test_format_merge_apply_dry_run_includes_planning_override_notes():
+    from signposter.merge import format_merge_apply_dry_run
+
+    fake_plan = MergePlan(
+        pr_number=5, title="test", state="OPEN", base_branch="main",
+        head_branch="work/issue-4-xxx", mergeable="MERGEABLE",
+        review_decision="APPROVED", checks_status="pass",
+        successful_checks=1, failing_checks=0, pending_checks=0,
+        github_approved=True, approving_reviewers=["AlphaExatron"],
+        has_non_author_approval=True, pr_author="ExatronOmega",
+        reviewer_gate_pass=True, reviewer_verdict="APPROVE",
+        reviewer_confidence=0.95, reviewer_risk="high",
+        associated_issue=4, has_auto_close_keywords=False,
+        files_changed=1, additions=8, deletions=0,
+        risk_level="high", size="medium",
+        merge_method="squash", delete_branch_after_merge=True,
+        command_preview="gh pr merge 5 -R test/repo --squash --delete-branch",
+        status="ready",
+        notes=[
+            "No merge was performed.",
+            "High-risk override explicitly allowed by operator for planning only.",
+            "Medium-scope override explicitly allowed by operator for planning only.",
+        ],
+    )
+
+    output = format_merge_apply_dry_run(fake_plan)
+
+    assert "DRY RUN: no merge was performed" in output
+    assert "High-risk override explicitly allowed by operator for planning only." in output
+    assert "Medium-scope override explicitly allowed by operator for planning only." in output
+    assert "for merge apply" not in output
+
+
+def test_cli_merge_apply_success_includes_apply_override_notes(monkeypatch, capsys):
+    from signposter.cli import main
+
+    fake_plan = MergePlan(
+        pr_number=5, title="test", state="OPEN", base_branch="main",
+        head_branch="work/issue-4-xxx", mergeable="MERGEABLE",
+        review_decision="APPROVED", checks_status="pass",
+        successful_checks=1, failing_checks=0, pending_checks=0,
+        github_approved=True, approving_reviewers=["AlphaExatron"],
+        has_non_author_approval=True, pr_author="ExatronOmega",
+        reviewer_gate_pass=True, reviewer_verdict="APPROVE",
+        reviewer_confidence=0.95, reviewer_risk="high",
+        associated_issue=4, has_auto_close_keywords=False,
+        files_changed=1, additions=8, deletions=0,
+        risk_level="high", size="medium",
+        merge_method="squash", delete_branch_after_merge=True,
+        command_preview="gh pr merge 5 -R test/repo --squash --delete-branch",
+        status="ready",
+        notes=[],
+    )
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "merge",
+            "apply",
+            "--repo",
+            "test/repo",
+            "--pr",
+            "5",
+            "--allow-high-risk",
+            "--allow-medium-scope",
+            "--apply",
+        ],
+    )
+
+    with patch(
+        "signposter.cli.apply_merge",
+        return_value={
+            "mode": "apply",
+            "plan": fake_plan,
+            "success": True,
+            "command": "gh pr merge 5 -R test/repo --squash --delete-branch",
+            "stdout": "",
+            "stderr": "",
+        },
+    ), pytest.raises(SystemExit) as exc:
+        main()
+
+    output = capsys.readouterr().out
+
+    assert exc.value.code == 0
+    assert "status: merged" in output
+    assert "High-risk override explicitly allowed by operator for merge apply." in output
+    assert "Medium-scope override explicitly allowed by operator for merge apply." in output
+    assert "for planning only" not in output
+
+
 def test_cli_merge_apply_dry_run_returns_blocked_exit_for_blocked_plan(
     monkeypatch, capsys
 ):
