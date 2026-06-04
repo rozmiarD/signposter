@@ -133,12 +133,18 @@ def test_execute_codex_cli_invocation_captures_success_artifacts(tmp_path) -> No
     assert "**Reasoning:** medium" in summary
     assert "**Exit Code:** 0" in summary
     assert "**Status:** success" in summary
+    assert "**Automatic Fallback:** no" in summary
+    assert "**Takeover Required:** no" in summary
     assert "**Task execution complete:** yes" in summary
     assert "**Acceptance:** pass" in summary
     assert "Status: success" in summary
     assert "Prompt Transport: stdin" in summary
     assert "Reasoning Transport: Signposter metadata only" in summary
     assert "Raw output: local only" in summary
+    assert "## Fallback / takeover transparency" in summary
+    assert "Automatic fallback: no; codex-cli uses the selected model exactly once." in summary
+    assert "Silent fallback: forbidden." in summary
+    assert "Takeover: not required for this successful execution." in summary
     assert "Raw output remains local." in summary
 
 
@@ -165,6 +171,8 @@ def test_execute_codex_cli_invocation_writes_preflight_artifacts(tmp_path) -> No
     summary = result.summary_path.read_text(encoding="utf-8")
     assert "**Exit Code:** 1" in summary
     assert "**Status:** missing-binary" in summary
+    assert "**Automatic Fallback:** no" in summary
+    assert "**Takeover Required:** yes" in summary
     assert "**Task execution complete:** no" in summary
     assert "**Acceptance:** needs-work" in summary
 
@@ -199,6 +207,8 @@ def test_execute_codex_cli_invocation_captures_timeout(tmp_path) -> None:
     summary = result.summary_path.read_text(encoding="utf-8")
     assert "**Exit Code:** -1" in summary
     assert "**Status:** timeout" in summary
+    assert "**Automatic Fallback:** no" in summary
+    assert "**Takeover Required:** yes" in summary
     assert "**Task execution complete:** no" in summary
     assert "**Acceptance:** needs-work" in summary
 
@@ -277,5 +287,9 @@ def test_execute_codex_cli_invocation_captures_unsupported_model_status(tmp_path
     assert "**Exit Code:** 1" in summary
     assert "**Status:** unsupported-model" in summary
     assert "**Token Usage Status:** unknown" in summary
+    assert "**Automatic Fallback:** no" in summary
+    assert "**Takeover Required:** yes" in summary
     assert "**Task execution complete:** no" in summary
     assert "**Acceptance:** needs-work" in summary
+    assert "Silent fallback: forbidden." in summary
+    assert "preserve raw/summary artifacts" in summary
