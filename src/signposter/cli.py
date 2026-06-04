@@ -213,8 +213,9 @@ def main() -> None:
         description="Signposter — Local GitHub/OpenClaw workflow dispatcher (bootstrap phase)",
         epilog=(
             "Operator status: use `signposter control-plane status --repo OWNER/REPO` "
-            "for the compact read-only workflow view. Bare `signposter` remains "
-            "help-only and performs no GitHub or local workflow reads."
+            "for the compact read-only workflow view with current task, next task, "
+            "and stop reason. Bare `signposter` remains help-only and performs no "
+            "GitHub or local workflow reads."
         ),
     )
     subparsers = parser.add_subparsers(dest="command")
