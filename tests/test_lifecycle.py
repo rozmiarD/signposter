@@ -10,11 +10,14 @@ import pytest
 
 from signposter.cli import main, run_lifecycle_status, run_lifecycle_watch
 from signposter.lifecycle import (
+    LifecycleNext,
+    LifecyclePreflight,
     LifecycleStatus,
     LifecycleWatchRequest,
     LifecycleWatchSnapshot,
     _contains_auto_close_keyword,
     collect_lifecycle_watch_data,
+    format_lifecycle_next,
     format_lifecycle_status,
     format_lifecycle_status_summary,
     format_lifecycle_watch,
@@ -375,6 +378,48 @@ def test_lifecycle_status_surfaces_post_merge_cleanup_gap():
     assert "local branch exists: yes" in out
     assert "next: run cleanup plan/apply for this PR" in out
     assert "post-merge gap: cleanup-needed" in summary
+
+
+def test_lifecycle_next_blocked_output_avoids_ready_apply_wording():
+    result = LifecycleNext(
+        query_issue=46,
+        query_pr=None,
+        issue_number=46,
+        pr_number=None,
+        issue_state="OPEN",
+        workflow_state="state:ready",
+        pr_state=None,
+        worktree_exists=False,
+        local_branch_exists=False,
+        prompt_exists=False,
+        worker_summary_exists=False,
+        preflight=LifecyclePreflight(
+            labels_status="blocked - required labels missing: state:ready",
+            sync_status="up-to-date",
+            worktree_status="clean",
+        ),
+        blocked_next_action="(would have recommended normal next action)",
+        action="labels-ensure",
+        command="signposter labels ensure --repo ExatronOmega/signposter --apply",
+        status="blocked",
+        reason="required labels must exist before lifecycle mutations",
+        notes=[
+            "Read-only recommendation only.",
+            "No GitHub mutation was performed.",
+            "No local mutation was performed.",
+        ],
+    )
+
+    out = format_lifecycle_next(result)
+
+    assert "Status:\n  blocked" in out
+    assert "Blocked action:" in out
+    assert "  apply ready: no" in out
+    assert "  command preview: signposter labels ensure" in out
+    assert "\nNext:" not in out
+    assert "\n  command: signposter labels ensure" not in out
+    assert "Status:\n  ready" not in out
+    assert "No GitHub mutation was performed." in out
 
 
 def test_lifecycle_status_handler_summary_output(capsys):
