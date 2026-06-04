@@ -2454,7 +2454,8 @@ def run_integration_apply(args: argparse.Namespace) -> int:
 
         if result.get("mode") == "dry_run":
             print(format_integration_apply_dry_run(plan, repo))
-            return 0 if plan and integration_apply_status(plan, repo) == "ready" else 1
+            apply_status = integration_apply_status(plan, repo) if plan else "blocked"
+            return 0 if apply_status in {"ready", "completed"} else 1
         elif result.get("mode") == "apply":
             success = result.get("success", False)
             print(f"Signposter Integration Apply — PR #{pr}")
@@ -2480,6 +2481,24 @@ def run_integration_apply(args: argparse.Namespace) -> int:
             print("  No local worktree was removed.")
             print("  No PR merge was performed.")
             return 0 if success else 1
+        elif result.get("mode") == "apply_completed":
+            print(f"Signposter Integration Apply — PR #{pr}")
+            print("")
+            print("Issue:")
+            if plan and plan.associated_issue:
+                print(f"  issue: #{plan.associated_issue}")
+            print("  status: already integrated")
+            print("  pending mutations: none")
+            print("")
+            print("Status:")
+            print("  completed")
+            print("")
+            print("Notes:")
+            print("  Integration was already completed before this apply.")
+            print("  No issue was closed.")
+            print("  No labels were changed.")
+            print("  No local worktree was removed.")
+            return 0
         else:
             # apply_blocked
             err = result.get("error", plan.status if plan else "unknown")
