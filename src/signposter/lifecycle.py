@@ -1034,9 +1034,15 @@ def format_lifecycle_next(result: LifecycleNext) -> str:
     if result.blocked_next_action:
         lines.append(f"  blocked_next_action: {result.blocked_next_action}")
 
-    lines.append("\nNext:")
-    lines.append(f"  action: {result.action}")
-    lines.append(f"  command: {result.command}")
+    if result.status == "blocked":
+        lines.append("\nBlocked action:")
+        lines.append(f"  action: {result.action}")
+        lines.append("  apply ready: no")
+        lines.append(f"  command preview: {result.command}")
+    else:
+        lines.append("\nNext:")
+        lines.append(f"  action: {result.action}")
+        lines.append(f"  command: {result.command}")
     if result.reason:
         lines.append(f"  reason: {result.reason}")
 
