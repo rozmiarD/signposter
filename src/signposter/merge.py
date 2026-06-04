@@ -431,6 +431,10 @@ def _fetch_pr_checks_for_merge(repo: str, pr: int) -> dict[str, Any]:
     }
 
 
+def _pr_ci_log_command() -> str:
+    return "gh run view <run-id-from-pr-checks> -R <repo> --log-failed"
+
+
 def _merge_check_blockage_lines(plan: MergePlan) -> list[str]:
     """Return bounded operator diagnostics for PR check states that stop merge."""
     if plan.checks_status == "failing":
@@ -442,6 +446,8 @@ def _merge_check_blockage_lines(plan: MergePlan) -> list[str]:
                 f"{plan.pending_checks} pending check(s)"
             ),
             f"inspect command: gh pr checks {plan.pr_number} --repo <repo>",
+            f"log command: {_pr_ci_log_command()}",
+            "logs: not fetched or printed by Signposter output",
             f"next: inspect failing checks for PR #{plan.pr_number} and rerun merge plan",
         ]
     if plan.checks_status == "pending":

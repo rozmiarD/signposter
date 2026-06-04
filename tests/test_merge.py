@@ -299,6 +299,12 @@ def test_format_merge_plan_surfaces_failing_ci_blockage():
     assert "category: failing-ci" in output
     assert "reason: 1 failing check(s), 0 pending check(s)" in output
     assert "inspect command: gh pr checks 5 --repo <repo>" in output
+    assert (
+        "log command: gh run view <run-id-from-pr-checks> "
+        "-R <repo> --log-failed"
+        in output
+    )
+    assert "logs: not fetched or printed by Signposter output" in output
     assert "next: inspect failing checks for PR #5 and rerun merge plan" in output
 
 
