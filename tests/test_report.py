@@ -112,6 +112,54 @@ No GitHub mutation was performed.
     assert "noisy provider banner" not in body
 
 
+def test_format_comment_redacts_secret_in_structured_summary_excerpt():
+    token = "github_pat_" + ("A" * 30)
+    summary = f"""# Signposter Execution Summary
+**Agent:** worker
+**Exit Code:** 0
+
+## Scoped completion evidence
+
+PASS - scoped report behavior is complete.
+
+## Validation evidence
+
+- token seen in local output: {token}
+"""
+
+    body = format_comment(
+        summary,
+        "ExatronOmega/signposter",
+        2,
+        summary_path="artifacts/runs/issue-2-worker.summary.md",
+        raw_path="artifacts/runs/issue-2-worker.raw.txt",
+        raw_content="raw output should not be selected",
+    )
+
+    assert token not in body
+    assert "[REDACTED:github-token]" in body
+    assert "raw output should not be selected" not in body
+
+
+def test_format_comment_rejects_auto_close_keyword_in_structured_excerpt():
+    summary = """# Signposter Execution Summary
+**Agent:** worker
+**Exit Code:** 0
+
+## Scoped completion evidence
+
+Fixes #123
+"""
+
+    with pytest.raises(ValueError, match="auto-close keyword"):
+        format_comment(
+            summary,
+            "ExatronOmega/signposter",
+            2,
+            summary_path="artifacts/runs/issue-2-worker.summary.md",
+        )
+
+
 def test_format_comment_body_is_bounded_for_huge_summary_and_raw():
     huge_validation = "\n".join(f"- validation evidence line {i}" for i in range(500))
     summary = f"""# Signposter Execution Summary
@@ -142,6 +190,25 @@ PASS — report body guard implemented.
     assert "Key Evidence Excerpt (bounded)" in body
     assert "omitted; excerpt limited" in body
     assert "raw execution line 1999" not in body
+
+
+def test_format_comment_without_structured_summary_bounds_large_raw_log():
+    summary = "**Agent:** worker\n**Exit Code:** 0"
+    raw = "\n".join(f"raw execution line {i} {'x' * 90}" for i in range(500))
+
+    body = format_comment(
+        summary,
+        "ExatronOmega/signposter",
+        244,
+        summary_path="artifacts/runs/issue-244-worker.summary.md",
+        raw_path="artifacts/runs/issue-244-worker.raw.txt",
+        raw_content=raw,
+    )
+
+    assert len(body) <= REPORT_COMMENT_MAX_CHARS
+    assert "raw execution line 0" in body
+    assert "raw execution line 499" not in body
+    assert "omitted; excerpt limited" in body
 
 
 def test_format_comment_bounds_oversized_metadata():
