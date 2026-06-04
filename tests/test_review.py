@@ -1083,6 +1083,58 @@ def test_execute_review_passes_model_and_thinking_flags(tmp_path):
     assert "medium" in cmd
 
 
+def test_generate_pr_reviewer_summary_includes_token_usage_status():
+    import datetime
+
+    from signposter.review import ReviewPlan, _generate_pr_reviewer_summary
+
+    plan = ReviewPlan(
+        pr_number=6,
+        title="core change",
+        state="OPEN",
+        base_branch="main",
+        head_branch="work/issue-6-xxx",
+        mergeable="MERGEABLE",
+        review_decision=None,
+        checks_status="pass",
+        successful_checks=1,
+        failing_checks=0,
+        pending_checks=0,
+        files_changed=2,
+        additions=10,
+        deletions=2,
+        risk_level="high",
+        size="small",
+        associated_issue=6,
+        branch_matches_convention=True,
+        status="ready",
+        notes=[],
+        reviewer_profile="reviewer",
+        prompt_artifact_path="artifacts/prompts/pr-6-review.md",
+        selected_role_name="REVIEWER_CORE",
+        selected_model="openai/gpt-5.4",
+        selected_reasoning_effort="medium",
+        role_selection_reason="test",
+    )
+
+    summary = _generate_pr_reviewer_summary(
+        pr_number=6,
+        plan=plan,
+        session_key="signposter-v2-pr-6-reviewer",
+        exit_code=0,
+        raw_path="artifacts/runs/pr-6-reviewer.raw.txt",
+        stdout="Verdict: APPROVE\nprompt_tokens: 100 completion_tokens: 25",
+        stderr="",
+        start_time=datetime.datetime.now(datetime.UTC),
+    )
+
+    assert "**Token Usage Status:** reported" in summary
+    assert "## Token usage accounting" in summary
+    assert "Role: REVIEWER_CORE" in summary
+    assert "Input tokens: 100" in summary
+    assert "Total tokens: 125" in summary
+
+
 def test_build_review_prompt_includes_authoritative_changed_files():
     from signposter.review import ReviewPlan, build_review_prompt
 

@@ -42,6 +42,7 @@ from signposter.openclaw_runtime import (
 )
 from signposter.role_routing import resolve_role_execution, select_role_for_review
 from signposter.runner import build_openclaw_session_key
+from signposter.token_usage import format_token_usage_accounting, summarize_token_usage
 
 REVIEW_PROMPT_LIMITS = {
     "changed_files": 16,
@@ -866,6 +867,13 @@ def _generate_pr_reviewer_summary(
         lines.append(f"**Execution Reason:** {diagnosis.reason}")
 
     raw_text = stdout + ("\n" + stderr if stderr else "")
+    token_usage = summarize_token_usage(
+        role=plan.selected_role_name,
+        model=plan.selected_model,
+        reasoning_effort=plan.selected_reasoning_effort,
+        output_text=raw_text,
+    )
+    lines.append(f"**Token Usage Status:** {token_usage.status}")
     line_count = len(raw_text.splitlines())
     byte_count = len(raw_text.encode("utf-8"))
     lines.append(f"**Output Size:** {line_count} lines, {byte_count} bytes")
@@ -875,6 +883,9 @@ def _generate_pr_reviewer_summary(
     if diagnostics_warnings:
         lines.append("\n## Runtime warnings\n")
         lines.extend(f"- {warning}" for warning in diagnostics_warnings)
+
+    lines.append("")
+    lines.extend(format_token_usage_accounting(token_usage).splitlines())
 
     # Try to extract structured verdict if present in output
     verdict = None

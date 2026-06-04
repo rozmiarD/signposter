@@ -902,6 +902,31 @@ def test_execute_plan_passes_model_and_thinking_flags():
     assert plan.selected_reasoning_effort in cmd
 
 
+def test_generate_execution_summary_includes_token_usage_status():
+    import datetime
+
+    from signposter.runner import _generate_execution_summary
+
+    plan = make_runner_plan_for_test("worker", "build", number=48)
+
+    summary = _generate_execution_summary(
+        repo="test/repo",
+        plan=plan,
+        session_key="signposter-v2-issue-48-worker",
+        exit_code=0,
+        raw_path="artifacts/runs/issue-48-worker.raw.txt",
+        stdout="usage: input_tokens=10 output_tokens=5 total_tokens=15 cost_usd=0.0001",
+        stderr="",
+        start_time=datetime.datetime.now(datetime.UTC),
+    )
+
+    assert "**Token Usage Status:** reported" in summary
+    assert "## Token usage accounting" in summary
+    assert "Role: WORKER_CODE" in summary
+    assert "Input tokens: 10" in summary
+    assert "Estimated cost USD: 0.0001" in summary
+
+
 def test_execute_plan_retries_once_with_explicit_fallback_on_unsupported_model():
     from unittest.mock import patch
 

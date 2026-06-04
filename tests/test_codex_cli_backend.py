@@ -118,6 +118,10 @@ def test_execute_codex_cli_invocation_captures_success_artifacts(tmp_path) -> No
 
     assert result.success is True
     assert result.status == "success"
+    summary = result.summary_path.read_text(encoding="utf-8")
+    assert "**Token Usage Status:** unknown" in summary
+    assert "## Token usage accounting" in summary
+    assert "Input tokens: unknown" in summary
     assert captured["command"] == ["codex", "exec", "--model", "openai/gpt-5.4", "-"]
     assert captured["input"] == "do work"
     assert "[STDOUT]\ndone" in result.raw_path.read_text(encoding="utf-8")
@@ -272,5 +276,6 @@ def test_execute_codex_cli_invocation_captures_unsupported_model_status(tmp_path
     summary = result.summary_path.read_text(encoding="utf-8")
     assert "**Exit Code:** 1" in summary
     assert "**Status:** unsupported-model" in summary
+    assert "**Token Usage Status:** unknown" in summary
     assert "**Task execution complete:** no" in summary
     assert "**Acceptance:** needs-work" in summary
