@@ -58,6 +58,8 @@ class OrchestratorNext:
     takeover_category: str | None
     takeover_reason: str | None
     notes: list[str]
+    activity_updated_at: str | None = None
+    activity_age: str | None = None
 
 
 @dataclass(frozen=True)
@@ -170,6 +172,8 @@ def plan_orchestrator_next(
     status = lifecycle.status
     takeover_category: str | None = None
     takeover_reason: str | None = None
+    activity_updated_at: str | None = None
+    activity_age: str | None = None
 
     if would_execute and not allow_execute:
         status = "blocked"
@@ -177,7 +181,15 @@ def plan_orchestrator_next(
     elif lifecycle.status == "blocked":
         stop_reason = lifecycle.reason
 
-    takeover_category, takeover_reason = _plan_takeover(repo, lifecycle)
+    if lifecycle.workflow_state == "state:active" and lifecycle.issue_number is not None:
+        activity_updated_at = _safe_issue_updated_at(repo, lifecycle.issue_number)
+        activity_age = _format_activity_age(activity_updated_at)
+
+    takeover_category, takeover_reason = _plan_takeover(
+        repo,
+        lifecycle,
+        issue_updated_at=activity_updated_at,
+    )
 
     notes = [
         "Read-only orchestrator planning only.",
@@ -201,6 +213,8 @@ def plan_orchestrator_next(
         takeover_category=takeover_category,
         takeover_reason=takeover_reason,
         notes=notes,
+        activity_updated_at=activity_updated_at,
+        activity_age=activity_age,
     )
 
 
@@ -850,13 +864,24 @@ def format_orchestrator_next(result: OrchestratorNext) -> str:
         f"  local branch: {'present' if lifecycle.local_branch_exists else 'missing'}",
         f"  prompt: {'present' if lifecycle.prompt_exists else 'missing'}",
         f"  worker summary: {'present' if lifecycle.worker_summary_exists else 'missing'}",
-        "",
-        "Next:",
-        f"  action: {result.action}",
-        f"  command: {result.command}",
-        f"  would mutate: {'yes' if result.would_mutate else 'no'}",
-        f"  would execute backend: {'yes' if result.would_execute else 'no'}",
     ]
+    if result.activity_updated_at is not None or result.activity_age is not None:
+        lines.extend(
+            [
+                f"  activity updated at: {result.activity_updated_at or 'unknown'}",
+                f"  activity age: {result.activity_age or 'unknown'}",
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            "Next:",
+            f"  action: {result.action}",
+            f"  command: {result.command}",
+            f"  would mutate: {'yes' if result.would_mutate else 'no'}",
+            f"  would execute backend: {'yes' if result.would_execute else 'no'}",
+        ]
+    )
 
     if result.stop_reason:
         lines.extend(["", "Stop:", f"  {result.stop_reason}"])
@@ -1048,6 +1073,8 @@ def format_orchestrator_run_next(result: OrchestratorRunNext) -> str:
             lines.append(f"  stop: {result.next.stop_reason}")
         if result.next.takeover_category:
             lines.append(f"  takeover: {result.next.takeover_category}")
+        if result.next.activity_age:
+            lines.append(f"  activity age: {result.next.activity_age}")
     else:
         lines.append("  none")
 
@@ -1523,13 +1550,19 @@ def _plan_fallback_commands(
     return ()
 
 
-def _plan_takeover(repo: str, lifecycle: LifecycleNext) -> tuple[str | None, str | None]:
+def _plan_takeover(
+    repo: str,
+    lifecycle: LifecycleNext,
+    *,
+    issue_updated_at: str | None = None,
+) -> tuple[str | None, str | None]:
     if lifecycle.workflow_state != "state:active" or lifecycle.issue_number is None:
         return None, None
     if lifecycle.worker_summary_exists:
         return None, None
 
-    issue_updated_at = _safe_issue_updated_at(repo, lifecycle.issue_number)
+    if issue_updated_at is None:
+        issue_updated_at = _safe_issue_updated_at(repo, lifecycle.issue_number)
     if not _is_stale_active_work(lifecycle, issue_updated_at=issue_updated_at):
         return None, None
 
@@ -1600,22 +1633,41 @@ def _newest_existing_mtime(paths: list[Path]) -> datetime | None:
 
 
 def _is_stale_issue(updated_at: str | None, *, stale_after_hours: int = 48) -> bool:
-    if not updated_at:
+    updated = _parse_github_datetime(updated_at)
+    if updated is None:
         return False
+    return _is_stale_datetime(updated, stale_after_hours=stale_after_hours)
+
+
+def _is_stale_datetime(updated: datetime, *, stale_after_hours: int) -> bool:
+    return (datetime.now(UTC) - updated).total_seconds() > stale_after_hours * 3600
+
+
+def _format_activity_age(updated_at: str | None, *, stale_after_hours: int = 48) -> str:
+    updated = _parse_github_datetime(updated_at)
+    if updated is None:
+        return "unknown"
+    age_seconds = max(0, int((datetime.now(UTC) - updated).total_seconds()))
+    age_hours = age_seconds // 3600
+    if age_hours <= stale_after_hours:
+        return f"fresh({age_hours}h)"
+    age_days = max(1, age_seconds // 86400)
+    return f"stale({age_days}d)"
+
+
+def _parse_github_datetime(updated_at: str | None) -> datetime | None:
+    if not updated_at:
+        return None
     text = updated_at.strip()
     if text.endswith("Z"):
         text = f"{text[:-1]}+00:00"
     try:
         updated = datetime.fromisoformat(text)
     except ValueError:
-        return False
+        return None
     if updated.tzinfo is None:
         updated = updated.replace(tzinfo=UTC)
-    return _is_stale_datetime(updated, stale_after_hours=stale_after_hours)
-
-
-def _is_stale_datetime(updated: datetime, *, stale_after_hours: int) -> bool:
-    return (datetime.now(UTC) - updated).total_seconds() > stale_after_hours * 3600
+    return updated
 
 
 def _has_ci_pending_signal(step: OrchestratorStep) -> bool:
