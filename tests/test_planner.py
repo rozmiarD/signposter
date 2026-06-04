@@ -2949,10 +2949,11 @@ def test_format_planner_run_plan_contains_dashboard_sections(
     assert "Status:\n  ready" in output
     assert "Planner status:\n  active" in output
     assert "Task counts:" in output
-    assert "  total: 5" in output
-    assert "  ready: 1" in output
-    assert "  waiting: 4" in output
-    assert "  completed: 0" in output
+    assert (
+        "  total=5 pending=0 ready=1 waiting=4 active=0 "
+        "done=0 merged=0 blocked=0 completed=0"
+    ) in output
+    assert "  total: 5" not in output
     assert "Next task:" in output
     assert "WATCH-001 — issue: #10 — state: open" in output
     assert "Reconcile hints:" in output
@@ -4151,7 +4152,10 @@ def test_cli_planner_run_dry_run_shows_dashboard(
     assert "Status:\n  ready" in captured
     assert "Planner status:\n  active" in captured
     assert "Task counts:" in captured
-    assert "  total: 5" in captured
+    assert (
+        "  total=5 pending=0 ready=1 waiting=4 active=0 "
+        "done=0 merged=0 blocked=0 completed=0"
+    ) in captured
     assert "Next task:" in captured
     assert "WATCH-001 — issue: #10 — state: open" in captured
     assert "Reconcile hints:" in captured
