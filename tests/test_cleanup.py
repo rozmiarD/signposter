@@ -70,6 +70,29 @@ def test_cleanup_plan_ready_when_all_conditions_met():
         assert "No GitHub mutation" in plan.notes[2]
 
 
+def test_cleanup_plan_ready_with_pr_body_related_issue_fallback():
+    with patch("signposter.cleanup._run_gh_pr_view") as mock_pr, \
+         patch("signposter.cleanup.fetch_issue_context") as mock_ctx, \
+         patch("signposter.cleanup._worktree_exists", return_value=True), \
+         patch("signposter.cleanup._local_branch_exists", return_value=True):
+        mock_pr.return_value = {
+            "state": "MERGED",
+            "headRefName": "feature/body-link-fallback",
+            "body": "Related issue: #4",
+        }
+        mock_ctx.return_value = {
+            "state": "CLOSED",
+            "labels": [{"name": "state:merged"}],
+        }
+
+        plan = plan_cleanup_for_pr("ExatronOmega/signposter", 5)
+
+        assert plan.status == "ready"
+        assert plan.associated_issue == 4
+        assert plan.expected_worktree_path == "../signposter-work/4"
+        assert plan.local_branch == "feature/body-link-fallback"
+
+
 def test_cleanup_plan_completed_noop_when_worktree_absent():
     """completed/no-op plan when worktree and local branch are already absent."""
     with patch("signposter.cleanup._run_gh_pr_view") as mock_pr, \

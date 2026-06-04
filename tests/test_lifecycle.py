@@ -130,6 +130,35 @@ def test_lifecycle_complete_when_starting_from_pr():
         assert status.status == "complete"
         assert status.query_pr == 5
         assert status.issue_number == 4
+        assert status.linkage_source == "branch-pattern"
+        assert status.linkage_confidence == "high"
+
+
+def test_lifecycle_complete_from_pr_body_related_issue_fallback():
+    with patch("signposter.lifecycle._run_gh_pr_view") as m_pr, \
+         patch("signposter.lifecycle.fetch_issue_by_number") as m_issue, \
+         patch("signposter.lifecycle.fetch_issue_context") as m_ctx, \
+         patch("signposter.lifecycle._worktree_exists", return_value=False), \
+         patch("signposter.lifecycle._local_branch_exists", return_value=False):
+
+        m_pr.return_value = {
+            "number": 5,
+            "state": "MERGED",
+            "baseRefName": "main",
+            "headRefName": "feature/h050-038-linkage-fallback",
+            "mergeCommit": {"oid": "abc123"},
+            "body": "Related issue: #4",
+            "reviews": [],
+        }
+        m_issue.return_value = type("I", (), {"labels": ["state:merged"]})()
+        m_ctx.return_value = {"state": "CLOSED"}
+
+        status = plan_lifecycle_status("ExatronOmega/signposter", pr=5)
+
+        assert status.status == "complete"
+        assert status.issue_number == 4
+        assert status.linkage_source == "pr-body-related-issue"
+        assert status.linkage_confidence == "medium"
 
 
 # =============================================================================
