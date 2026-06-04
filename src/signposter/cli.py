@@ -3630,6 +3630,20 @@ def _planner_workflow_state_from_issue_payload(payload: dict[str, object]) -> st
     return None
 
 
+def _planner_manifest_expected_github_title(issue: dict[str, object]) -> str:
+    return str(issue.get("github_title") or issue.get("title") or "").strip()
+
+
+def _bounded_planner_gh_error(result: subprocess.CompletedProcess[str]) -> str:
+    text = (result.stderr or result.stdout or "").strip()
+    if not text:
+        return f"gh issue view exited with {result.returncode}"
+    first_line = text.splitlines()[0].strip()
+    if len(first_line) > 160:
+        first_line = first_line[:157].rstrip() + "..."
+    return first_line
+
+
 def _fetch_manifest_issue_states(repo: str, manifest: dict[str, object]) -> dict[int, object]:
     """Fetch GitHub issue states for issues listed in a planner manifest."""
     states: dict[int, object] = {}
@@ -3649,25 +3663,40 @@ def _fetch_manifest_issue_states(repo: str, manifest: dict[str, object]) -> dict
                 "-R",
                 repo,
                 "--json",
-                "state,labels",
+                "state,labels,title",
             ],
             capture_output=True,
             text=True,
             check=False,
         )
         if result.returncode != 0:
+            states[int(issue_number)] = {
+                "state": "stale",
+                "github_state": "missing",
+                "workflow_state": None,
+                "mapping_status": "stale",
+                "mapping_reason": _bounded_planner_gh_error(result),
+            }
             continue
 
         output = result.stdout.strip()
         state = ""
         workflow_state = ""
         github_state = ""
+        github_title = ""
+        mapping_status = "ok"
+        mapping_reason = ""
         try:
             payload = json.loads(output) if output else {}
             if isinstance(payload, dict):
                 workflow_state = _planner_workflow_state_from_issue_payload(payload) or ""
                 github_state = str(payload.get("state", "")).lower()
                 state = workflow_state or github_state
+                github_title = str(payload.get("title") or "").strip()
+                expected_title = _planner_manifest_expected_github_title(issue)
+                if github_title and expected_title and github_title != expected_title:
+                    mapping_status = "mismatched"
+                    mapping_reason = "GitHub issue title does not match planner manifest"
             else:
                 state = output.lower()
         except json.JSONDecodeError:
@@ -3680,6 +3709,9 @@ def _fetch_manifest_issue_states(repo: str, manifest: dict[str, object]) -> dict
                     "state": state,
                     "github_state": github_state,
                     "workflow_state": workflow_state or None,
+                    "mapping_status": mapping_status,
+                    "mapping_reason": mapping_reason or None,
+                    "github_title": github_title or None,
                 }
             else:
                 states[int(issue_number)] = state

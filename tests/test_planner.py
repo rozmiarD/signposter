@@ -2036,6 +2036,68 @@ def test_build_planner_status_reports_seeded_active_manifest(tmp_path: Path) -> 
     assert status["tasks"][2]["state"] == "unknown"
 
 
+def test_build_planner_status_surfaces_stale_and_mismatched_issue_mappings(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+
+    status = build_planner_status(
+        manifest,
+        {
+            10: {
+                "state": "stale",
+                "github_state": "missing",
+                "workflow_state": None,
+                "mapping_status": "stale",
+                "mapping_reason": "issue not found",
+            },
+            11: {
+                "state": "open",
+                "github_state": "open",
+                "workflow_state": None,
+                "mapping_status": "mismatched",
+                "mapping_reason": "GitHub issue title does not match planner manifest",
+                "github_title": "Unexpected title",
+            },
+        },
+    )
+
+    counts = build_planner_status_counts(status["tasks"])
+    next_result = build_planner_next_from_status(status)
+    output = format_planner_status(status)
+
+    assert counts["blocked"] == 2
+    assert status["tasks"][0]["mapping_status"] == "stale"
+    assert status["tasks"][1]["mapping_status"] == "mismatched"
+    assert next_result["status"] == "blocked"
+    assert next_result["blocked"][0]["reason"] == (
+        "GitHub issue mapping is stale: issue not found"
+    )
+    assert next_result["blocked"][1]["reason"] == (
+        "GitHub issue mapping is mismatched: "
+        "GitHub issue title does not match planner manifest"
+    )
+    assert "mapping: stale — issue not found" in output
+    assert (
+        "mapping: mismatched — GitHub issue title does not match planner manifest"
+        in output
+    )
+    assert "GitHub title: Unexpected title" in output
+
+
 def test_build_planner_status_counts_groups_lifecycle_buckets() -> None:
     counts = build_planner_status_counts(
         [
@@ -2218,6 +2280,81 @@ def test_cli_planner_status_sync_github_fetches_issue_states(
     assert calls[0][:4] == ["gh", "issue", "view", "10"]
     assert "WATCH-001 — issue: #10 — state: open" in captured
     assert "No task execution was performed." in captured
+
+
+def test_cli_planner_status_sync_github_surfaces_stale_and_mismatched_mappings(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    calls: list[list[str]] = []
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+    write_planner_seed_manifest(manifest, manifest_path)
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> _FakeGhIssueCreateResult:
+        calls.append(command)
+        issue_number = command[3]
+        if issue_number == "10":
+            return _FakeGhIssueCreateResult(1, stderr="GraphQL: could not resolve")
+        title = (
+            "Unexpected title"
+            if issue_number == "11"
+            else manifest["issues"][int(issue_number) - 10]["title"]
+        )
+        return _FakeGhIssueCreateResult(
+            0,
+            stdout=json.dumps({"state": "OPEN", "labels": [], "title": title}),
+        )
+
+    monkeypatch.setattr("signposter.cli.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "status",
+            "--manifest",
+            str(manifest_path),
+            "--sync-github",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+    assert exc_info.value.code in (None, 0)
+    assert len(calls) == 5
+    assert calls[0][-1] == "state,labels,title"
+    assert "WATCH-001 — issue: #10 — state: stale" in captured
+    assert "mapping: stale — GraphQL: could not resolve" in captured
+    assert "WATCH-002 — issue: #11 — state: open" in captured
+    assert (
+        "mapping: mismatched — GitHub issue title does not match planner manifest"
+        in captured
+    )
+    assert "GitHub title: Unexpected title" in captured
+    assert "No GitHub mutation was performed." in captured
 
 
 def test_build_planner_next_from_status_selects_first_open_ready_task(
