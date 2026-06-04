@@ -105,6 +105,48 @@ def _fetch_pr_merge_details(repo: str, pr_number: int) -> dict[str, Any]:
     )
 
 
+_CI_RUN_LIST_JSON_FIELDS = (
+    "status,conclusion,workflowName,headBranch,headSha,databaseId"
+)
+
+
+def _build_ci_run_selection_command(
+    repo: str,
+    *,
+    branch: str,
+    commit_sha: str | None = None,
+    workflow: str = "CI",
+) -> list[str]:
+    """Build the deterministic gh command used to select one CI run.
+
+    Branch-only selection is useful for PR branch smoke checks. Passing a commit
+    SHA tightens selection for post-merge main CI so an older green run cannot
+    satisfy integration for a newer merge commit.
+    """
+    command = [
+        "gh",
+        "run",
+        "list",
+        "-R",
+        repo,
+        "--branch",
+        branch,
+    ]
+    if commit_sha:
+        command.extend(["--commit", commit_sha])
+    command.extend(
+        [
+            "--workflow",
+            workflow,
+            "--limit",
+            "1",
+            "--json",
+            _CI_RUN_LIST_JSON_FIELDS,
+        ]
+    )
+    return command
+
+
 def _fetch_main_ci_status(repo: str, commit_sha: str | None = None) -> str:
     """Return main CI status using gh run list.
 
@@ -118,23 +160,11 @@ def _fetch_main_ci_status(repo: str, commit_sha: str | None = None) -> str:
     - pending: latest main CI run is queued/in_progress/waiting/etc.
     - unknown: gh failed, no runs found, or payload shape is unexpected
     """
-    command = [
-        "gh",
-        "run",
-        "list",
-        "-R",
+    command = _build_ci_run_selection_command(
         repo,
-        "--branch",
-        "main",
-        "--workflow",
-        "CI",
-        "--limit",
-        "1",
-        "--json",
-        "status,conclusion,workflowName,headBranch,headSha,databaseId",
-    ]
-    if commit_sha:
-        command[7:7] = ["--commit", commit_sha]
+        branch="main",
+        commit_sha=commit_sha,
+    )
 
     try:
         result = subprocess.run(
