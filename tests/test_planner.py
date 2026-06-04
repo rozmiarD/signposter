@@ -1872,6 +1872,8 @@ def test_format_seed_label_preflight_includes_safety_notes() -> None:
     assert "Seed Label Preflight" in output
     assert "Status:\n  blocked" in output
     assert "missing GitHub label: area:cli" in output
+    assert "Label preflight runs before any GitHub issue creation." in output
+    assert "Missing labels block before any GitHub issue creation." in output
     assert "No GitHub issue was created." in output
     assert "No OpenClaw execution was performed." in output
 
@@ -1947,6 +1949,8 @@ def test_cli_planner_seed_apply_blocks_missing_label_before_issue_create(
     assert "Status:\n  blocked" in captured
     assert "missing GitHub label: area:cli" in captured
     assert "missing GitHub label: state:ready" in captured
+    assert "Label preflight runs before any GitHub issue creation." in captured
+    assert "Missing labels block before any GitHub issue creation." in captured
     assert "Planner Seed Apply" not in captured
 
 
