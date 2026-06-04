@@ -533,6 +533,12 @@ def test_integration_apply_dry_run_surfaces_failing_main_ci_inspection_command()
         "inspect command: gh run list -R test/repo --branch main --commit abc123"
         in output
     )
+    assert (
+        "log command: gh run view <run-id-from-inspect-command> "
+        "-R test/repo --log-failed"
+        in output
+    )
+    assert "logs: not fetched or printed by Signposter output" in output
     assert "blocked — main CI is not confirmed pass (got failing)" in output
 
 
