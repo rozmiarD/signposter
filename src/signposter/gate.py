@@ -1240,6 +1240,11 @@ def format_gate_report(result: dict) -> str:
         ]
     )
 
+    blocked_sections = _blocked_evidence_sections(result)
+    if blocked_sections:
+        lines.extend(["", "Blocked evidence sections:"])
+        lines.extend(f"  - {section}" for section in blocked_sections)
+
     if result.get("proposed_transition"):
         lines.append(f"  Proposed: {result['proposed_transition']}")
 
@@ -1253,6 +1258,82 @@ def format_gate_report(result: dict) -> str:
         lines.append("WARNING: This issue does not appear ready for a supported gate decision.")
 
     return "\n".join(lines)
+
+
+def _blocked_evidence_sections(result: dict) -> tuple[str, ...]:
+    """Return operator-facing evidence sections to repair for blocked gates."""
+    decision = str(result.get("decision", "")).lower()
+    if decision in {"pass", "not-applicable"}:
+        return ()
+
+    reason = str(result.get("reason", "")).lower()
+    gate_type = str(result.get("gate_type", "unknown")).lower()
+    worker_artifact = result.get("worker_artifact_validation") or {}
+
+    if worker_artifact and worker_artifact.get("status") != "pass":
+        sections = ["Worker summary schema: repair missing fields shown above."]
+        if worker_artifact.get("summary_signal") or worker_artifact.get("raw_signal"):
+            sections.append(
+                "Artifact safety: replace stale/failover runtime output with a reviewed summary."
+            )
+        return tuple(sections)
+
+    if gate_type == "ci":
+        if "non-zero exit code" in reason:
+            return (
+                "**Exit Code:** use a successful execution summary or documented takeover.",
+                "## Validation evidence",
+                "## Safety",
+            )
+        if "stale/failover" in reason:
+            return (
+                "## Scoped completion evidence",
+                "## Validation evidence",
+                "Artifact safety: write a reviewed human/operator summary.",
+            )
+        if "python exception" in reason or "worker output mentioned" in reason:
+            return (
+                "## Scoped completion evidence",
+                "## Validation evidence",
+                "## Safety",
+            )
+        return (
+            "## Scoped completion evidence",
+            "## Validation evidence",
+            "## Safety",
+            "## Gate recommendation",
+        )
+
+    if gate_type == "human":
+        sections = []
+        if "approval" in reason:
+            sections.append("Human approval: approved")
+        if "scope" in reason:
+            sections.append("Scope reviewed: yes")
+        if "validation" in reason:
+            sections.append("Validation status: passed")
+        if "safety" in reason:
+            sections.extend(
+                [
+                    "GitHub mutation: no",
+                    "Execution backend: no",
+                    "Issue closure: no",
+                    "Merge performed: no",
+                ]
+            )
+        return tuple(sections or ("Human approval, scope, validation, and safety fields",))
+
+    if gate_type == "review":
+        return (
+            "Verdict:",
+            "Confidence:",
+            "Scope match:",
+            "CI considered:",
+            "Merge recommendation:",
+            "Findings:",
+        )
+
+    return ("gate label: add one supported gate label: gate:ci, gate:review, or gate:human",)
 
 
 def evaluate_gate_for_complete(repo: str, issue: int) -> tuple[bool, str, str, str]:
