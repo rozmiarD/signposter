@@ -110,6 +110,9 @@ def test_comment_audit_blocks_auto_close_past_tense_and_urls():
         "Signposter report\n\nFixed issue #123",
         "Signposter report\n\nResolve https://github.com/acme/project/issues/123",
         "Signposter report\n\nFixes github.com/acme/project#123",
+        "Signposter report\n\nFixes acme/project#123",
+        "Signposter report\n\nCloses issue: #123",
+        "Signposter report\n\nResolved: acme/project#123",
     ]
 
     for sample in samples:
@@ -124,6 +127,19 @@ def test_comment_audit_allows_related_issue_reference():
 
     assert contains_auto_close_keyword(body) is False
     assert audit_github_comment_body(body).valid
+
+
+def test_comment_audit_allows_harmless_issue_references():
+    samples = [
+        "Signposter report\n\nRelated issue: #123",
+        "Signposter report\n\nFix docs for issue #123 without closing it.",
+        "Signposter report\n\nResolved in validation notes for #123.",
+        "Signposter report\n\nNo merge or issue closure is implied by #123.",
+    ]
+
+    for sample in samples:
+        assert contains_auto_close_keyword(sample) is False
+        assert audit_github_comment_body(sample).valid
 
 
 def test_comment_audit_blocks_obvious_secret_material():
