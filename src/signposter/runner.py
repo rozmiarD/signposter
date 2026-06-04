@@ -1306,6 +1306,12 @@ def _render_compact_worker_prompt(
 - Report changed files, validation, safety notes, and remaining risks.
 - If uncertain, state the uncertainty explicitly instead of guessing.
 
+## Recovery Hints
+- Interrupted/unavailable backend: preserve existing raw and summary artifacts.
+- Existing branch/worktree: inspect and resume it; do not create duplicates.
+- Manual fallback: `signposter artifact write-worker-summary`, then
+  `signposter report` and `signposter gate`.
+
 ## Task
 {task_instruction}
 

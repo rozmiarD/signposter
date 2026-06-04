@@ -555,3 +555,35 @@ def test_format_worktree_plan_includes_reviewer_route_human_gate_notes():
     assert "gate: human" in output
     assert "Reviewer-route build task is supported" in output
     assert "Human-gated issue" in output
+
+
+def test_format_worktree_plan_includes_recovery_hints():
+    from signposter.worktree import WorktreePlan, format_worktree_plan
+
+    plan = WorktreePlan(
+        issue_number=42,
+        title="Resume interrupted worker",
+        state="active",
+        route="worker",
+        gate="ci",
+        base_branch="main",
+        proposed_branch="work/issue-42-resume-interrupted-worker",
+        proposed_worktree="../signposter-work/42",
+        working_tree_clean=True,
+        branch_exists=False,
+        worktree_exists=True,
+        has_unresolved_dependencies=False,
+        dependency_block_reason=None,
+        status="blocked — proposed worktree path already exists: ../signposter-work/42",
+        notes=["No branches or worktrees were created."],
+        branch_collision_reason="worktree path already exists",
+    )
+
+    output = format_worktree_plan(plan)
+
+    assert "Recovery hints:" in output
+    assert "Existing worktree detected" in output
+    assert "signposter run --repo <repo> --issue 42 --execute --worktree" in output
+    assert "signposter artifact write-worker-summary" in output
+    assert "signposter report --repo <repo> --issue 42" in output
+    assert "signposter gate --repo <repo> --issue 42 --dry-run" in output
