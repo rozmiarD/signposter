@@ -15,6 +15,8 @@ from pathlib import Path
 from shutil import which
 from typing import Protocol
 
+from signposter.token_usage import format_token_usage_accounting, summarize_token_usage
+
 
 class CompletedProcessLike(Protocol):
     returncode: int
@@ -337,33 +339,44 @@ def _format_codex_cli_summary(
     output = "\n".join(part for part in (stdout, stderr) if part)
     excerpt = _bounded_excerpt(output)
     complete = exit_code == 0 and status == "success"
-    return "\n".join(
+    token_usage = summarize_token_usage(
+        role=invocation.agent,
+        model=invocation.model,
+        reasoning_effort=invocation.reasoning_effort,
+        output_text=output,
+    )
+    lines = [
+        "# Signposter Codex CLI Execution Summary",
+        "",
+        "**Backend:** codex-cli",
+        f"**Agent:** {invocation.agent}",
+        f"**Model:** {invocation.model}",
+        f"**Reasoning:** {invocation.reasoning_effort}",
+        f"**Token Usage Status:** {token_usage.status}",
+        f"**Exit Code:** {exit_code}",
+        f"**Status:** {status}",
+        f"**Task execution complete:** {'yes' if complete else 'no'}",
+        f"**Acceptance:** {'pass' if complete else 'needs-work'}",
+        "",
+        "Backend: codex-cli",
+        f"Agent: {invocation.agent}",
+        f"Model: {invocation.model}",
+        f"Reasoning: {invocation.reasoning_effort}",
+        "Reasoning Transport: Signposter metadata only",
+        f"Session Key: {invocation.session_key}",
+        f"Prompt Artifact: {invocation.prompt_path}",
+        "Prompt Transport: stdin",
+        f"Working Directory: {invocation.working_dir or '(current process cwd)'}",
+        f"Last Message Artifact: {invocation.output_last_message_path or '(not requested)'}",
+        f"Started (UTC): {started_at.isoformat()}",
+        f"Status: {status}",
+        f"Reason: {reason}",
+        f"Raw Output: {raw_path}",
+        "",
+    ]
+    lines.extend(format_token_usage_accounting(token_usage).splitlines())
+    lines.extend(
         [
-            "# Signposter Codex CLI Execution Summary",
-            "",
-            "**Backend:** codex-cli",
-            f"**Agent:** {invocation.agent}",
-            f"**Model:** {invocation.model}",
-            f"**Reasoning:** {invocation.reasoning_effort}",
-            f"**Exit Code:** {exit_code}",
-            f"**Status:** {status}",
-            f"**Task execution complete:** {'yes' if complete else 'no'}",
-            f"**Acceptance:** {'pass' if complete else 'needs-work'}",
-            "",
-            "Backend: codex-cli",
-            f"Agent: {invocation.agent}",
-            f"Model: {invocation.model}",
-            f"Reasoning: {invocation.reasoning_effort}",
-            "Reasoning Transport: Signposter metadata only",
-            f"Session Key: {invocation.session_key}",
-            f"Prompt Artifact: {invocation.prompt_path}",
-            "Prompt Transport: stdin",
-            f"Working Directory: {invocation.working_dir or '(current process cwd)'}",
-            f"Last Message Artifact: {invocation.output_last_message_path or '(not requested)'}",
-            f"Started (UTC): {started_at.isoformat()}",
-            f"Status: {status}",
-            f"Reason: {reason}",
-            f"Raw Output: {raw_path}",
             "",
             "## Gate evidence",
             "",
@@ -383,6 +396,7 @@ def _format_codex_cli_summary(
             "- Agent, session key, and reasoning effort are recorded as Signposter metadata.",
         ]
     )
+    return "\n".join(lines)
 
 
 def _bounded_excerpt(text: str, *, max_lines: int = 30, max_chars: int = 1800) -> str:
