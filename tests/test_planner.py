@@ -32,6 +32,7 @@ from signposter.planner import (
     format_planner_next_from_status,
     format_planner_roadmap,
     format_planner_run_plan,
+    format_planner_seed_plan,
     format_planner_side_task_plan,
     format_planner_status,
     format_planner_step,
@@ -702,6 +703,80 @@ def test_cli_planner_seed_without_show_commands_keeps_command_hidden(
     assert exc_info.value.code in (None, 0)
     assert "----- BEGIN GH COMMAND -----" not in captured
     assert "gh issue create" not in captured
+
+
+def test_format_planner_seed_plan_command_preview_is_deterministic(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+
+    first = format_planner_seed_plan(
+        plan_path,
+        seed_plan,
+        repo="ExatronOmega/signposter",
+        body_dir=body_dir,
+        show_commands=True,
+    )
+    second = format_planner_seed_plan(
+        plan_path,
+        seed_plan,
+        repo="ExatronOmega/signposter",
+        body_dir=body_dir,
+        show_commands=True,
+    )
+
+    assert second == first
+    assert "command preview:" in first
+    assert "----- BEGIN GH COMMAND -----" in first
+    assert "----- END GH COMMAND -----" in first
+    assert "Command previews are not executed." in first
+    assert "No GitHub mutation was performed." in first
+    assert "No GitHub issue was created." in first
+    assert "Planner Seed Apply" not in first
+    assert "Seed Label Preflight" not in first
+    assert "Executed:" not in first
+
+
+def test_cli_planner_seed_dry_run_preview_excludes_apply_sections(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    write_planner_draft("build lifecycle watch", plan_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "seed",
+            "--plan",
+            str(plan_path),
+            "--repo",
+            "ExatronOmega/signposter",
+            "--show-commands",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+    assert exc_info.value.code in (None, 0)
+    assert "Signposter Planner Seed" in captured
+    assert "command preview:" in captured
+    assert "Dry-run only." in captured
+    assert "Command previews are not executed." in captured
+    assert "No GitHub mutation was performed." in captured
+    assert "No GitHub issue was created." in captured
+    assert "Planner Seed Apply" not in captured
+    assert "Seed Label Preflight" not in captured
+    assert "Written issue body files:" not in captured
+    assert "Written seed manifest:" not in captured
 
 
 def test_write_planner_seed_issue_bodies_writes_markdown_files(tmp_path: Path) -> None:
