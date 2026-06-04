@@ -183,6 +183,58 @@ def _fallback_runner_plan(plan: RunnerPlan) -> RunnerPlan | None:
     )
 
 
+def _fallback_transparency_lines(plan: RunnerPlan) -> tuple[str, ...]:
+    """Return deterministic operator-facing fallback/takeover policy lines."""
+    fallback_plan = _fallback_runner_plan(plan)
+    if fallback_plan is None:
+        return (
+            "automatic_fallback: no",
+            "fallback_candidate: none",
+            "fallback_trigger: none",
+            "manual_takeover: required after any persistent backend blocker",
+            (
+                "manual_fallback_command: signposter artifact write-worker-summary "
+                f"--repo <repo> --issue {plan.item.number} --agent human/operator --apply"
+            ),
+            "silent_fallback: forbidden",
+        )
+
+    candidate = (
+        f"{fallback_plan.selected_role_name} / {fallback_plan.selected_model} / "
+        f"{fallback_plan.selected_reasoning_effort}"
+    )
+    if plan.proposed_runner == "openclaw":
+        return (
+            "automatic_fallback: yes",
+            f"fallback_candidate: {candidate}",
+            "fallback_trigger: unsupported selected model from runtime output",
+            "manual_takeover: required if primary and fallback both fail",
+            (
+                "manual_fallback_command: signposter artifact write-worker-summary "
+                f"--repo <repo> --issue {plan.item.number} --agent human/operator --apply"
+            ),
+            "silent_fallback: forbidden; retry is recorded in raw and summary artifacts",
+        )
+    return (
+        "automatic_fallback: no",
+        f"fallback_candidate: {candidate}",
+        (
+            "fallback_trigger: unavailable for codex-cli automatic retry; "
+            "candidate is visible for operator takeover only"
+        ),
+        "manual_takeover: required after codex-cli backend blocker",
+        (
+            "manual_fallback_command: signposter artifact write-worker-summary "
+            f"--repo <repo> --issue {plan.item.number} --agent human/operator --apply"
+        ),
+        "silent_fallback: forbidden",
+    )
+
+
+def _format_fallback_transparency_block(plan: RunnerPlan, *, indent: str) -> list[str]:
+    return [f"{indent}{line}" for line in _fallback_transparency_lines(plan)]
+
+
 def _format_dirty_tree_refusal(
     *,
     context: str,
@@ -532,6 +584,8 @@ def format_runner_plan(plans: list[RunnerPlan]) -> str:
         lines.append(f"      working_dir:      {plan.proposed_working_dir}")
         lines.append(f"      prompt_artifact:  {plan.proposed_prompt_path}")
         lines.append(f"      command_shape:    {plan.proposed_command_shape}")
+        lines.append("      fallback_takeover:")
+        lines.extend(_format_fallback_transparency_block(plan, indent="        "))
         lines.append("")
         lines.append(f"    Reason: {plan.reason}")
         lines.append(f"    Role Reason: {plan.role_selection_reason}")
@@ -1183,6 +1237,8 @@ def render_prompt(
 - Execution agent/profile: {plan.selected_openclaw_agent}
 - role selection reason: {plan.role_selection_reason}
 - command shape: {plan.proposed_command_shape}
+- fallback/takeover transparency:
+{chr(10).join(f"  - {line}" for line in _fallback_transparency_lines(plan))}
 
 ## Prompt Contract
 - expected output format: concise execution summary with changed files, validation,
@@ -1285,6 +1341,8 @@ def _render_compact_worker_prompt(
 - Execution agent/profile: {plan.selected_openclaw_agent}
 - role selection reason: {plan.role_selection_reason}
 - command shape: {plan.proposed_command_shape}
+- fallback/takeover transparency:
+{chr(10).join(f"  - {line}" for line in _fallback_transparency_lines(plan))}
 
 ## Prompt Contract
 - expected output format: concise execution summary with changed files, validation,
@@ -2192,6 +2250,18 @@ def _generate_execution_summary(
         lines.append(f"**Original Selected Model:** {original_model or 'unknown'}")
     else:
         lines.append("**Runtime Fallback Used:** no")
+    lines.append("")
+    lines.append("## Fallback / takeover transparency")
+    if fallback_used:
+        lines.append("- automatic fallback retry was used and recorded in this artifact")
+        lines.append(f"- effective role/model: {plan.selected_role_name} / {plan.selected_model}")
+        lines.append(
+            f"- original role/model: {original_role_name or 'unknown'} / "
+            f"{original_model or 'unknown'}"
+        )
+        lines.append("- silent fallback: forbidden")
+    else:
+        lines.extend(f"- {line}" for line in _fallback_transparency_lines(plan))
 
     # Basic stats
     raw_text = stdout + ("\n" + stderr if stderr else "")
