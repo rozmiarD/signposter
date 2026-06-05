@@ -228,6 +228,53 @@ def test_worker_summary_plan_includes_manual_takeover_provenance():
     assert "GitHub comment provenance: bounded report excerpt only." in plan.content
 
 
+def test_worker_summary_validation_records_cover_required_commands(tmp_path):
+    targeted = [
+        "ruff check src/signposter/artifact.py tests/test_artifact.py",
+        "python -m pytest tests/test_artifact.py -q",
+    ]
+    full = [
+        "ruff check .",
+        "python -m pytest tests/ -q",
+    ]
+    plan = plan_worker_summary(
+        repo="test/repo",
+        issue=35,
+        targeted_validation=targeted,
+        full_validation=full,
+        runs_dir=tmp_path,
+    )
+    write_manual_artifact(plan, apply=True)
+
+    validation = validate_worker_summary_artifact(35, runs_dir=tmp_path)
+
+    assert validation.status == "pass"
+    for command in targeted + full:
+        assert f"  command: `{command}`" in plan.content
+
+
+def test_validate_worker_summary_blocks_incomplete_validation_result_records(tmp_path):
+    plan = plan_worker_summary(
+        repo="test/repo",
+        issue=36,
+        targeted_validation=[
+            "ruff check src/signposter/artifact.py tests/test_artifact.py",
+            "python -m pytest tests/test_artifact.py -q",
+        ],
+        runs_dir=tmp_path,
+    )
+    text = plan.content.replace(
+        "  command: `python -m pytest tests/test_artifact.py -q`\n",
+        "",
+    )
+    (tmp_path / "issue-36-worker.summary.md").write_text(text, encoding="utf-8")
+
+    validation = validate_worker_summary_artifact(36, runs_dir=tmp_path)
+
+    assert validation.status == "blocked"
+    assert "validation result required-command coverage" in validation.missing
+
+
 def test_worker_summary_plan_includes_default_token_usage_accounting():
     plan = plan_worker_summary(repo="test/repo", issue=32)
     decision = evaluate_ci_gate(0, plan.content)
