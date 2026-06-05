@@ -6,8 +6,10 @@ from signposter.comments import contains_auto_close_keyword
 from signposter.handoff import HandoffPlan
 from signposter.pr import (
     format_github_command_result,
+    format_github_issue_read_result,
     format_pr_plan,
     plan_pr_for_issue,
+    read_github_issue_with_timeout,
     run_github_command_with_timeout,
 )
 
@@ -109,6 +111,64 @@ def test_github_command_timeout_wrapper_rejects_non_gh_command():
         assert "commands starting with 'gh'" in str(exc)
     else:
         raise AssertionError("expected ValueError")
+
+
+def test_github_issue_read_timeout_helper_builds_bounded_read_command():
+    def fake_run(command, **kwargs):
+        assert command == [
+            "gh",
+            "issue",
+            "view",
+            "44",
+            "-R",
+            "owner/repo",
+            "--json",
+            "number,title,state",
+        ]
+        assert kwargs["timeout"] == 4
+        assert kwargs["capture_output"] is True
+        assert kwargs["text"] is True
+        return type("Proc", (), {"returncode": 0, "stdout": '{"number":44}', "stderr": ""})()
+
+    result = read_github_issue_with_timeout(
+        "owner/repo",
+        44,
+        fields=("number", "title", "state"),
+        timeout_seconds=4,
+        run_command=fake_run,
+    )
+    output = format_github_issue_read_result("owner/repo", 44, result)
+
+    assert result.status == "completed"
+    assert result.returncode == 0
+    assert result.stdout == '{"number":44}'
+    assert "Signposter GitHub Issue Read Result" in output
+    assert "No GitHub mutation was performed." in output
+
+
+def test_github_issue_read_timeout_helper_records_timeout():
+    def fake_run(command, **kwargs):
+        raise subprocess.TimeoutExpired(
+            cmd=command,
+            timeout=kwargs["timeout"],
+            output="partial issue output",
+            stderr="partial issue error",
+        )
+
+    result = read_github_issue_with_timeout(
+        "owner/repo",
+        44,
+        timeout_seconds=5,
+        run_command=fake_run,
+    )
+    output = format_github_issue_read_result("owner/repo", 44, result)
+
+    assert result.status == "timeout"
+    assert result.returncode is None
+    assert result.stdout == "partial issue output"
+    assert result.stderr == "partial issue error"
+    assert "Status:\n  timeout" in output
+    assert "callers must stop after timeout before later mutations" in output
 
 
 def test_pr_plan_ready_for_clean_branch_with_committed_changes(monkeypatch):

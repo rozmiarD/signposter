@@ -14,6 +14,7 @@ from signposter.comments import contains_auto_close_keyword
 from signposter.handoff import HandoffPlan, plan_handoff_for_issue
 
 DEFAULT_GITHUB_COMMAND_TIMEOUT_SECONDS = 30
+DEFAULT_GITHUB_ISSUE_READ_FIELDS = ("number", "title", "state", "labels")
 
 
 @dataclass(frozen=True)
@@ -123,6 +124,64 @@ def format_github_command_result(result: GitHubCommandResult) -> str:
         "Notes:",
         "  No follow-up GitHub mutation was performed by this wrapper.",
         "  Callers must stop after timeout unless an explicit recovery path is planned.",
+    ]
+    return "\n".join(lines)
+
+
+def read_github_issue_with_timeout(
+    repo: str,
+    issue_number: int,
+    *,
+    fields: tuple[str, ...] = DEFAULT_GITHUB_ISSUE_READ_FIELDS,
+    timeout_seconds: int = DEFAULT_GITHUB_COMMAND_TIMEOUT_SECONDS,
+    run_command=subprocess.run,
+) -> GitHubCommandResult:
+    """Read one GitHub issue through gh with bounded timeout evidence."""
+    json_fields = ",".join(fields)
+    return run_github_command_with_timeout(
+        [
+            "gh",
+            "issue",
+            "view",
+            str(issue_number),
+            "-R",
+            repo,
+            "--json",
+            json_fields,
+        ],
+        timeout_seconds=timeout_seconds,
+        run_command=run_command,
+    )
+
+
+def format_github_issue_read_result(
+    repo: str,
+    issue_number: int,
+    result: GitHubCommandResult,
+) -> str:
+    """Render a compact GitHub issue read attempt result."""
+    lines = [
+        "Signposter GitHub Issue Read Result",
+        "",
+        "Issue:",
+        f"  repo: {repo}",
+        f"  issue: #{issue_number}",
+        "",
+        "Command:",
+        "  " + shlex.join(result.command),
+        "",
+        "Status:",
+        f"  {result.status}",
+        f"  returncode: {result.returncode if result.returncode is not None else 'none'}",
+        f"  timeout_seconds: {result.timeout_seconds}",
+        "",
+        "Output:",
+        f"  stdout: {'present' if result.stdout else 'empty'}",
+        f"  stderr: {'present' if result.stderr else 'empty'}",
+        "",
+        "Notes:",
+        "  No GitHub mutation was performed.",
+        "  Issue reads are read-only; callers must stop after timeout before later mutations.",
     ]
     return "\n".join(lines)
 
