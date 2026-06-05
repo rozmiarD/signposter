@@ -2407,6 +2407,7 @@ def build_planner_advance_plan_from_status(
             "issue": issue,
             "source_task": None,
             "targets": [],
+            "final_task_unlocks": [],
             "planned_github_mutations": [],
             "planned_manifest_mutations": [],
             "requires_llm_analysis": False,
@@ -2421,6 +2422,7 @@ def build_planner_advance_plan_from_status(
             "issue": issue,
             "source_task": source_task,
             "targets": [],
+            "final_task_unlocks": [],
             "planned_github_mutations": [],
             "planned_manifest_mutations": [],
             "requires_llm_analysis": False,
@@ -2446,6 +2448,7 @@ def build_planner_advance_plan_from_status(
     targets = []
     blocked_downstream = []
     already_ready_downstream = []
+    final_task_unlocks = []
     planned_github_mutations = []
     for task in downstream:
         github_issue = task.get("github_issue")
@@ -2455,6 +2458,13 @@ def build_planner_advance_plan_from_status(
         if github_issue is None:
             continue
         if state == "ready" or workflow_state == "ready" or "state:ready" in labels:
+            if _is_final_bootstrap_task(task):
+                final_task_unlocks.append(
+                    _build_final_task_unlock_entry(
+                        task,
+                        missing_dependencies=[],
+                    )
+                )
             already_ready_downstream.append(
                 {
                     "key": task["key"],
@@ -2472,6 +2482,13 @@ def build_planner_advance_plan_from_status(
             if dependency not in completed
         ]
         if missing_dependencies:
+            if _is_final_bootstrap_task(task):
+                final_task_unlocks.append(
+                    _build_final_task_unlock_entry(
+                        task,
+                        missing_dependencies=missing_dependencies,
+                    )
+                )
             blocked_downstream.append(
                 {
                     "key": task["key"],
@@ -2488,6 +2505,13 @@ def build_planner_advance_plan_from_status(
             "labels_to_add": ["state:ready"],
         }
         targets.append(target)
+        if _is_final_bootstrap_task(task):
+            final_task_unlocks.append(
+                _build_final_task_unlock_entry(
+                    task,
+                    missing_dependencies=[],
+                )
+            )
 
         command = f"gh issue edit {github_issue}"
         if repo:
@@ -2529,6 +2553,7 @@ def build_planner_advance_plan_from_status(
         "source_task": source_task,
         "targets": targets,
         "already_ready_downstream": already_ready_downstream,
+        "final_task_unlocks": final_task_unlocks,
         "planned_github_mutations": planned_github_mutations,
         "planned_manifest_mutations": [],
         "requires_llm_analysis": False,
@@ -2592,6 +2617,30 @@ def format_planner_advance_plan(result: dict[str, Any]) -> str:
                 "no duplicate state:ready mutation planned"
             )
 
+    final_task_unlocks = result.get("final_task_unlocks", [])
+    if final_task_unlocks:
+        lines.extend(["", "Final-task unlock contract:"])
+        for unlock in final_task_unlocks:
+            github_issue = unlock.get("github_issue")
+            issue_text = f"#{github_issue}" if github_issue is not None else "unknown"
+            lines.append(
+                f"  {unlock.get('key', 'unknown')} — issue: {issue_text} — "
+                f"status: {unlock.get('status', 'unknown')}"
+            )
+            lines.append(f"    contract: {unlock.get('contract_status', 'unknown')}")
+            lines.append(f"    current prefix: {unlock.get('current_prefix', '')}")
+            lines.append(f"    next prefix: {unlock.get('next_prefix', '')}")
+            lines.append(
+                f"    minimum DAG nodes: {unlock.get('minimum_dag_nodes', '')}"
+            )
+            waiting_on = unlock.get("waiting_on", [])
+            if waiting_on:
+                lines.append(f"    waiting on: {', '.join(waiting_on)}")
+            errors = unlock.get("errors", [])
+            if errors:
+                lines.append(f"    errors: {'; '.join(errors)}")
+            lines.append(f"    safety: {unlock.get('safety_note', '')}")
+
     lines.extend(["", "Planned GitHub mutations:"])
     mutations = result.get("planned_github_mutations", [])
     if mutations:
@@ -2624,6 +2673,65 @@ def format_planner_advance_plan(result: dict[str, Any]) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def _is_final_bootstrap_task(task: dict[str, Any]) -> bool:
+    key = str(task.get("key", ""))
+    title = str(task.get("title") or task.get("expected_title") or "")
+    searchable = f"{key} {title}".lower()
+    return (
+        "final" in searchable
+        and "bootstrap" in searchable
+        and _mainline_from_task_key(key) is not None
+    )
+
+
+def _build_final_task_unlock_entry(
+    task: dict[str, Any],
+    *,
+    missing_dependencies: list[str],
+) -> dict[str, Any]:
+    current_prefix = _mainline_from_task_key(str(task.get("key", ""))) or ""
+    next_prefix = _infer_next_roadmap_prefix(current_prefix, task)
+    contract = build_next_roadmap_bootstrap_contract(
+        current_prefix=current_prefix,
+        next_prefix=next_prefix,
+    )
+    errors = validate_next_roadmap_bootstrap_contract(contract)
+    contract_status = "blocked" if errors else "ready"
+    dependency_status = "locked" if missing_dependencies else "ready"
+    status = "blocked" if errors else dependency_status
+    return {
+        "key": task.get("key"),
+        "title": task.get("title") or task.get("expected_title") or "",
+        "github_issue": task.get("github_issue"),
+        "status": status,
+        "contract_status": contract_status,
+        "current_prefix": current_prefix,
+        "next_prefix": next_prefix,
+        "minimum_dag_nodes": contract.get("minimum_dag_nodes"),
+        "waiting_on": list(missing_dependencies),
+        "errors": errors,
+        "safety_note": (
+            "final task unlock is dry-run only until planner advance --apply "
+            "is explicit"
+        ),
+    }
+
+
+def _infer_next_roadmap_prefix(current_prefix: str, task: dict[str, Any]) -> str:
+    title = str(task.get("title") or task.get("expected_title") or "")
+    text = f"{task.get('key', '')} {title}".upper()
+    current = current_prefix.upper()
+    for prefix in re.findall(r"\bH\d{3,}\b", text):
+        if prefix != current:
+            return prefix
+
+    match = re.fullmatch(r"([A-Z]+)(\d+)", current)
+    if not match:
+        return ""
+    prefix, number = match.groups()
+    return f"{prefix}{int(number) + 1:0{len(number)}d}"
 
 
 def build_planner_impact_from_status(
