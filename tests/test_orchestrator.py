@@ -730,6 +730,21 @@ def test_orchestrator_step_apply_blocks_takeover_until_manual_recovery(
     assert any("Takeover apply guard stopped before running" in note for note in result.notes)
     run_command.assert_not_called()
 
+    output = format_orchestrator_step(result)
+    assert "Mutation boundary:" in output
+    assert "status: blocked before lifecycle command" in output
+    assert "command executed: no" in output
+    assert "category: resume-existing-worktree" in output
+    assert "reason: takeover evidence requires manual recovery before mutation" in output
+    assert (
+        "next: signposter run --repo ExatronOmega/signposter "
+        "--issue 46 --execute --worktree"
+    ) in output
+    assert (
+        "safety: no lifecycle command, GitHub mutation, local mutation, "
+        "or backend execution was performed"
+    ) in output
+
 
 def test_orchestrator_stuck_state_recovery_smoke_surfaces_takeover_and_ci_blocker(
     monkeypatch: pytest.MonkeyPatch,
@@ -798,6 +813,9 @@ def test_orchestrator_stuck_state_recovery_smoke_surfaces_takeover_and_ci_blocke
         "Takeover apply guard stopped before running" in note for note in step.notes
     )
     run_command.assert_not_called()
+    blocked_output = format_orchestrator_step(step)
+    assert "Mutation boundary:" in blocked_output
+    assert "command executed: no" in blocked_output
 
     ci_blocked = _next(
         issue_number=46,
