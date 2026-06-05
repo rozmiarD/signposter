@@ -1048,6 +1048,10 @@ def format_orchestrator_step(result: OrchestratorStep) -> str:
         f"  applied: {'yes' if result.applied else 'no'}",
         f"  exit code: {result.exit_code if result.exit_code is not None else 'n/a'}",
     ]
+    mutation_boundary = _format_takeover_apply_mutation_boundary_lines(result)
+    if mutation_boundary:
+        lines.extend(["", "Mutation boundary:"])
+        lines.extend(f"  {line}" for line in mutation_boundary)
     if result.diagnosis_status or result.raw_artifact_path or result.summary_artifact_path:
         lines.extend(["", "Diagnosis:"])
         lines.append(f"  status: {result.diagnosis_status or 'unknown'}")
@@ -1075,6 +1079,37 @@ def format_orchestrator_step(result: OrchestratorStep) -> str:
     lines.extend(["", "Notes:"])
     lines.extend(f"  {note}" for note in result.notes)
     return "\n".join(lines)
+
+
+def _format_takeover_apply_mutation_boundary_lines(
+    result: OrchestratorStep,
+) -> list[str]:
+    """Return audit lines when apply is blocked before takeover recovery."""
+    category = result.next.takeover_category
+    if (
+        result.status != "blocked"
+        or result.applied
+        or not category
+        or not (result.stop_reason or "").startswith("takeover plan requires")
+    ):
+        return []
+
+    next_command = (
+        result.next.recovery_commands[0]
+        if result.next.recovery_commands
+        else "inspect takeover plan and preserve existing evidence"
+    )
+    return [
+        "status: blocked before lifecycle command",
+        "command executed: no",
+        f"category: {category}",
+        "reason: takeover evidence requires manual recovery before mutation",
+        f"next: {next_command}",
+        (
+            "safety: no lifecycle command, GitHub mutation, local mutation, "
+            "or backend execution was performed"
+        ),
+    ]
 
 
 def format_orchestrator_loop(result: OrchestratorLoop) -> str:
