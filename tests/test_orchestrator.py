@@ -521,6 +521,93 @@ def test_format_orchestrator_next_includes_missing_worker_artifact_takeover(
     assert "signposter artifact write-worker-summary --repo ExatronOmega/signposter" in output
 
 
+def test_orchestrator_next_detects_malformed_worker_summary(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    runs = tmp_path / "artifacts" / "runs"
+    runs.mkdir(parents=True)
+    (runs / "issue-46-worker.summary.md").write_text(
+        "# incomplete worker summary\nAcceptance: pass\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    lifecycle_next = _next(
+        worker_summary_exists=True,
+        action="check-gate",
+        command="signposter gate --repo ExatronOmega/signposter --issue 46",
+        reason="worker evidence exists and gate should be checked",
+    )
+    issue = LabeledItem(
+        number=46,
+        title="Issue 46",
+        html_url="https://github.com/example/repo/issues/46",
+        labels=["state:active"],
+        item_type="issue",
+        updated_at=datetime.now(UTC).isoformat(),
+    )
+
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=issue),
+    ):
+        result = plan_orchestrator_next("ExatronOmega/signposter", issue=46)
+
+    assert result.status == "blocked"
+    assert result.takeover_category == "malformed-worker-artifact"
+    assert "canonical worker summary is malformed" in (result.takeover_reason or "")
+    assert "missing fields:" in (result.takeover_reason or "")
+    assert result.recovery_commands == (
+        "signposter artifact validate-worker-summary --issue 46",
+        "signposter artifact write-worker-summary --repo ExatronOmega/signposter "
+        "--issue 46 --apply",
+        "signposter artifact validate-worker-summary --issue 46",
+        "signposter report --repo ExatronOmega/signposter --issue 46 --apply",
+        "signposter gate --repo ExatronOmega/signposter --issue 46",
+    )
+
+
+def test_format_orchestrator_next_includes_malformed_worker_artifact_takeover(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    runs = tmp_path / "artifacts" / "runs"
+    runs.mkdir(parents=True)
+    (runs / "issue-46-worker.summary.md").write_text(
+        "Status: unsupported-model\nTask execution complete: no\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    lifecycle_next = _next(
+        worker_summary_exists=True,
+        action="check-gate",
+        command="signposter gate --repo ExatronOmega/signposter --issue 46",
+        reason="worker evidence exists and gate should be checked",
+    )
+    issue = LabeledItem(
+        number=46,
+        title="Issue 46",
+        html_url="https://github.com/example/repo/issues/46",
+        labels=["state:active"],
+        item_type="issue",
+        updated_at=datetime.now(UTC).isoformat(),
+    )
+
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=issue),
+    ):
+        result = plan_orchestrator_next("ExatronOmega/signposter", issue=46)
+
+    output = format_orchestrator_next(result)
+
+    assert "category: malformed-worker-artifact" in output
+    assert "resume path: inspect canonical worker summary validation findings" in output
+    assert "manual fallback: repair or replace the worker summary" in output
+    assert "signposter artifact validate-worker-summary --issue 46" in output
+    assert "Status:\n  blocked" in output
+
+
 def test_orchestrator_step_dry_run_does_not_execute() -> None:
     lifecycle_next = _next(
         workflow_state="state:ready",
