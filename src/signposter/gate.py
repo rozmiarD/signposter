@@ -56,6 +56,7 @@ def build_gate_heuristic_audit() -> GateHeuristicAudit:
             "worker summary schema is validated before CI-gate evaluation",
             "stale/failover artifact markers block before scoped evidence checks",
             "actual Python exception output requires traceback framing, not the word alone",
+            "worker disqualifier phrases are ignored only in neutral policy/audit context",
             "scoped code/test/no-op paths require validation and safety statements",
             "validated no-op completion requires explicit unchanged-tree evidence",
             "human gate structured fields: Human approval, Scope reviewed/match, "
@@ -71,7 +72,7 @@ def build_gate_heuristic_audit() -> GateHeuristicAudit:
             "positive review fallback still requires multiple positive reviewer phrases",
         ),
         false_positive_risks=(
-            "generic blocker words can still block when summaries discuss examples or policy",
+            "generic blocker words outside neutral audit/implementation context still block",
             "non-error blocker phrases still need section-aware failure context",
             "test-only disqualifiers include broad traceback wording rather than framed output",
         ),
@@ -735,16 +736,70 @@ def _has_contextual_worker_disqualifier_signal(text: str, signal: str) -> bool:
         "when actual failure output",
         "without indicating real blockers",
     )
+    neutral_sections = (
+        "implemented behavior",
+        "verified behavior",
+        "audit",
+        "audit result",
+        "regression coverage",
+        "findings",
+        "reasoning summary",
+    )
+    failure_sections = (
+        "validation evidence",
+        "execution output",
+        "failure",
+        "failures",
+        "errors",
+        "stderr",
+        "raw output",
+    )
+    current_section = ""
     for raw_line in (text or "").splitlines():
         line = raw_line.strip().lower()
+        if line.startswith("#"):
+            current_section = line.lstrip("#").strip()
+            continue
         if signal not in line:
             continue
         if any(marker in line for marker in neutral_context):
             continue
         if f"no {signal}" in line:
             continue
+        in_failure_section = any(section in current_section for section in failure_sections)
+        in_neutral_section = any(section in current_section for section in neutral_sections)
+        if (
+            in_neutral_section
+            and not in_failure_section
+            and _is_neutral_worker_disqualifier_discussion(line)
+        ):
+            continue
         return True
     return False
+
+
+def _is_neutral_worker_disqualifier_discussion(line: str) -> bool:
+    """Return True for meta-discussion of blocker phrases, not actual failures."""
+    neutral_markers = (
+        "regression",
+        "coverage",
+        "test",
+        "tests",
+        "guard",
+        "preserve",
+        "preserved",
+        "still block",
+        "still blocks",
+        "continues to block",
+        "continue to block",
+        "remains blocked",
+        "remain blocked",
+        "blocked-path",
+        "blocked path",
+        "policy",
+        "heuristic",
+    )
+    return any(marker in line for marker in neutral_markers)
 
 
 def _has_scoped_worker_test_completion_evidence(text: str) -> bool:
