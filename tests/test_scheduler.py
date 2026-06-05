@@ -16,10 +16,10 @@ from signposter.scheduler import (
 )
 
 
-def _issue(number: int, labels: list[str]) -> LabeledItem:
+def _issue(number: int, labels: list[str], title: str | None = None) -> LabeledItem:
     return LabeledItem(
         number=number,
-        title=f"Issue {number}",
+        title=title or f"Issue {number}",
         html_url=f"https://github.com/example/repo/issues/{number}",
         labels=labels,
         item_type="issue",
@@ -82,6 +82,49 @@ def test_scheduler_skips_dependency_blocked_ready_issue() -> None:
     assert result.issue is not None
     assert result.issue.number == 4
     assert "#3: blocked by #2 -> state:active" in result.skipped
+
+
+def test_scheduler_skips_stale_roadmap_ready_issue_when_newer_ready_exists() -> None:
+    issues = [
+        _issue(50, ["state:ready"], title="H048O — Old dashboard task"),
+        _issue(58, ["state:ready"], title="H051-028 — Planner stale-roadmap task guard"),
+    ]
+
+    with (
+        patch("signposter.scheduler.fetch_open_issues", return_value=issues),
+        patch("signposter.scheduler.fetch_issue_context", return_value={"body": ""}),
+        patch("signposter.scheduler.is_dependency_blocked", return_value=(False, "none")),
+    ):
+        result = select_next_issue("example/repo")
+
+    assert result.status == "ready"
+    assert result.issue is not None
+    assert result.issue.number == 58
+    assert "#50: stale roadmap task H048O; current roadmap is H051" in result.skipped
+
+
+def test_scheduler_skips_old_ready_issue_when_newer_roadmap_is_active(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    issues = [
+        _issue(50, ["state:ready"], title="H050-080 — Old final audit"),
+        _issue(58, ["state:active"], title="H051-028 — Planner stale-roadmap task guard"),
+    ]
+
+    with (
+        patch("signposter.scheduler.fetch_open_issues", return_value=issues),
+        patch("signposter.scheduler.fetch_issue_context", return_value={"body": ""}),
+        patch("signposter.scheduler.is_dependency_blocked", return_value=(False, "none")),
+    ):
+        result = select_next_issue("example/repo")
+
+    assert result.status == "completed"
+    assert result.issue is None
+    assert "#50: stale roadmap task H050; current roadmap is H051" in result.skipped
+    assert "#58: state:active" in result.skipped
+    assert result.active_counts == {"blocked-active": 1}
 
 
 def test_scheduler_prefers_unblocked_side_task_before_mainline() -> None:
