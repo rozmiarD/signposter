@@ -11,9 +11,11 @@ from signposter.pr import (
     format_github_issue_read_result,
     format_pr_ci_pending_timeout_status,
     format_pr_exact_commit_ci_selection_timeout_status,
+    format_pr_failed_ci_diagnosis_status,
     format_pr_plan,
     plan_pr_ci_pending_timeout_status,
     plan_pr_exact_commit_ci_selection_timeout_status,
+    plan_pr_failed_ci_diagnosis_status,
     plan_pr_for_issue,
     read_github_issue_with_timeout,
     run_github_command_with_timeout,
@@ -421,6 +423,69 @@ def test_pr_exact_commit_ci_selection_blocks_after_timeout():
     assert "command: gh run list -R owner/repo --branch main --commit abc123" in output
     assert "Callers must stop after selection timeout before merge or integration." in output
     assert "No issue was closed." in output
+
+
+def test_pr_failed_ci_diagnosis_blocks_with_bounded_failure_summaries():
+    secret = "ghp_" + ("A" * 30)
+    hidden_tail = "hidden failure detail"
+    result = plan_pr_failed_ci_diagnosis_status(
+        "owner/repo",
+        44,
+        checks_status="failing",
+        successful_checks=1,
+        pending_checks=1,
+        failed_checks=[
+            f"test failed with token {secret}\nline two context\n{hidden_tail}",
+            "lint failed because import order changed",
+            "mypy failed",
+        ],
+        max_failed_checks=2,
+        max_check_chars=70,
+    )
+    output = format_pr_failed_ci_diagnosis_status(result)
+
+    assert result.status == "blocked — CI checks failing"
+    assert result.reason == "3 failing check(s)"
+    assert result.failing_checks == 3
+    assert result.omitted_failed_checks == 1
+    assert "Signposter PR Failed CI Diagnosis — PR #44" in output
+    assert "inspect command: gh pr checks 44 --repo owner/repo" in output
+    assert "Callers must stop before merge or integration while CI is failing." in output
+    assert "No GitHub mutation was performed." in output
+    assert "No merge was performed." in output
+    assert secret not in output
+    assert "[REDACTED:github-token]" in output
+    assert hidden_tail not in output
+    assert "... 1 additional failing check(s) omitted" in output
+
+
+def test_pr_failed_ci_diagnosis_blocks_when_failure_evidence_missing():
+    result = plan_pr_failed_ci_diagnosis_status(
+        "owner/repo",
+        44,
+        checks_status="failing",
+        failed_checks=[],
+    )
+    output = format_pr_failed_ci_diagnosis_status(result)
+
+    assert result.status == "blocked — failing CI evidence missing"
+    assert result.reason == "CI is not passing, but no failing check summary was provided"
+    assert "Failed checks:\n  none provided" in output
+    assert "No issue was closed." in output
+
+
+def test_pr_failed_ci_diagnosis_ready_when_checks_pass():
+    result = plan_pr_failed_ci_diagnosis_status(
+        "owner/repo",
+        44,
+        checks_status="pass",
+        failed_checks=[],
+        successful_checks=2,
+    )
+
+    assert result.status == "ready"
+    assert result.reason == "PR checks passed"
+    assert result.failing_checks == 0
 
 
 def test_pr_plan_ready_for_clean_branch_with_committed_changes(monkeypatch):
