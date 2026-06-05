@@ -10,6 +10,17 @@ Signposter is the control plane. Prefer Signposter planning surfaces over direct
 manual GitHub mutation. Use direct `gh` only when Signposter prints it as a
 planned bridge or the current surface is planning-only.
 
+## Related References
+
+- `docs/troubleshooting.md`: recovery-first checklist for interrupted or
+  inconsistent lifecycle states.
+- `docs/artifacts-reference.md`: worker/reviewer artifact schema fields,
+  takeover preservation, and GitHub redaction boundaries.
+- `docs/architecture.md`: control-plane layers, module ownership, and safety
+  boundaries behind the command flow.
+- `docs/workflow.md`: compact lifecycle overview for status, evidence, and
+  planner advancement.
+
 ## Safety Rules
 
 - Dry-run/read-only is the default.
