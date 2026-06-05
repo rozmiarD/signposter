@@ -4024,6 +4024,21 @@ def run_planner_advance(args: argparse.Namespace) -> int:
     if args.dry_run:
         return 0
 
+    if advance_plan["status"] == "completed":
+        apply_result = apply_planner_advance_plan(
+            advance_plan,
+            repo=repo,
+            run_command=lambda command: subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                check=False,
+            ),
+        )
+        print()
+        print(format_planner_advance_apply_result(apply_result))
+        return 0 if apply_result["status"] == "completed" else 1
+
     try:
         existing_labels = _fetch_repo_label_names(repo)
     except RuntimeError as exc:

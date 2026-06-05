@@ -3071,6 +3071,57 @@ def test_apply_planner_advance_plan_blocks_after_timeout_before_mutation() -> No
     assert "No later GitHub mutation was attempted after the failed command." in output
 
 
+def test_apply_planner_advance_plan_completed_noops_already_ready_downstream() -> None:
+    advance_plan = {
+        "status": "completed",
+        "issue": 10,
+        "targets": [],
+        "already_ready_downstream": [
+            {
+                "key": "WATCH-002",
+                "github_issue": 11,
+                "state": "open",
+                "workflow_state": "ready",
+            }
+        ],
+        "planned_github_mutations": [],
+        "reasons": [
+            "one or more downstream tasks are already state:ready; "
+            "no duplicate mutation is planned"
+        ],
+    }
+    calls: list[list[str]] = []
+
+    result = apply_planner_advance_plan(
+        advance_plan,
+        repo="ExatronOmega/signposter",
+        run_command=lambda command: calls.append(command),
+    )
+
+    assert result == {
+        "status": "completed",
+        "issue": 10,
+        "promoted": [],
+        "commands": [],
+        "already_ready": [
+            {
+                "key": "WATCH-002",
+                "github_issue": 11,
+                "state": "open",
+                "workflow_state": "ready",
+            }
+        ],
+        "errors": [],
+    }
+    assert calls == []
+
+    output = format_planner_advance_apply_result(result)
+    assert "Status:\n  completed" in output
+    assert "no GitHub mutation was needed" in output
+    assert "Already ready GitHub issues:" in output
+    assert "WATCH-002 -> #11 already has state:ready" in output
+
+
 def test_build_planner_run_plan_from_status_reports_next_open_task(
     tmp_path: Path,
 ) -> None:
@@ -3389,12 +3440,28 @@ def test_build_planner_advance_plan_from_status_skips_workflow_ready_downstream(
         manifest_path=str(manifest_path),
     )
 
-    assert result["status"] == "blocked"
+    assert result["status"] == "completed"
     assert result["targets"] == []
+    assert result["already_ready_downstream"] == [
+        {
+            "key": "H049-004",
+            "github_issue": 211,
+            "state": "open",
+            "workflow_state": "ready",
+        }
+    ]
     assert result["planned_github_mutations"] == []
     assert result["planned_manifest_mutations"] == []
     assert result["requires_llm_analysis"] is False
-    assert "no downstream task is currently promotable" in result["reasons"]
+    assert (
+        "one or more downstream tasks are already state:ready; "
+        "no duplicate mutation is planned"
+    ) in result["reasons"]
+
+    output = format_planner_advance_plan(result)
+    assert "Status:\n  completed" in output
+    assert "Already ready downstream:" in output
+    assert "H049-004 — issue: #211 — no duplicate state:ready mutation planned" in output
 
 
 def test_build_planner_advance_plan_from_status_blocks_incomplete_multi_dependency(
@@ -4913,6 +4980,92 @@ def test_cli_planner_advance_apply_executes_single_label_mutation(
     assert "Signposter Planner Advance Apply" in captured
     assert "Status:\n  applied" in captured
     assert "WATCH-002 -> #11 added labels: state:ready" in captured
+    assert "No manifest mutation was performed." in captured
+    assert "No OpenClaw execution was performed." in captured
+    assert "No LLM analysis was performed." in captured
+
+
+def test_cli_planner_advance_apply_noops_when_sync_shows_target_ready(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    calls: list[list[str]] = []
+
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+        timeout: int | None = None,
+    ) -> _FakeGhIssueCreateResult:
+        calls.append(command)
+        if command[:4] == ["gh", "issue", "view", "10"]:
+            return _FakeGhIssueCreateResult(
+                0,
+                stdout=json.dumps(
+                    {"state": "OPEN", "labels": [{"name": "state:merged"}]}
+                ),
+            )
+        if command[:4] == ["gh", "issue", "view", "11"]:
+            return _FakeGhIssueCreateResult(
+                0,
+                stdout=json.dumps(
+                    {"state": "OPEN", "labels": [{"name": "state:ready"}]}
+                ),
+            )
+        return _FakeGhIssueCreateResult(
+            0,
+            stdout=json.dumps({"state": "OPEN", "labels": []}),
+        )
+
+    monkeypatch.setattr("signposter.cli.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "advance",
+            "--manifest",
+            str(manifest_path),
+            "--issue",
+            "10",
+            "--sync-github",
+            "--apply",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+
+    assert exc_info.value.code in (None, 0)
+    assert len(calls) == 5
+    assert not any(command[:3] == ["gh", "label", "list"] for command in calls)
+    assert not any(command[:3] == ["gh", "issue", "edit"] for command in calls)
+    assert "Status:\n  completed" in captured
+    assert "no duplicate state:ready mutation planned" in captured
+    assert "Signposter Planner Advance Apply" in captured
+    assert "WATCH-002 -> #11 already has state:ready" in captured
     assert "No manifest mutation was performed." in captured
     assert "No OpenClaw execution was performed." in captured
     assert "No LLM analysis was performed." in captured
