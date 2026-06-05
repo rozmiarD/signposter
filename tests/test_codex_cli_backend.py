@@ -159,7 +159,7 @@ def test_execute_codex_cli_invocation_captures_success_artifacts(tmp_path) -> No
     assert "**Model Availability:** verified" in summary
     assert "Model Availability: verified" in summary
     assert "Local Preflight Scope: codex binary and prompt artifact only" in summary
-    assert "**Reasoning:** medium" in summary
+    assert "**Requested Reasoning:** medium" in summary
     assert "**Exit Code:** 0" in summary
     assert "**Status:** success" in summary
     assert "**Automatic Fallback:** no" in summary
@@ -168,7 +168,9 @@ def test_execute_codex_cli_invocation_captures_success_artifacts(tmp_path) -> No
     assert "**Acceptance:** pass" in summary
     assert "Status: success" in summary
     assert "Prompt Transport: stdin" in summary
-    assert "Reasoning Transport: Signposter metadata only" in summary
+    assert "Requested Reasoning: medium" in summary
+    assert "Runtime Reasoning: not reported by Signposter summary" in summary
+    assert "Reasoning Transport: not passed to Codex CLI; Signposter metadata only" in summary
     assert "Raw output: local only" in summary
     assert "## Fallback / takeover transparency" in summary
     assert "Automatic fallback: no; codex-cli uses the selected model exactly once." in summary
