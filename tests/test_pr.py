@@ -1,8 +1,15 @@
 """Tests for PR planning (HARDENING-013)."""
 
+import subprocess
+
 from signposter.comments import contains_auto_close_keyword
 from signposter.handoff import HandoffPlan
-from signposter.pr import format_pr_plan, plan_pr_for_issue
+from signposter.pr import (
+    format_github_command_result,
+    format_pr_plan,
+    plan_pr_for_issue,
+    run_github_command_with_timeout,
+)
 
 
 def _handoff_plan(
@@ -47,6 +54,61 @@ def test_pr_plan_blocks_when_worktree_has_uncommitted_changes(monkeypatch):
     assert plan.status.startswith("blocked — worktree has uncommitted changes")
     assert plan.has_uncommitted_changes is True
     assert plan.changed_files == ["README.md"]
+
+
+def test_github_command_timeout_wrapper_records_completed_attempt():
+    def fake_run(command, **kwargs):
+        assert command == ["gh", "pr", "view", "4"]
+        assert kwargs["timeout"] == 3
+        assert kwargs["capture_output"] is True
+        assert kwargs["text"] is True
+        return type("Proc", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
+
+    result = run_github_command_with_timeout(
+        ["gh", "pr", "view", "4"],
+        timeout_seconds=3,
+        run_command=fake_run,
+    )
+    output = format_github_command_result(result)
+
+    assert result.status == "completed"
+    assert result.returncode == 0
+    assert result.stdout == "ok"
+    assert "Status:\n  completed" in output
+    assert "No follow-up GitHub mutation was performed by this wrapper." in output
+
+
+def test_github_command_timeout_wrapper_records_timeout():
+    def fake_run(command, **kwargs):
+        raise subprocess.TimeoutExpired(
+            cmd=command,
+            timeout=kwargs["timeout"],
+            output="partial stdout",
+            stderr="partial stderr",
+        )
+
+    result = run_github_command_with_timeout(
+        ("gh", "issue", "edit", "4"),
+        timeout_seconds=2,
+        run_command=fake_run,
+    )
+    output = format_github_command_result(result)
+
+    assert result.status == "timeout"
+    assert result.returncode is None
+    assert result.stdout == "partial stdout"
+    assert result.stderr == "partial stderr"
+    assert "Status:\n  timeout" in output
+    assert "Callers must stop after timeout unless an explicit recovery path is planned." in output
+
+
+def test_github_command_timeout_wrapper_rejects_non_gh_command():
+    try:
+        run_github_command_with_timeout(["git", "status"])
+    except ValueError as exc:
+        assert "commands starting with 'gh'" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")
 
 
 def test_pr_plan_ready_for_clean_branch_with_committed_changes(monkeypatch):

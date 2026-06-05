@@ -13,6 +13,20 @@ from dataclasses import dataclass
 from signposter.comments import contains_auto_close_keyword
 from signposter.handoff import HandoffPlan, plan_handoff_for_issue
 
+DEFAULT_GITHUB_COMMAND_TIMEOUT_SECONDS = 30
+
+
+@dataclass(frozen=True)
+class GitHubCommandResult:
+    """Bounded result for a single GitHub CLI command attempt."""
+
+    command: tuple[str, ...]
+    status: str
+    returncode: int | None
+    stdout: str
+    stderr: str
+    timeout_seconds: int
+
 
 @dataclass(frozen=True)
 class PRPlan:
@@ -35,6 +49,82 @@ class PRPlan:
 
     status: str
     notes: list[str]
+
+
+def run_github_command_with_timeout(
+    command: list[str] | tuple[str, ...],
+    *,
+    timeout_seconds: int = DEFAULT_GITHUB_COMMAND_TIMEOUT_SECONDS,
+    run_command=subprocess.run,
+) -> GitHubCommandResult:
+    """Run one gh command with a bounded timeout.
+
+    The helper is intentionally narrow: callers must pass a concrete `gh`
+    command, and timeout is reported as terminal evidence for that attempt.
+    Later mutation/recovery decisions remain explicit caller responsibility.
+    """
+    normalized = tuple(command)
+    if not normalized or normalized[0] != "gh":
+        raise ValueError("GitHub command wrapper only accepts commands starting with 'gh'")
+    bounded_timeout = max(1, int(timeout_seconds))
+    try:
+        result = run_command(
+            list(normalized),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=bounded_timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return GitHubCommandResult(
+            command=normalized,
+            status="timeout",
+            returncode=None,
+            stdout=_timeout_output_text(exc.stdout),
+            stderr=_timeout_output_text(exc.stderr),
+            timeout_seconds=bounded_timeout,
+        )
+
+    return GitHubCommandResult(
+        command=normalized,
+        status="completed" if result.returncode == 0 else "failed",
+        returncode=result.returncode,
+        stdout=result.stdout or "",
+        stderr=result.stderr or "",
+        timeout_seconds=bounded_timeout,
+    )
+
+
+def _timeout_output_text(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
+
+
+def format_github_command_result(result: GitHubCommandResult) -> str:
+    """Render a compact GitHub command attempt result."""
+    lines = [
+        "Signposter GitHub Command Result",
+        "",
+        "Command:",
+        "  " + shlex.join(result.command),
+        "",
+        "Status:",
+        f"  {result.status}",
+        f"  returncode: {result.returncode if result.returncode is not None else 'none'}",
+        f"  timeout_seconds: {result.timeout_seconds}",
+        "",
+        "Output:",
+        f"  stdout: {'present' if result.stdout else 'empty'}",
+        f"  stderr: {'present' if result.stderr else 'empty'}",
+        "",
+        "Notes:",
+        "  No follow-up GitHub mutation was performed by this wrapper.",
+        "  Callers must stop after timeout unless an explicit recovery path is planned.",
+    ]
+    return "\n".join(lines)
 
 
 def _get_branch_changed_files(
