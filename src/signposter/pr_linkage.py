@@ -33,6 +33,18 @@ def _first_match(pattern: str, text: str) -> int | None:
     return int(match.group(1))
 
 
+def _confidence_wording(source: str, confidence: str) -> str:
+    if source == "branch-pattern":
+        return f"confidence: {confidence}; branch naming is the strongest Signposter signal"
+    if source == "pr-body-related-issue":
+        return f"confidence: {confidence}; explicit Related issue line fallback"
+    if source == "pr-body-issue-reference":
+        return f"confidence: {confidence}; generic issue mention fallback"
+    if source == "ambiguous":
+        return f"confidence: {confidence}; conflicting linkage signals require inspection"
+    return f"confidence: {confidence}"
+
+
 def detect_pr_issue_linkage(head_branch: str | None, body: str | None) -> PrIssueLinkage:
     """Detect a single safe associated issue for a Signposter PR.
 
@@ -70,7 +82,10 @@ def detect_pr_issue_linkage(head_branch: str | None, body: str | None) -> PrIssu
             status="ambiguous",
             source="ambiguous",
             confidence="low",
-            reason=f"associated issue link is ambiguous ({details})",
+            reason=(
+                f"associated issue link is ambiguous ({details}); "
+                f"{_confidence_wording('ambiguous', 'low')}"
+            ),
             candidates=candidates,
         )
 
@@ -80,7 +95,10 @@ def detect_pr_issue_linkage(head_branch: str | None, body: str | None) -> PrIssu
             status="detected",
             source="branch-pattern",
             confidence="high",
-            reason=f"associated issue detected from branch pattern: #{branch_issue}",
+            reason=(
+                f"associated issue detected from branch pattern: #{branch_issue}; "
+                f"{_confidence_wording('branch-pattern', 'high')}"
+            ),
             candidates=candidates,
         )
 
@@ -90,7 +108,10 @@ def detect_pr_issue_linkage(head_branch: str | None, body: str | None) -> PrIssu
             status="detected",
             source="pr-body-related-issue",
             confidence="medium",
-            reason=f"associated issue detected from Related issue line: #{related_issue}",
+            reason=(
+                f"associated issue detected from Related issue line: #{related_issue}; "
+                f"{_confidence_wording('pr-body-related-issue', 'medium')}"
+            ),
             candidates=candidates,
         )
 
@@ -100,7 +121,10 @@ def detect_pr_issue_linkage(head_branch: str | None, body: str | None) -> PrIssu
             status="detected",
             source="pr-body-issue-reference",
             confidence="low",
-            reason=f"associated issue detected from issue reference: #{generic_issue}",
+            reason=(
+                f"associated issue detected from issue reference: #{generic_issue}; "
+                f"{_confidence_wording('pr-body-issue-reference', 'low')}"
+            ),
             candidates=candidates,
         )
 
@@ -109,6 +133,6 @@ def detect_pr_issue_linkage(head_branch: str | None, body: str | None) -> PrIssu
         status="missing",
         source="unknown",
         confidence="low",
-        reason="associated issue could not be detected",
+        reason="associated issue could not be detected; confidence: low",
         candidates=candidates,
     )
