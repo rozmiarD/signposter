@@ -405,6 +405,34 @@ def test_validate_worker_summary_artifact_blocks_unsafe_raw_marker(tmp_path):
     assert "preserve unsafe backend output separately" in out
 
 
+def test_validate_worker_summary_allows_preserved_diagnostic_runtime_pair(tmp_path):
+    plan = plan_worker_summary(repo="test/repo", issue=72, runs_dir=tmp_path)
+    write_manual_artifact(plan, apply=True)
+    (tmp_path / "issue-72-worker.codex-runtime.summary.md").write_text(
+        "runtime diagnostic summary",
+        encoding="utf-8",
+    )
+    (tmp_path / "issue-72-worker.codex-runtime.raw.txt").write_text(
+        "The model is not supported for this account.\n",
+        encoding="utf-8",
+    )
+
+    validation = validate_worker_summary_artifact(72, runs_dir=tmp_path)
+    audit = audit_run_artifacts(runs_dir=tmp_path)
+    out = format_run_artifact_audit(audit)
+
+    assert validation.status == "pass"
+    assert validation.raw_exists is False
+    assert any("raw output artifact not found" in item for item in validation.guidance)
+    assert audit.diagnostic_pairs == 1
+    assert (
+        "issue-72-worker.codex-runtime.raw.txt: model is not supported"
+        in audit.unsafe_markers
+    )
+    assert "retained diagnostic raw/summary pairs: 1" in out
+    assert "diagnostic suffixes such as .codex-runtime.*" in out
+
+
 def test_review_summary_plan_is_review_gate_compatible(tmp_path):
     plan = plan_review_summary(
         pr=31,
