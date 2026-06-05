@@ -19,6 +19,7 @@ from signposter.planner import (
     build_planner_impact_from_status,
     build_planner_next,
     build_planner_next_from_status,
+    build_planner_regeneration_plan,
     build_planner_run_plan_from_status,
     build_planner_seed_manifest,
     build_planner_seed_plan,
@@ -27,6 +28,7 @@ from signposter.planner import (
     build_planner_status_artifact,
     build_planner_status_counts,
     build_planner_step_from_next,
+    classify_planner_task,
     evaluate_worker_issue_body_size,
     format_gh_issue_create_command,
     format_next_roadmap_bootstrap_contract,
@@ -35,6 +37,7 @@ from signposter.planner import (
     format_planner_impact,
     format_planner_issue_body,
     format_planner_next_from_status,
+    format_planner_regeneration_plan,
     format_planner_roadmap,
     format_planner_run_plan,
     format_planner_seed_plan,
@@ -503,6 +506,236 @@ def test_format_planner_roadmap_blocks_invalid_plan() -> None:
     assert "Status:\nblocked" in roadmap
     assert "Validation errors:" in roadmap
     assert "WATCH-001: contains auto-close keyword" in roadmap
+
+
+def test_classify_planner_task_assigns_docs_only_lightweight_profile() -> None:
+    result = classify_planner_task(
+        {
+            "key": "DOC-001",
+            "title": "README operator wording update",
+            "body": "Update README only; no behavior change.",
+            "risk": "low",
+            "area": "docs",
+        }
+    )
+
+    assert result["scope_class"] == "narrow"
+    assert result["validation_profile"] == "docs-only"
+    assert result["dry_run_policy"] == "optional"
+    assert "python -m pytest tests/ -q" not in result["required_evidence"]
+
+
+def test_classify_planner_task_assigns_planner_targeted_plus_lint() -> None:
+    result = classify_planner_task(
+        {
+            "key": "PLAN-001",
+            "title": "Planner output formatting task",
+            "body": "Adjust planner output and tests.",
+            "risk": "medium",
+            "area": "planner",
+        }
+    )
+
+    assert result["scope_class"] == "normal"
+    assert result["validation_profile"] == "targeted-plus-lint"
+    assert result["dry_run_policy"] == "required"
+    assert "python -m pytest tests/test_planner.py -q" in result["required_evidence"]
+
+
+def test_classify_planner_task_assigns_full_suite_for_shared_safety() -> None:
+    result = classify_planner_task(
+        {
+            "key": "SAFE-001",
+            "title": "Lifecycle mutation boundary hardening",
+            "body": "Change lifecycle and merge gate behavior.",
+            "risk": "high",
+            "area": "lifecycle",
+        }
+    )
+
+    assert result["scope_class"] == "normal"
+    assert result["validation_profile"] == "full-suite"
+    assert result["dry_run_policy"] == "required"
+    assert "python -m pytest tests/ -q" in result["required_evidence"]
+
+
+def test_classify_planner_task_uses_wide_only_for_broad_work() -> None:
+    narrow = classify_planner_task(
+        {
+            "key": "SMALL-001",
+            "title": "One small CLI wording fix",
+            "body": "One localized output wording adjustment.",
+            "risk": "low",
+            "area": "cli",
+        }
+    )
+    wide = classify_planner_task(
+        {
+            "key": "WIDE-001",
+            "title": "Architecture roadmap bootstrap",
+            "body": "Regenerate roadmap and split global architecture work.",
+            "risk": "medium",
+            "area": "planner",
+        }
+    )
+
+    assert narrow["scope_class"] == "narrow"
+    assert wide["scope_class"] == "wide"
+    assert wide["dry_run_policy"] == "required"
+
+
+def test_build_planner_regeneration_plan_is_deterministic_and_bounded() -> None:
+    manifest = {
+        "repo": "ExatronOmega/signposter",
+        "plan": "docs/roadmaps/h051-plan.json",
+        "issues": [
+            {
+                "key": "H051-017",
+                "title": "H051-017 — Planner advance retry-safe output",
+                "labels": ["risk:high", "area:planner"],
+            },
+            {
+                "key": "H051-018",
+                "title": "H051-018 — No duplicate mutation after timeout regression",
+                "labels": ["risk:medium", "area:planner"],
+            },
+            {
+                "key": "H051-019",
+                "title": "H051-019 — Operator-visible GitHub stall guidance",
+                "labels": ["risk:low", "area:docs"],
+            },
+            {
+                "key": "H051-020",
+                "title": "H051-020 — GitHub command stderr bounded output",
+                "labels": ["risk:medium", "area:github"],
+            },
+            {
+                "key": "H051-080",
+                "title": "H051-080 — H051 final audit and H052 bootstrap",
+                "labels": ["risk:high", "area:planner"],
+            },
+        ],
+    }
+    plan = {
+        "goal": "H051 - autonomous Signposter reliability hardening",
+        "issues": [
+            {
+                "key": "H051-019",
+                "body": "Operator docs-only guidance for GitHub stalls.",
+            }
+        ],
+    }
+
+    result = build_planner_regeneration_plan(
+        manifest=manifest,
+        manifest_path="docs/roadmaps/h051-seed-manifest.json",
+        plan=plan,
+    )
+    output = format_planner_regeneration_plan(result)
+
+    assert result["status"] == "ready"
+    assert result["tasks_inspected"] == 5
+    assert result["tasks_kept"] == 5
+    assert result["tasks_expanded"] == 0
+    assert result["policy"]["llm_analysis"] is False
+    assert result["preserved_tasks"][0]["key"] == "H051-017"
+    assert all(
+        "H051-017" not in update["keys"]
+        for update in result["proposed_issue_updates"]
+    )
+    assert "Signposter Planner Regeneration" in output
+    assert "tasks inspected: 5" in output
+    assert "scope classifier: enabled" in output
+    assert "validation profiles: enabled" in output
+    assert "dry-run optimization: enabled" in output
+    assert "H051-017" in output
+    assert "No GitHub mutation was performed." in output
+    assert "No backend execution was performed." in output
+
+
+def test_cli_planner_regenerate_dry_run_no_github_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    manifest_path = tmp_path / "seed-manifest.json"
+    plan_path = tmp_path / "plan.json"
+    manifest = {
+        "repo": "ExatronOmega/signposter",
+        "plan": str(plan_path),
+        "issues": [
+            {
+                "key": "H051-019",
+                "title": "H051-019 — Operator-visible GitHub stall guidance",
+                "labels": ["risk:low", "area:docs"],
+            }
+        ],
+    }
+    plan = {"goal": "H051 - autonomous Signposter reliability hardening", "issues": []}
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+
+    def fail_if_called(*args: object, **kwargs: object) -> object:
+        raise AssertionError("planner regenerate dry-run must not call subprocess")
+
+    monkeypatch.setattr("signposter.cli.subprocess.run", fail_if_called)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "regenerate",
+            "--repo",
+            "ExatronOmega/signposter",
+            "--manifest",
+            str(manifest_path),
+            "--dry-run",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+
+    assert exc_info.value.code in (None, 0)
+    assert "Signposter Planner Regeneration" in captured
+    assert "Status:\n  ready" in captured
+    assert "validation: docs-only" in captured
+    assert "No GitHub mutation was performed." in captured
+    assert "No backend execution was performed." in captured
+
+
+def test_cli_planner_regenerate_apply_is_blocked(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    manifest_path = tmp_path / "seed-manifest.json"
+    manifest_path.write_text(json.dumps({"issues": []}), encoding="utf-8")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "regenerate",
+            "--manifest",
+            str(manifest_path),
+            "--apply",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+
+    assert exc_info.value.code == 1
+    assert "Status:\n  blocked" in captured
+    assert "--apply is not implemented for planner regeneration" in captured
+    assert "No GitHub mutation was performed." in captured
 
 
 def test_next_roadmap_bootstrap_contract_formats_ready_output() -> None:
