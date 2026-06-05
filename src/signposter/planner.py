@@ -2384,8 +2384,14 @@ def build_planner_run_plan_from_status(
             }
         )
 
+    run_status = (
+        "completed"
+        if next_plan.get("status") == "completed" and not advance_candidates
+        else "ready"
+    )
+
     return {
-        "status": "ready",
+        "status": run_status,
         "repo": status.get("repo", ""),
         "manifest_path": manifest_path,
         "planner_status": status.get("status", "unknown"),
@@ -2453,6 +2459,10 @@ def format_planner_run_plan(result: dict[str, Any]) -> str:
         )
     else:
         lines.append("  none")
+        completion = _planner_run_completion_lines(result, next_plan, counts)
+        if completion:
+            lines.extend(["", "Roadmap completion:"])
+            lines.extend(f"  {line}" for line in completion)
 
     reconcile_hints = _planner_run_reconcile_hints(next_plan)
     lines.extend(["", "Reconcile hints:"])
@@ -2509,6 +2519,26 @@ def format_planner_run_plan(result: dict[str, Any]) -> str:
     lines.extend(["", "Notes:"])
     lines.extend(f"  {note}" for note in result.get("notes", []))
     return "\n".join(lines)
+
+
+def _planner_run_completion_lines(
+    result: dict[str, Any],
+    next_plan: dict[str, Any],
+    counts: dict[str, Any],
+) -> list[str]:
+    """Return explicit completed-roadmap wording for planner run output."""
+    if next_plan.get("status") != "completed" and result.get("planner_status") != "completed":
+        return []
+    total = counts.get("total", 0)
+    completed = counts.get("completed", 0)
+    reason = str(next_plan.get("reason") or "no dependency-ready task remains")
+    return [
+        "status: completed",
+        f"reason: {reason}",
+        f"completed tasks: {completed}/{total}",
+        "next task: none",
+        "next action: no planner advance is required for this manifest",
+    ]
 
 
 def _format_planner_run_counts(counts: dict[str, Any]) -> str:

@@ -104,6 +104,42 @@ def test_backend_status_cli_renders_compact_summary(
     assert "No GitHub mutation was performed." in output
 
 
+def test_planner_completed_roadmap_wording_is_not_ready(tmp_path) -> None:
+    from signposter.planner import (
+        build_planner_run_plan_from_status,
+        format_planner_run_plan,
+    )
+
+    status = {
+        "repo": "ExatronOmega/signposter",
+        "manifest_status": "applied",
+        "status": "completed",
+        "tasks": [
+            {
+                "key": "H051-001",
+                "title": "Done task",
+                "github_issue": 501,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/501",
+                "state": "merged",
+                "depends_on": [],
+                "labels": [],
+            },
+        ],
+    }
+
+    result = build_planner_run_plan_from_status(
+        status,
+        manifest_path=str(tmp_path / "manifest.json"),
+    )
+    output = format_planner_run_plan(result)
+
+    assert "Status:\n  completed" in output
+    assert "Next task:\n  none" in output
+    assert "Roadmap completion:" in output
+    assert "completed tasks: 1/1" in output
+    assert "next action: no planner advance is required for this manifest" in output
+
+
 def test_handoff_snapshot_help_lists_manifest_options(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
