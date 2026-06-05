@@ -1388,6 +1388,57 @@ No unrelated files were changed.
     assert decision.decision == "pass"
 
 
+def test_evaluate_ci_gate_allows_neutral_blocker_regression_discussion():
+    """Meta-discussion of blocker phrase coverage must not block scoped evidence."""
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+# Signposter Execution Summary
+
+**Repository:** ExatronOmega/signposter
+**Issue:** #575 — H051-045 — Gate phrase sensitivity audit
+**Agent:** human/operator
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+## Files changed
+
+- src/signposter/gate.py
+- tests/test_gate.py
+
+## Implemented behavior / verified behavior
+
+- Regression coverage confirms real critical blocker lines still block.
+- Regression coverage confirms neutral blocker wording stays gate-friendly.
+
+## Validation evidence
+
+Targeted validation passed:
+
+- ruff check src/signposter/gate.py tests/test_gate.py
+- pytest tests/test_gate.py -q
+
+Full validation passed:
+
+- ruff check .
+- pytest tests/ -q
+
+## Safety
+
+No GitHub mutation was performed by the implemented code.
+No OpenClaw execution was performed by the implemented code.
+No issue was closed by the implemented code.
+No merge was performed by the implemented code.
+No unrelated files were changed.
+"""
+
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "pass"
+
+
 def test_evaluate_ci_gate_still_blocks_real_critical_blocker_line():
     from signposter.gate import evaluate_ci_gate
 
@@ -1398,6 +1449,27 @@ def test_evaluate_ci_gate_still_blocks_real_critical_blocker_line():
 **Acceptance:** pass
 
 Critical blocker: validation evidence is not trustworthy.
+"""
+
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "needs-work"
+    assert "critical blocker" in decision.reason
+
+
+def test_evaluate_ci_gate_still_blocks_validation_section_critical_blocker():
+    """Failure sections must stay blocking even when wording resembles a regression note."""
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+## Validation evidence
+
+Critical blocker still blocks validation: pytest output is not trustworthy.
 """
 
     decision = evaluate_ci_gate(0, summary)
