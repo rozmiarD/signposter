@@ -122,6 +122,8 @@ WORKER_SUMMARY_REQUIRED_FIELDS = {
     "validation evidence": "validation evidence",
     "targeted validation": "targeted validation passed",
     "full validation": "full validation passed",
+    "token usage accounting": "## token usage accounting",
+    "token usage status": "token usage status:",
     "safety section": "## safety",
     "no github mutation safety note": "no github mutation was performed",
     "no openclaw execution safety note": "no openclaw execution was performed",
@@ -195,6 +197,7 @@ def build_worker_summary(
     targeted_validation: list[str] | None = None,
     full_validation: list[str] | None = None,
     manual_smoke: list[str] | None = None,
+    token_usage: dict[str, object] | None = None,
 ) -> str:
     """Build a gate-friendly manual worker summary."""
     changed_files = changed_files or ["src/signposter/<file>.py", "tests/test_<file>.py"]
@@ -207,6 +210,7 @@ def build_worker_summary(
     ]
     full_validation = full_validation or DEFAULT_FULL_VALIDATION
     manual_smoke = manual_smoke or ["Manual CLI smoke passed."]
+    token_usage = token_usage or {}
     docs_only = _is_docs_only_changed_files(changed_files)
 
     lines = [
@@ -278,6 +282,23 @@ def build_worker_summary(
     )
     lines.extend(_validation_result_record_lines("targeted", targeted_validation))
     lines.extend(_validation_result_record_lines("full", full_validation))
+    token_usage_source = _artifact_field(
+        token_usage.get("source"),
+        default="manual summary did not receive backend token usage",
+    )
+    lines.extend(
+        [
+            "",
+            "## Token usage accounting",
+            "",
+            f"Token usage status: {_artifact_field(token_usage.get('status'))}",
+            f"Input tokens: {_artifact_field(token_usage.get('input_tokens'))}",
+            f"Output tokens: {_artifact_field(token_usage.get('output_tokens'))}",
+            f"Total tokens: {_artifact_field(token_usage.get('total_tokens'))}",
+            f"Estimated cost USD: {_artifact_field(token_usage.get('estimated_cost_usd'))}",
+            f"Source: {token_usage_source}",
+        ]
+    )
     lines.extend(["", "Manual CLI smoke passed:", ""])
     lines.extend(f"- `{cmd}`" for cmd in manual_smoke)
     lines.extend(
@@ -310,6 +331,11 @@ def build_worker_summary(
         ]
     )
     return "\n".join(lines) + "\n"
+
+
+def _artifact_field(value: object, *, default: str = "unknown") -> str:
+    text = str(value if value is not None else default).replace("\n", " ").strip()
+    return text or default
 
 
 def _validation_result_record_lines(scope: str, commands: list[str]) -> list[str]:
@@ -688,6 +714,7 @@ def plan_worker_summary(
     targeted_validation: list[str] | None = None,
     full_validation: list[str] | None = None,
     manual_smoke: list[str] | None = None,
+    token_usage: dict[str, object] | None = None,
     runs_dir: str | Path = "artifacts/runs",
 ) -> ManualArtifactPlan:
     path = Path(runs_dir) / f"issue-{issue}-worker.summary.md"
@@ -700,6 +727,7 @@ def plan_worker_summary(
         targeted_validation=targeted_validation,
         full_validation=full_validation,
         manual_smoke=manual_smoke,
+        token_usage=token_usage,
     )
     return ManualArtifactPlan(
         artifact_type="worker-summary",
