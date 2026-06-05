@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import shlex
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -1566,7 +1567,7 @@ def apply_planner_advance_plan(
         key=lambda item: (int(item.get("github_issue", 0)), str(item.get("key", ""))),
     )
 
-    for target in ordered_targets:
+    for index, target in enumerate(ordered_targets):
         labels_to_add = target.get("labels_to_add", [])
         if labels_to_add != ["state:ready"]:
             return {
@@ -1588,7 +1589,43 @@ def apply_planner_advance_plan(
             "--add-label",
             "state:ready",
         ]
-        run_command(command)
+        try:
+            result = run_command(command)
+        except subprocess.TimeoutExpired as exc:
+            failed = _planner_advance_failed_mutation(
+                target=target,
+                command=command,
+                status="timeout",
+                returncode=None,
+                stdout=exc.stdout,
+                stderr=exc.stderr,
+            )
+            return _planner_advance_stopped_result(
+                advance_plan=advance_plan,
+                promoted=promoted,
+                commands=commands,
+                failed=failed,
+                skipped_targets=ordered_targets[index + 1 :],
+            )
+
+        returncode = getattr(result, "returncode", 0) if result is not None else 0
+        if returncode != 0:
+            failed = _planner_advance_failed_mutation(
+                target=target,
+                command=command,
+                status="failed",
+                returncode=returncode,
+                stdout=getattr(result, "stdout", ""),
+                stderr=getattr(result, "stderr", ""),
+            )
+            return _planner_advance_stopped_result(
+                advance_plan=advance_plan,
+                promoted=promoted,
+                commands=commands,
+                failed=failed,
+                skipped_targets=ordered_targets[index + 1 :],
+            )
+
         commands.append(" ".join(command))
         promoted.append(
             {
@@ -1607,9 +1644,80 @@ def apply_planner_advance_plan(
     }
 
 
+def _planner_advance_failed_mutation(
+    *,
+    target: dict[str, Any],
+    command: list[str],
+    status: str,
+    returncode: int | None,
+    stdout: object,
+    stderr: object,
+) -> dict[str, Any]:
+    return {
+        "key": target["key"],
+        "github_issue": target["github_issue"],
+        "command": " ".join(command),
+        "status": status,
+        "returncode": returncode,
+        "stdout": _bounded_planner_command_output(stdout),
+        "stderr": _bounded_planner_command_output(stderr),
+    }
+
+
+def _planner_advance_stopped_result(
+    *,
+    advance_plan: dict[str, Any],
+    promoted: list[dict[str, Any]],
+    commands: list[str],
+    failed: dict[str, Any],
+    skipped_targets: list[dict[str, Any]],
+) -> dict[str, Any]:
+    skipped = [
+        {"key": target["key"], "github_issue": target["github_issue"]}
+        for target in skipped_targets
+    ]
+    return {
+        "status": "partial" if promoted else "blocked",
+        "issue": advance_plan.get("issue"),
+        "promoted": promoted,
+        "commands": commands,
+        "failed": [failed],
+        "skipped": skipped,
+        "errors": [
+            (
+                f"stopped after {failed['status']} promoting "
+                f"{failed['key']} (#{failed['github_issue']})"
+            )
+        ],
+    }
+
+
+def _bounded_planner_command_output(value: object, *, limit: int = 300) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        text = value.decode("utf-8", errors="replace")
+    else:
+        text = str(value)
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3].rstrip() + "..."
+
+
 def format_planner_advance_apply_result(result: dict[str, Any]) -> str:
     """Format guarded planner advance apply result."""
     status = str(result.get("status", "unknown"))
+    status_details = {
+        "applied": (
+            "  applied — GitHub label mutations listed below were executed because "
+            "--apply was provided."
+        ),
+        "partial": (
+            "  partial — one or more GitHub label mutations executed, then "
+            "Signposter stopped after a failed mutation."
+        ),
+    }
     lines = [
         "Signposter Planner Advance Apply",
         "",
@@ -1617,12 +1725,7 @@ def format_planner_advance_apply_result(result: dict[str, Any]) -> str:
         f"  {status}",
         "",
         "Status detail:",
-        (
-            "  applied — GitHub label mutations listed below were executed because "
-            "--apply was provided."
-            if status == "applied"
-            else "  blocked — no GitHub label mutation was executed."
-        ),
+        status_details.get(status, "  blocked — no GitHub label mutation was executed."),
     ]
 
     if result.get("promoted"):
@@ -1638,9 +1741,39 @@ def format_planner_advance_apply_result(result: dict[str, Any]) -> str:
         lines.extend(["", "Executed commands:"])
         lines.extend(f"  {command}" for command in result["commands"])
 
+    if result.get("failed"):
+        lines.extend(["", "Failed mutation:"])
+        for item in result["failed"]:
+            returncode = item["returncode"] if item["returncode"] is not None else "none"
+            lines.extend(
+                [
+                    f"  {item['key']} -> #{item['github_issue']}",
+                    f"    status: {item['status']}",
+                    f"    returncode: {returncode}",
+                    f"    command: {item['command']}",
+                    f"    stdout: {'present' if item.get('stdout') else 'empty'}",
+                    f"    stderr: {'present' if item.get('stderr') else 'empty'}",
+                ]
+            )
+
+    if result.get("skipped"):
+        lines.extend(["", "Skipped mutations after stop:"])
+        for item in result["skipped"]:
+            lines.append(f"  {item['key']} -> #{item['github_issue']}")
+
     if result.get("errors"):
         lines.extend(["", "Errors:"])
         lines.extend(f"  - {error}" for error in result["errors"])
+
+    if result.get("failed"):
+        lines.extend(
+            [
+                "",
+                "Retry guidance:",
+                "  Inspect the listed GitHub issue labels before retrying planner advance.",
+                "  No later GitHub mutation was attempted after the failed command.",
+            ]
+        )
 
     lines.extend(
         [
