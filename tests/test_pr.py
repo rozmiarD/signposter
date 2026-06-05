@@ -106,6 +106,69 @@ def test_github_command_timeout_wrapper_records_timeout():
     assert "Callers must stop after timeout unless an explicit recovery path is planned." in output
 
 
+def test_github_command_formatter_includes_bounded_stderr_excerpt():
+    hidden_tail = "line-7 hidden tail"
+
+    def fake_run(command, **kwargs):
+        return type(
+            "Proc",
+            (),
+            {
+                "returncode": 1,
+                "stdout": "",
+                "stderr": "\n".join(
+                    [
+                        "line-1 failed",
+                        "line-2 context",
+                        "line-3 context",
+                        "line-4 context",
+                        "line-5 context",
+                        "line-6 context",
+                        hidden_tail,
+                    ]
+                ),
+            },
+        )()
+
+    result = run_github_command_with_timeout(
+        ["gh", "issue", "edit", "4"],
+        run_command=fake_run,
+    )
+    output = format_github_command_result(result)
+
+    assert result.status == "failed"
+    assert "stderr: present" in output
+    assert "stderr excerpt (bounded):" in output
+    assert "line-1 failed" in output
+    assert "... (truncated)" in output
+    assert hidden_tail not in output
+
+
+def test_github_command_formatter_redacts_secret_stderr_excerpt():
+    token = "ghp_" + ("A" * 30)
+
+    def fake_run(command, **kwargs):
+        return type(
+            "Proc",
+            (),
+            {
+                "returncode": 1,
+                "stdout": "",
+                "stderr": f"failed with token {token}",
+            },
+        )()
+
+    result = run_github_command_with_timeout(
+        ["gh", "issue", "edit", "4"],
+        run_command=fake_run,
+    )
+    output = format_github_command_result(result)
+
+    assert token not in output
+    assert "[REDACTED:github-token]" in output
+    assert result.stderr.endswith(token)
+
+
 def test_github_command_timeout_wrapper_rejects_non_gh_command():
     try:
         run_github_command_with_timeout(["git", "status"])
@@ -170,6 +233,8 @@ def test_github_issue_read_timeout_helper_records_timeout():
     assert result.stdout == "partial issue output"
     assert result.stderr == "partial issue error"
     assert "Status:\n  timeout" in output
+    assert "stderr excerpt (bounded):" in output
+    assert "partial issue error" in output
     assert "callers must stop after timeout before later mutations" in output
 
 
@@ -231,6 +296,8 @@ def test_github_issue_edit_timeout_helper_records_timeout():
     assert result.stdout == "partial edit output"
     assert result.stderr == "partial edit error"
     assert "Status:\n  timeout" in output
+    assert "stderr excerpt (bounded):" in output
+    assert "partial edit error" in output
     assert "Callers must stop after timeout before any later mutation." in output
 
 
