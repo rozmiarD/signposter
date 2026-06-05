@@ -32,6 +32,31 @@ def test_raw_artifact_path_is_reported_but_full_raw_output_stays_local():
     assert "omitted; excerpt limited" in body
 
 
+def test_runtime_raw_secret_is_redacted_from_report_comment():
+    token = "github_pat_" + ("A" * 30)
+    raw = "\n".join(
+        [
+            "runtime banner",
+            f"captured token: {token}",
+            "runtime tail",
+        ]
+    )
+
+    body = format_comment(
+        "**Agent:** worker\n**Exit Code:** 0",
+        "ExatronOmega/signposter",
+        405,
+        summary_path="artifacts/runs/issue-405-worker.summary.md",
+        raw_path="artifacts/runs/issue-405-worker.raw.txt",
+        raw_content=raw,
+    )
+
+    assert token not in body
+    assert "[REDACTED:github-token]" in body
+    assert "- **Raw output:** `artifacts/runs/issue-405-worker.raw.txt`" in body
+    assert "(full log, stored locally)" in body
+
+
 def test_worker_summary_includes_validation_result_records(tmp_path):
     from signposter.artifact import build_worker_summary, validate_worker_summary_artifact
 
