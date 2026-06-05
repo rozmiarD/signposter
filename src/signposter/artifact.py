@@ -963,6 +963,8 @@ def _missing_worker_summary_fields(text: str) -> list[str]:
         for name, needle in WORKER_SUMMARY_REQUIRED_FIELDS.items()
         if needle not in lowered
     ]
+    if _has_incomplete_validation_result_command_coverage(text):
+        missing.append("validation result required-command coverage")
     if "## token usage accounting" in lowered and not _has_token_usage_status(lowered):
         missing.append("token usage status")
     if _requires_docs_only_worker_summary_fields(text):
@@ -972,6 +974,60 @@ def _missing_worker_summary_fields(text: str) -> list[str]:
             if needle not in lowered
         )
     return missing
+
+
+def _has_incomplete_validation_result_command_coverage(text: str) -> bool:
+    """Return True when structured validation records omit listed commands."""
+    lowered = text.lower()
+    if "## validation result records" not in lowered:
+        return False
+
+    required_commands = _validation_evidence_commands(text)
+    if not required_commands:
+        return False
+
+    record_commands = _validation_result_record_commands(text)
+    return any(command not in record_commands for command in required_commands)
+
+
+def _validation_evidence_commands(text: str) -> tuple[str, ...]:
+    commands: list[str] = []
+    current_scope: str | None = None
+    for raw_line in text.splitlines():
+        stripped = raw_line.strip()
+        lowered = stripped.lower()
+        if lowered.startswith("## "):
+            current_scope = None
+            continue
+        if lowered.startswith("targeted validation passed"):
+            current_scope = "targeted"
+            continue
+        if lowered.startswith("full validation passed"):
+            current_scope = "full"
+            continue
+        if current_scope and stripped.startswith("-"):
+            command = stripped.removeprefix("-").strip().strip("`")
+            if command:
+                commands.append(command)
+    return tuple(commands)
+
+
+def _validation_result_record_commands(text: str) -> tuple[str, ...]:
+    commands: list[str] = []
+    in_records = False
+    for raw_line in text.splitlines():
+        stripped = raw_line.strip()
+        lowered = stripped.lower()
+        if lowered == "## validation result records":
+            in_records = True
+            continue
+        if in_records and lowered.startswith("## "):
+            break
+        if in_records and lowered.startswith("command:"):
+            command = stripped.split(":", 1)[1].strip().strip("`")
+            if command:
+                commands.append(command)
+    return tuple(commands)
 
 
 def _has_token_usage_status(lowered_text: str) -> bool:
