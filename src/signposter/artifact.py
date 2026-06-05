@@ -283,6 +283,18 @@ def build_worker_summary(
     lines.extend(
         [
             "",
+            "## Manual takeover provenance",
+            "",
+            f"Takeover agent: {agent}",
+            "Takeover artifact: parser-compatible worker summary.",
+            "Runtime artifact handling: raw backend output remains local and is not embedded.",
+            "Validation provenance: signposter.validation-result.v1 records above.",
+            "GitHub comment provenance: bounded report excerpt only.",
+        ]
+    )
+    lines.extend(
+        [
+            "",
             "## Safety",
             "",
             "No GitHub mutation was performed by the implemented code.",
