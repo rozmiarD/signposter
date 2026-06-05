@@ -14,6 +14,7 @@ from signposter.planner import (
     apply_planner_advance_plan,
     apply_planner_seed_manifest,
     build_next_roadmap_bootstrap_contract,
+    build_next_roadmap_bootstrap_status_artifact,
     build_planner_advance_plan_from_status,
     build_planner_draft,
     build_planner_impact_from_status,
@@ -2498,6 +2499,7 @@ def test_build_planner_status_artifact_is_compact_and_recovery_oriented(
     assert artifact["version"] == "planner.status-artifact.v0.1"
     assert artifact["manifest"] == str(manifest_path)
     assert artifact["task_counts"]["blocked"] == 1
+    assert artifact["next_roadmap_bootstrap"]["status"] == "not-found"
     assert artifact["tasks"][0] == {
         "key": "WATCH-001",
         "github_issue": 10,
@@ -2510,6 +2512,110 @@ def test_build_planner_status_artifact_is_compact_and_recovery_oriented(
     assert "body_file" not in artifact["tasks"][0]
     assert "github_url" not in artifact["tasks"][0]
     assert "No GitHub mutation was performed." in artifact["notes"]
+
+
+def test_build_next_roadmap_bootstrap_status_artifact_reports_locked_task() -> None:
+    status = {
+        "manifest_status": "applied",
+        "repo": "ExatronOmega/signposter",
+        "status": "active",
+        "notes": ["No GitHub mutation was performed."],
+        "tasks": [
+            {
+                "key": "H051-078",
+                "title": "H051-078 — Final hardening audit",
+                "github_issue": 608,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/608",
+                "state": "merged",
+                "depends_on": [],
+                "labels": [],
+            },
+            {
+                "key": "H051-079",
+                "title": "H051-079 — Final roadmap readiness smoke",
+                "github_issue": 609,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/609",
+                "state": "open",
+                "depends_on": ["H051-078"],
+                "labels": [],
+            },
+            {
+                "key": "H051-080",
+                "title": "H051-080 — H051 final audit and H052 bootstrap",
+                "github_issue": 610,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/610",
+                "state": "open",
+                "depends_on": ["H051-078", "H051-079"],
+                "labels": [],
+            },
+        ],
+    }
+
+    artifact = build_next_roadmap_bootstrap_status_artifact(status)
+    output = format_planner_status(status)
+
+    assert artifact["version"] == "planner.next-roadmap-bootstrap-status.v0.1"
+    assert artifact["status"] == "locked"
+    assert artifact["final_tasks"][0]["key"] == "H051-080"
+    assert artifact["final_tasks"][0]["status"] == "locked"
+    assert artifact["final_tasks"][0]["current_prefix"] == "H051"
+    assert artifact["final_tasks"][0]["next_prefix"] == "H052"
+    assert artifact["final_tasks"][0]["waiting_on"] == ["H051-079"]
+    assert artifact["final_tasks"][0]["dependency_count"] == 2
+    assert "No GitHub mutation was performed." in artifact["notes"]
+    assert "Next-roadmap bootstrap:" in output
+    assert "status: locked" in output
+    assert "final task: H051-080 — issue: #610 — state: open" in output
+    assert "transition: H051 -> H052" in output
+    assert "minimum DAG nodes: 80" in output
+    assert "waiting on: H051-079" in output
+
+
+def test_build_next_roadmap_bootstrap_status_artifact_reports_ready_task() -> None:
+    status = {
+        "manifest_status": "applied",
+        "repo": "ExatronOmega/signposter",
+        "status": "active",
+        "notes": ["No GitHub mutation was performed."],
+        "tasks": [
+            {
+                "key": "H051-078",
+                "title": "H051-078 — Final hardening audit",
+                "github_issue": 608,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/608",
+                "state": "merged",
+                "depends_on": [],
+                "labels": [],
+            },
+            {
+                "key": "H051-079",
+                "title": "H051-079 — Final roadmap readiness smoke",
+                "github_issue": 609,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/609",
+                "state": "merged",
+                "depends_on": ["H051-078"],
+                "labels": [],
+            },
+            {
+                "key": "H051-080",
+                "title": "H051-080 — H051 final audit and H052 bootstrap",
+                "github_issue": 610,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/610",
+                "state": "open",
+                "depends_on": ["H051-078", "H051-079"],
+                "labels": [],
+            },
+        ],
+    }
+
+    artifact = build_next_roadmap_bootstrap_status_artifact(status)
+    output = format_planner_status(status)
+
+    assert artifact["status"] == "ready"
+    assert artifact["final_tasks"][0]["status"] == "ready"
+    assert artifact["final_tasks"][0]["waiting_on"] == []
+    assert "status: ready" in output
+    assert "waiting on:" not in output
 
 
 def test_build_planner_status_counts_groups_lifecycle_buckets() -> None:

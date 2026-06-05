@@ -4042,6 +4042,10 @@ def run_planner_status(args: argparse.Namespace) -> int:
         print()
         print("Artifact:")
         print(f"  roadmap status: {args.out}")
+        bootstrap = artifact.get("next_roadmap_bootstrap", {})
+        bootstrap_status = bootstrap.get("status")
+        if bootstrap_status and bootstrap_status != "not-found":
+            print(f"  next-roadmap bootstrap: {bootstrap_status}")
         print()
         print("Artifact notes:")
         print("  Local file only.")
