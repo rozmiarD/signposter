@@ -10,6 +10,14 @@ Use it together with `docs/operator-lifecycle-runbook.md` and
 `docs/artifacts-reference.md`. The runbook gives the normal command sequence;
 this guide focuses on diagnosing interrupted or inconsistent states.
 
+## Related References
+
+- `docs/operator-lifecycle-runbook.md`: normal issue-to-cleanup command flow.
+- `docs/artifacts-reference.md`: artifact names, schema fields, takeover
+  preservation, and redaction boundaries.
+- `docs/architecture.md`: module boundaries and lifecycle ownership model.
+- `docs/workflow.md`: concise lifecycle overview for status and evidence flow.
+
 ## First Evidence
 
 Start from repository root unless a command explicitly targets the isolated
