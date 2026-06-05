@@ -252,6 +252,7 @@ def _format_pending_local_cleanup(plan: CleanupPlan) -> list[str]:
 
     lines = [
         "  category: stale local worker state",
+        "  status: pending — local cleanup remains",
         "  reason: PR is merged and issue integration is complete, but local cleanup remains.",
     ]
     for item in stale_items:
