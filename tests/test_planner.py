@@ -3826,6 +3826,53 @@ def test_format_planner_run_plan_contains_dashboard_sections(
     assert "No LLM analysis was performed." in output
 
 
+def test_format_planner_run_plan_completed_roadmap_is_not_worded_ready(
+    tmp_path: Path,
+) -> None:
+    manifest_path = tmp_path / "seed-manifest.json"
+    status = {
+        "repo": "ExatronOmega/signposter",
+        "manifest_status": "applied",
+        "status": "completed",
+        "tasks": [
+            {
+                "key": "H051-001",
+                "title": "First task",
+                "github_issue": 501,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/501",
+                "state": "merged",
+                "depends_on": [],
+                "labels": [],
+            },
+            {
+                "key": "H051-002",
+                "title": "Second task",
+                "github_issue": 502,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/502",
+                "state": "closed",
+                "depends_on": ["H051-001"],
+                "labels": [],
+            },
+        ],
+    }
+
+    result = build_planner_run_plan_from_status(
+        status,
+        manifest_path=str(manifest_path),
+    )
+    output = format_planner_run_plan(result)
+
+    assert result["status"] == "completed"
+    assert "Status:\n  completed" in output
+    assert "Planner status:\n  completed" in output
+    assert "Next task:\n  none" in output
+    assert "Roadmap completion:" in output
+    assert "status: completed" in output
+    assert "reason: all planner tasks are completed" in output
+    assert "completed tasks: 2/2" in output
+    assert "next action: no planner advance is required for this manifest" in output
+
+
 def test_format_planner_run_plan_reconcile_policy_blocks_without_llm() -> None:
     status = {
         "repo": "ExatronOmega/signposter",
