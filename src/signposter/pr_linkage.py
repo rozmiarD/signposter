@@ -9,6 +9,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from signposter.comments import contains_auto_close_keyword
+
 
 @dataclass(frozen=True)
 class PrIssueLinkage:
@@ -39,6 +41,7 @@ def detect_pr_issue_linkage(head_branch: str | None, body: str | None) -> PrIssu
     """
     head = head_branch or ""
     text = body or ""
+    body_has_auto_close = contains_auto_close_keyword(text)
     candidates: dict[str, int] = {}
 
     branch_issue = _first_match(r"(?:^|/)issue-(\d+)(?:-|$)", head)
@@ -49,7 +52,11 @@ def detect_pr_issue_linkage(head_branch: str | None, body: str | None) -> PrIssu
     if related_issue is not None:
         candidates["pr-body-related-issue"] = related_issue
 
-    generic_issue = _first_match(r"\bissue\s*#(\d+)\b", text)
+    generic_issue = (
+        None
+        if body_has_auto_close
+        else _first_match(r"\bissue\s*#(\d+)\b", text)
+    )
     if generic_issue is not None and "pr-body-related-issue" not in candidates:
         candidates["pr-body-issue-reference"] = generic_issue
 
