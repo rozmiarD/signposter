@@ -12,6 +12,7 @@ from signposter.scan import LabeledItem, fetch_issue_context, fetch_open_issues
 
 TERMINAL_STATES = {"done", "merged", "blocked", "failed"}
 ISSUE_REF_RE = re.compile(r"#(\d+)")
+ROADMAP_KEY_RE = re.compile(r"\b(H\d+[A-Z]*)(?:-\d+|\s+[—-]|\b)", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -102,14 +103,23 @@ def _state(labels: list[str]) -> str | None:
     return None
 
 
-def select_next_issue(repo: str, *, limit: int = 50) -> SchedulerNext:
+def select_next_issue(
+    repo: str,
+    *,
+    limit: int = 50,
+    roadmap_prefix: str | None = None,
+) -> SchedulerNext:
     """Select the first dependency-clear open issue labeled state:ready."""
     skipped: list[str] = []
     active_notes: list[str] = []
     active_counts: dict[str, int] = {}
     ready_mainline: LabeledItem | None = None
+    issues = sorted(fetch_open_issues(repo, limit=limit), key=lambda item: item.number)
+    current_roadmap_prefix = _normalize_roadmap_prefix(
+        roadmap_prefix
+    ) or _infer_current_roadmap_prefix(issues)
 
-    for issue in sorted(fetch_open_issues(repo, limit=limit), key=lambda item: item.number):
+    for issue in issues:
         state = _state(issue.labels)
         if state != "ready":
             if state in TERMINAL_STATES or state == "active":
@@ -118,6 +128,11 @@ def select_next_issue(repo: str, *, limit: int = 50) -> SchedulerNext:
                 note, category = _active_issue_diagnostics(issue)
                 active_notes.append(note)
                 active_counts[category] = active_counts.get(category, 0) + 1
+            continue
+
+        stale_reason = _stale_roadmap_reason(issue, current_roadmap_prefix)
+        if stale_reason:
+            skipped.append(f"#{issue.number}: {stale_reason}")
             continue
 
         context = fetch_issue_context(repo, issue.number) or {}
@@ -180,6 +195,60 @@ def select_next_issue(repo: str, *, limit: int = 50) -> SchedulerNext:
         active_notes=active_notes,
         active_counts=active_counts,
     )
+
+
+def _normalize_roadmap_prefix(value: str | None) -> str | None:
+    if value is None:
+        return None
+    value = value.strip().upper()
+    return value if re.fullmatch(r"H\d+[A-Z]*", value) else None
+
+
+def _roadmap_prefix_number(value: str | None) -> int | None:
+    prefix = _normalize_roadmap_prefix(value)
+    if prefix is None:
+        return None
+    match = re.match(r"H(\d+)", prefix)
+    if not match:
+        return None
+    return int(match.group(1))
+
+
+def _issue_roadmap_prefix(issue: LabeledItem) -> str | None:
+    match = ROADMAP_KEY_RE.search(issue.title or "")
+    if not match:
+        return None
+    return _normalize_roadmap_prefix(match.group(1))
+
+
+def _infer_current_roadmap_prefix(issues: list[LabeledItem]) -> str | None:
+    prefixes = [
+        prefix
+        for issue in issues
+        if _state(issue.labels) in {"ready", "active"}
+        for prefix in [_issue_roadmap_prefix(issue)]
+        if prefix is not None
+    ]
+    if not prefixes:
+        return None
+    return max(prefixes, key=lambda prefix: _roadmap_prefix_number(prefix) or -1)
+
+
+def _stale_roadmap_reason(
+    issue: LabeledItem,
+    current_roadmap_prefix: str | None,
+) -> str | None:
+    issue_prefix = _issue_roadmap_prefix(issue)
+    issue_number = _roadmap_prefix_number(issue_prefix)
+    current_number = _roadmap_prefix_number(current_roadmap_prefix)
+    if issue_prefix is None or issue_number is None or current_number is None:
+        return None
+    if issue_number < current_number:
+        return (
+            f"stale roadmap task {issue_prefix}; "
+            f"current roadmap is {current_roadmap_prefix}"
+        )
+    return None
 
 
 def _active_issue_diagnostics(
