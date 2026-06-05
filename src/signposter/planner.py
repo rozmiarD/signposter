@@ -1861,12 +1861,68 @@ def build_planner_status_artifact(
         "manifest_status": status.get("manifest_status", "unknown"),
         "status": status.get("status", "unknown"),
         "task_counts": build_planner_status_counts(status.get("tasks", [])),
+        "next_roadmap_bootstrap": build_next_roadmap_bootstrap_status_artifact(status),
         "tasks": tasks,
         "notes": [
             "Compact roadmap status artifact for handoff and loop recovery.",
             "No GitHub mutation was performed.",
             "No manifest mutation was performed.",
             "No task execution was performed.",
+        ],
+    }
+
+
+def build_next_roadmap_bootstrap_status_artifact(
+    status: dict[str, Any],
+) -> dict[str, Any]:
+    """Build compact status for final roadmap bootstrap task readiness."""
+    tasks = status.get("tasks", [])
+    completed = {
+        task["key"]
+        for task in tasks
+        if str(task.get("state", "")).lower() in COMPLETED_PLANNER_STATES
+    }
+    final_tasks = []
+    for task in tasks:
+        if not _is_final_bootstrap_task(task):
+            continue
+
+        dependencies = list(task.get("depends_on", []))
+        missing_dependencies = [
+            dependency for dependency in dependencies if dependency not in completed
+        ]
+        entry = _build_final_task_unlock_entry(
+            task,
+            missing_dependencies=missing_dependencies,
+        )
+        state = str(task.get("state", "") or "unknown").lower()
+        if state in COMPLETED_PLANNER_STATES:
+            entry["status"] = "completed"
+        entry["state"] = state
+        entry["dependencies"] = dependencies
+        entry["dependency_count"] = len(dependencies)
+        final_tasks.append(entry)
+
+    if not final_tasks:
+        bootstrap_status = "not-found"
+    elif any(task.get("errors") for task in final_tasks):
+        bootstrap_status = "blocked"
+    elif any(task.get("status") == "ready" for task in final_tasks):
+        bootstrap_status = "ready"
+    elif all(task.get("status") == "completed" for task in final_tasks):
+        bootstrap_status = "completed"
+    else:
+        bootstrap_status = "locked"
+
+    return {
+        "version": "planner.next-roadmap-bootstrap-status.v0.1",
+        "status": bootstrap_status,
+        "final_tasks": final_tasks,
+        "notes": [
+            "Read-only final roadmap bootstrap readiness evidence.",
+            "No GitHub mutation was performed.",
+            "No manifest mutation was performed.",
+            "No backend execution was performed.",
         ],
     }
 
@@ -3887,9 +3943,41 @@ def format_planner_status(status: dict[str, Any]) -> str:
         f"  merged: {counts.get('merged', 0)}",
         f"  blocked: {counts.get('blocked', 0)}",
         f"  completed: {counts.get('completed', 0)}",
-        "",
-        "Tasks:",
     ]
+
+    bootstrap = status.get("next_roadmap_bootstrap")
+    if bootstrap is None:
+        bootstrap = build_next_roadmap_bootstrap_status_artifact(status)
+    if bootstrap.get("status") != "not-found":
+        lines.extend(
+            [
+                "",
+                "Next-roadmap bootstrap:",
+                f"  status: {bootstrap.get('status', 'unknown')}",
+            ]
+        )
+        for final_task in bootstrap.get("final_tasks", []):
+            github_issue = final_task.get("github_issue")
+            issue_text = f"#{github_issue}" if github_issue is not None else "none"
+            lines.append(
+                f"  final task: {final_task.get('key', 'unknown')} — "
+                f"issue: {issue_text} — state: {final_task.get('state', 'unknown')}"
+            )
+            lines.append(
+                f"    transition: {final_task.get('current_prefix', '')} -> "
+                f"{final_task.get('next_prefix', '')}"
+            )
+            lines.append(
+                f"    minimum DAG nodes: {final_task.get('minimum_dag_nodes', '')}"
+            )
+            waiting_on = final_task.get("waiting_on", [])
+            if waiting_on:
+                lines.append(f"    waiting on: {', '.join(waiting_on)}")
+            errors = final_task.get("errors", [])
+            if errors:
+                lines.append(f"    errors: {'; '.join(errors)}")
+
+    lines.extend(["", "Tasks:"])
 
     if not status["tasks"]:
         lines.append("  none")
