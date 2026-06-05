@@ -478,6 +478,7 @@ def test_cleanup_plan_surfaces_pending_stale_worktree_and_branch():
 
     assert "Pending local cleanup:" in out
     assert "category: stale local worker state" in out
+    assert "status: pending — local cleanup remains" in out
     assert "pending: worktree: ../signposter-work/4" in out
     assert (
         "pending: local branch: "
@@ -497,6 +498,7 @@ def test_cleanup_plan_surfaces_pending_branch_only_cleanup():
     out = format_cleanup_plan(plan)
 
     assert "Pending local cleanup:" in out
+    assert "status: pending — local cleanup remains" in out
     assert "pending: worktree:" not in out
     assert (
         "pending: local branch: "
@@ -516,6 +518,7 @@ def test_cleanup_apply_dry_run_surfaces_pending_local_cleanup():
 
     assert "DRY RUN: no local worktree was removed." in out
     assert "Pending local cleanup:" in out
+    assert "status: pending — local cleanup remains" in out
     assert "pending: worktree: ../signposter-work/4" in out
     assert (
         "next command: signposter cleanup apply --repo <repo> --pr 5 --apply"
