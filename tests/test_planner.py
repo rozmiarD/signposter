@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -2474,6 +2475,7 @@ def test_cli_planner_status_sync_github_fetches_issue_states(
         capture_output: bool,
         text: bool,
         check: bool,
+        timeout: int | None = None,
     ) -> _FakeGhIssueCreateResult:
         calls.append(command)
         return _FakeGhIssueCreateResult(0, stdout="OPEN\n")
@@ -2531,6 +2533,7 @@ def test_cli_planner_status_sync_github_surfaces_stale_and_mismatched_mappings(
         capture_output: bool,
         text: bool,
         check: bool,
+        timeout: int | None = None,
     ) -> _FakeGhIssueCreateResult:
         calls.append(command)
         issue_number = command[3]
@@ -4236,6 +4239,7 @@ def test_cli_planner_run_dry_run_shows_dashboard(
         capture_output: bool,
         text: bool,
         check: bool,
+        timeout: int | None = None,
     ) -> _FakeGhIssueCreateResult:
         calls.append(command)
         return _FakeGhIssueCreateResult(0, stdout="OPEN\n")
@@ -4315,6 +4319,7 @@ def test_cli_planner_run_sync_github_uses_workflow_state_labels(
         capture_output: bool,
         text: bool,
         check: bool,
+        timeout: int | None = None,
     ) -> _FakeGhIssueCreateResult:
         calls.append(command)
         issue_number = command[3]
@@ -4372,6 +4377,73 @@ def test_cli_planner_run_sync_github_uses_workflow_state_labels(
         f"signposter planner advance --manifest {manifest_path} --issue 10 --dry-run"
         in captured
     )
+
+
+def test_cli_planner_run_sync_github_reports_issue_view_timeout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    calls: list[list[str]] = []
+
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+        timeout: int,
+    ) -> _FakeGhIssueCreateResult:
+        calls.append(command)
+        if command[:4] == ["gh", "issue", "view", "10"]:
+            raise subprocess.TimeoutExpired(cmd=command, timeout=timeout)
+        return _FakeGhIssueCreateResult(
+            0,
+            stdout=json.dumps({"state": "OPEN", "labels": []}),
+        )
+
+    monkeypatch.setattr("signposter.cli.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "run",
+            "--manifest",
+            str(manifest_path),
+            "--sync-github",
+            "--dry-run",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+
+    assert exc_info.value.code in (None, 0)
+    assert len(calls) == 5
+    assert "Status:\n  ready" in captured
+    assert "GitHub issue mapping is stale" in captured
+    assert "gh issue view for issue #10 timed out after 30s" in captured
+    assert "No GitHub mutation was performed." in captured
 
 
 def test_cli_planner_run_requires_dry_run(
@@ -4440,6 +4512,7 @@ def test_cli_planner_advance_dry_run_promotes_downstream_task(
         capture_output: bool,
         text: bool,
         check: bool,
+        timeout: int | None = None,
     ) -> _FakeGhIssueCreateResult:
         calls.append(command)
         if command[:4] == ["gh", "issue", "view", "10"]:
@@ -4512,6 +4585,7 @@ def test_cli_planner_advance_apply_blocks_open_source_task(
         capture_output: bool,
         text: bool,
         check: bool,
+        timeout: int | None = None,
     ) -> _FakeGhIssueCreateResult:
         calls.append(command)
         return _FakeGhIssueCreateResult(0, stdout="OPEN\n")
@@ -4575,6 +4649,7 @@ def test_cli_planner_advance_apply_blocks_when_state_ready_label_missing(
         capture_output: bool,
         text: bool,
         check: bool,
+        timeout: int | None = None,
     ) -> _FakeGhIssueCreateResult:
         calls.append(command)
         if command[:4] == ["gh", "issue", "view", "10"]:
@@ -4641,6 +4716,7 @@ def test_cli_planner_advance_apply_executes_single_label_mutation(
         capture_output: bool,
         text: bool,
         check: bool,
+        timeout: int | None = None,
     ) -> _FakeGhIssueCreateResult:
         calls.append(command)
         if command[:4] == ["gh", "issue", "view", "10"]:
@@ -4759,6 +4835,7 @@ def test_cli_planner_impact_manifest_sync_github_blocks_open_task(
         capture_output: bool,
         text: bool,
         check: bool,
+        timeout: int | None = None,
     ) -> _FakeGhIssueCreateResult:
         calls.append(command)
         return _FakeGhIssueCreateResult(0, stdout="OPEN\n")
@@ -4826,6 +4903,7 @@ def test_cli_planner_step_manifest_sync_github_suggests_dry_run_command(
         capture_output: bool,
         text: bool,
         check: bool,
+        timeout: int | None = None,
     ) -> _FakeGhIssueCreateResult:
         calls.append(command)
         return _FakeGhIssueCreateResult(0, stdout="OPEN\n")
@@ -4972,6 +5050,7 @@ def test_cli_planner_next_manifest_sync_github_selects_ready_issue(
         capture_output: bool,
         text: bool,
         check: bool,
+        timeout: int | None = None,
     ) -> _FakeGhIssueCreateResult:
         calls.append(command)
         return _FakeGhIssueCreateResult(0, stdout="OPEN\n")
@@ -5038,6 +5117,7 @@ def test_cli_planner_next_manifest_sync_github_blocks_dependency_missing_ready_l
         capture_output: bool,
         text: bool,
         check: bool,
+        timeout: int | None = None,
     ) -> _FakeGhIssueCreateResult:
         calls.append(command)
         issue_number = int(command[3])

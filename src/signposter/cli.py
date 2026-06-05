@@ -3774,9 +3774,14 @@ def _bounded_planner_gh_error(result: subprocess.CompletedProcess[str]) -> str:
     return first_line
 
 
+def _bounded_planner_gh_timeout_error(issue_number: int, timeout_seconds: int) -> str:
+    return f"gh issue view for issue #{issue_number} timed out after {timeout_seconds}s"
+
+
 def _fetch_manifest_issue_states(repo: str, manifest: dict[str, object]) -> dict[int, object]:
     """Fetch GitHub issue states for issues listed in a planner manifest."""
     states: dict[int, object] = {}
+    timeout_seconds = 30
     for issue in manifest.get("issues", []):
         if not isinstance(issue, dict):
             continue
@@ -3784,21 +3789,36 @@ def _fetch_manifest_issue_states(repo: str, manifest: dict[str, object]) -> dict
         if issue_number is None:
             continue
 
-        result = subprocess.run(
-            [
-                "gh",
-                "issue",
-                "view",
-                str(issue_number),
-                "-R",
-                repo,
-                "--json",
-                "state,labels,title",
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        try:
+            result = subprocess.run(
+                [
+                    "gh",
+                    "issue",
+                    "view",
+                    str(issue_number),
+                    "-R",
+                    repo,
+                    "--json",
+                    "state,labels,title",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired:
+            states[int(issue_number)] = {
+                "state": "stale",
+                "github_state": "timeout",
+                "workflow_state": None,
+                "mapping_status": "stale",
+                "mapping_reason": _bounded_planner_gh_timeout_error(
+                    int(issue_number),
+                    timeout_seconds,
+                ),
+            }
+            continue
+
         if result.returncode != 0:
             states[int(issue_number)] = {
                 "state": "stale",
