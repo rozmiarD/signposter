@@ -788,7 +788,7 @@ def _prompt_exists(issue: int | None) -> bool:
 def _worker_summary_exists(issue: int | None) -> bool:
     if issue is None:
         return False
-    return bool(list(Path("artifacts/runs").glob(f"issue-{issue}-*.summary.md")))
+    return Path(f"artifacts/runs/issue-{issue}-worker.summary.md").exists()
 
 
 def _check_required_labels(repo: str) -> str:
