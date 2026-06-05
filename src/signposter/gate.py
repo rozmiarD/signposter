@@ -363,8 +363,11 @@ def evaluate_ci_gate(
             decision="pass",
             reason=(
                 "Worker completed successfully (exit 0) with validated no-op completion "
-                "evidence: the requested behavior already exists, targeted/full validation "
-                "passed, manual smoke passed, and the worktree had no file changes."
+                "evidence: no repository changes were required because the requested behavior "
+                "already exists; targeted/full validation passed; manual smoke passed; "
+                "unchanged-tree evidence confirmed the worktree had no file changes. "
+                "Continue with normal complete and integration steps; this gate does not "
+                "close the issue."
             ),
             confidence="medium",
             proposed_transition="state:active → state:done",

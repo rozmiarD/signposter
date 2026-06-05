@@ -637,6 +637,9 @@ PASS — scoped no-op worker task completed with validation evidence.
 
     assert decision.decision == "pass"
     assert "validated no-op completion" in decision.reason
+    assert "no repository changes were required" in decision.reason
+    assert "normal complete and integration steps" in decision.reason
+    assert "does not close the issue" in decision.reason
     assert decision.proposed_transition == "state:active → state:done"
 
 
