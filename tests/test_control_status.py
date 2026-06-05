@@ -203,6 +203,8 @@ def test_control_plane_status_composes_active_task_with_waiting_dependency() -> 
     assert result.status == "ready"
     assert "Current task:\n  active: #422\n  next: none\n  stop reason: none" in output
     assert "counts: total=3 ready=0 active=1 waiting=1 merged=1 blocked=0" in output
+    assert "active:\n    H050-052 (#422, state=active)" in output
+    assert "active hint: resume active task before selecting another ready task" in output
     assert "#423: waiting on H050-052" not in output
     assert "active diagnostics:" in output
     assert "#422: worktree=present, prompt=present, summary=missing" in output
@@ -274,6 +276,10 @@ def test_control_plane_status_surfaces_blocked_state() -> None:
         stop_reason="OpenClaw execution requires explicit --execute",
         takeover_category="runtime-stall",
         takeover_reason="worker artifact incomplete",
+        recovery_commands=(
+            "signposter artifact write-worker-summary --repo ExatronOmega/signposter "
+            "--issue 156 --apply",
+        ),
     )
 
     result = build_control_plane_status(
@@ -292,6 +298,10 @@ def test_control_plane_status_surfaces_blocked_state() -> None:
     assert "stop reason: OpenClaw execution requires explicit --execute" in output
     assert "stop: OpenClaw execution requires explicit --execute" in output
     assert "takeover: runtime-stall — worker artifact incomplete" in output
+    assert (
+        "recovery command: signposter artifact write-worker-summary "
+        "--repo ExatronOmega/signposter --issue 156 --apply"
+    ) in output
 
 
 def test_control_plane_status_blocks_disagreed_targets() -> None:

@@ -334,6 +334,13 @@ def format_control_plane_status(result: ControlPlaneStatus) -> str:
             )
         else:
             lines.append("  next: none")
+        active_tasks = _planner_active_task_summaries(result.planner)
+        if active_tasks:
+            lines.append("  active:")
+            lines.extend(f"    {item}" for item in active_tasks[:5])
+            if len(active_tasks) > 5:
+                lines.append(f"    ... {len(active_tasks) - 5} more")
+            lines.append("  active hint: resume active task before selecting another ready task")
 
     lines.extend(["", "Scheduler:"])
     if result.scheduler is None:
@@ -370,6 +377,9 @@ def format_control_plane_status(result: ControlPlaneStatus) -> str:
                 f"{result.orchestrator.takeover_category} — "
                 f"{result.orchestrator.takeover_reason or 'unspecified'}"
             )
+        recovery_commands = getattr(result.orchestrator, "recovery_commands", ())
+        if recovery_commands:
+            lines.append(f"  recovery command: {recovery_commands[0]}")
 
     lines.extend(["", "Local worker state:"])
     if result.local_warnings:
@@ -417,6 +427,21 @@ def _format_current_active_task(result: ControlPlaneStatus) -> str:
     if active:
         return _format_issue_refs(active)
     return "none"
+
+
+def _planner_active_task_summaries(planner_run: dict[str, Any]) -> tuple[str, ...]:
+    summaries: list[str] = []
+    for task in planner_run.get("active_tasks", []):
+        if not isinstance(task, dict):
+            continue
+        key = task.get("key", "unknown")
+        issue = task.get("github_issue")
+        state = task.get("state", "active")
+        if issue is None:
+            summaries.append(f"{key} (issue=unknown, state={state})")
+        else:
+            summaries.append(f"{key} (#{issue}, state={state})")
+    return tuple(summaries)
 
 
 def _format_current_next_task(result: ControlPlaneStatus) -> str:

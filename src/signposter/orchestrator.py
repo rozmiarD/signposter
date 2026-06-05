@@ -1111,6 +1111,17 @@ def format_orchestrator_run_next(result: OrchestratorRunNext) -> str:
                 f"  reason: {result.scheduler.reason}",
             ]
         )
+        if result.selection_source == "planner-manifest" and _issue_state(issue) == "active":
+            lines.extend(
+                [
+                    "",
+                    "Active task hint:",
+                    "  source: planner manifest active task",
+                    f"  issue: #{issue.number}",
+                    "  action: resume this active task before selecting another ready task",
+                    f"  command: {_active_task_hint_command(result)}",
+                ]
+            )
     else:
         lines.extend(["  selected: none", f"  reason: {result.scheduler.reason}"])
 
@@ -1155,6 +1166,16 @@ def format_orchestrator_run_next(result: OrchestratorRunNext) -> str:
     lines.extend(["", "Notes:"])
     lines.extend(f"  {note}" for note in result.notes)
     return "\n".join(lines)
+
+
+def _active_task_hint_command(result: OrchestratorRunNext) -> str:
+    """Return the safest read-only/resume command for a selected active task."""
+    if result.next is not None and result.next.command:
+        return result.next.command
+    if result.scheduler.issue is not None:
+        issue = result.scheduler.issue
+        return f"signposter lifecycle status --repo {result.scheduler.repo} --issue {issue.number}"
+    return "signposter planner run --dry-run"
 
 
 def format_orchestrator_run_next_summary(result: OrchestratorRunNext) -> str:
