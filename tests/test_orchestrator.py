@@ -262,6 +262,10 @@ def test_format_orchestrator_next_includes_resume_takeover_contract(
     assert "resume path: resume existing worktree and prompt" in output
     assert "manual fallback: write a manual worker summary" in output
     assert "mutation policy: this plan is read-only" in output
+    assert "Takeover output contract:" in output
+    assert "status: takeover planned" in output
+    assert "order: inspect evidence, resume when safe, then use bounded manual fallback" in output
+    assert "gate: validate/report/gate must run before completion" in output
     assert "Recovery summary:" in output
     assert "category: resume-existing-worktree" in output
     assert (
@@ -517,6 +521,8 @@ def test_format_orchestrator_next_includes_missing_worker_artifact_takeover(
     assert "category: missing-worker-artifact" in output
     assert "resume path: inspect preserved runtime artifacts" in output
     assert "manual fallback: write a bounded manual worker summary" in output
+    assert "Takeover output contract:" in output
+    assert "evidence: preserve local raw, summary, prompt, branch, and worktree context" in output
     assert "Recovery commands:" in output
     assert "signposter artifact write-worker-summary --repo ExatronOmega/signposter" in output
 

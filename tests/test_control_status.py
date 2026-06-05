@@ -299,6 +299,10 @@ def test_control_plane_status_surfaces_blocked_state() -> None:
     assert "stop: OpenClaw execution requires explicit --execute" in output
     assert "takeover: runtime-stall — worker artifact incomplete" in output
     assert (
+        "takeover contract: preserve evidence; resume when safe; "
+        "bounded manual fallback; rerun gate"
+    ) in output
+    assert (
         "recovery command: signposter artifact write-worker-summary "
         "--repo ExatronOmega/signposter --issue 156 --apply"
     ) in output
@@ -327,6 +331,7 @@ def test_control_plane_status_surfaces_missing_worker_artifact_takeover() -> Non
     assert result.status == "blocked"
     assert "takeover: missing-worker-artifact" in output
     assert "runtime evidence exists but canonical worker summary is missing" in output
+    assert "takeover contract: preserve evidence; resume when safe" in output
     assert (
         "recovery command: signposter artifact write-worker-summary "
         "--repo ExatronOmega/signposter --issue 561 --apply"
@@ -357,6 +362,7 @@ def test_control_plane_status_surfaces_malformed_worker_artifact_takeover() -> N
     assert result.status == "blocked"
     assert "takeover: malformed-worker-artifact" in output
     assert "canonical worker summary is malformed or unsafe" in output
+    assert "bounded manual fallback; rerun gate" in output
     assert "recovery command: signposter artifact validate-worker-summary --issue 562" in output
 
 

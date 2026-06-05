@@ -377,6 +377,10 @@ def format_control_plane_status(result: ControlPlaneStatus) -> str:
                 f"{result.orchestrator.takeover_category} — "
                 f"{result.orchestrator.takeover_reason or 'unspecified'}"
             )
+            lines.append(
+                "  takeover contract: preserve evidence; resume when safe; "
+                "bounded manual fallback; rerun gate"
+            )
         recovery_commands = getattr(result.orchestrator, "recovery_commands", ())
         if recovery_commands:
             lines.append(f"  recovery command: {recovery_commands[0]}")
