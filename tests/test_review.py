@@ -1782,6 +1782,43 @@ def test_format_review_artifact_validation_summary_is_concise(tmp_path):
     assert "Notes:" not in out
 
 
+def test_format_review_artifact_validation_summary_bounds_long_error_smoke():
+    from signposter.review import (
+        ReviewArtifactValidation,
+        ReviewerOpinion,
+        format_review_artifact_validation_summary,
+    )
+
+    raw_finding = "backend log line " * 40
+    result = ReviewArtifactValidation(
+        pr_number=74,
+        summary_path="artifacts/runs/pr-74-reviewer.summary.md",
+        status="blocked",
+        errors=[f"Summary contained unbounded evidence:\n{raw_finding}"],
+        opinion=ReviewerOpinion(
+            verdict="APPROVE",
+            confidence=0.91,
+            risk="medium",
+            scope_match="yes",
+            ci_considered="yes",
+            merge_recommendation="yes",
+            automerge_eligible="no",
+            findings=[raw_finding],
+            reasoning="Raw finding should stay out of concise status output.",
+            raw_text=raw_finding,
+        ),
+        notes=["No GitHub review was submitted."],
+    )
+
+    out = format_review_artifact_validation_summary(result)
+
+    assert len(out.splitlines()) == 7
+    assert len(out) < 360
+    assert "\nbackend log line" not in out
+    assert raw_finding not in out
+    assert "[truncated " in out
+
+
 # =============================================================================
 # HARDENING-018 tests: GitHub PR review submit plan + apply guard
 # =============================================================================
