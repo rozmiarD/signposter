@@ -384,6 +384,65 @@ def test_render_prompt_worker_marks_omitted_sections_for_large_context():
     assert "source exceeded prompt budget" in content
 
 
+def test_render_prompt_worker_budget_warning_keeps_scope_and_safety_data():
+    from signposter.runner import render_prompt
+
+    plan = make_runner_plan_for_test("worker", "build", number=54)
+    issue_context = {
+        "labels": [
+            {"name": "phase:build"},
+            {"name": "state:active"},
+            {"name": "risk:medium"},
+            {"name": "role:worker"},
+            {"name": "area:runner"},
+            {"name": "gate:ci"},
+        ],
+        "body": "\n".join(f"scope line {i} {'x' * 120}" for i in range(100)),
+        "state": "OPEN",
+        "comments": [
+            {"author": {"login": "operator"}, "body": "validation context " + ("y" * 900)},
+            {"author": {"login": "reviewer"}, "body": "safety context " + ("z" * 900)},
+        ],
+    }
+
+    content = render_prompt(plan, "ExatronOmega/signposter", issue_context=issue_context)
+
+    assert "## Prompt Budget Report" in content
+    assert "Issue body: bounded" in content
+    assert "Recent comments: bounded" in content
+    assert "source exceeded prompt budget" in content
+    assert "Issue: #54" in content
+    assert "Route/phase/role/risk/area/gate: worker/build/worker/low/core/review" in content
+    assert "selected model:" in content
+    assert "selected reasoning effort:" in content
+    assert "fallback/takeover transparency:" in content
+    assert "silent_fallback: forbidden" in content
+    assert "Do not mutate GitHub unless a later command explicitly asks." in content
+    assert "Keep raw backend output local under artifacts/runs/." in content
+    assert "Manual fallback: `signposter artifact write-worker-summary`" in content
+    assert "Run targeted validation for changed files." in content
+
+
+def test_render_prompt_worker_budget_report_stays_compact_when_bounded():
+    from signposter.runner import render_prompt
+
+    plan = make_runner_plan_for_test("worker", "build", number=55)
+    issue_context = {
+        "labels": [{"name": "phase:build"}, {"name": "state:active"}],
+        "body": "\n".join(f"body {i} {'x' * 200}" for i in range(120)),
+        "state": "OPEN",
+        "comments": [{"author": {"login": "a"}, "body": "comment " + ("y" * 2000)}],
+    }
+
+    content = render_prompt(plan, "test/repo", issue_context=issue_context)
+    budget_report = content.split("## Prompt Budget Report", 1)[1].split("## Issue Body", 1)[0]
+
+    assert len(budget_report) < 700
+    assert budget_report.count("...[omitted ") == 2
+    assert "prompt mode: compact-worker" in budget_report
+    assert "escalation reason: bounded sections present to preserve token budget" in budget_report
+
+
 def test_compact_worker_issue_body_uses_tighter_budget_than_generic_body():
     from signposter.runner import (
         PROMPT_COMPACTION_LIMITS,
