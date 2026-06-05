@@ -6,6 +6,7 @@ done inside a Signposter-managed worktree.
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 from dataclasses import dataclass
@@ -415,6 +416,57 @@ def format_handoff_snapshot(snapshot: HandoffSnapshot) -> str:
     )
     lines.extend(f"  {note}" for note in snapshot.notes)
     return "\n".join(lines)
+
+
+def build_handoff_snapshot_artifact(snapshot: HandoffSnapshot) -> dict[str, Any]:
+    """Build a compact JSON artifact for planner loop handoff/resume."""
+    return {
+        "version": "handoff.snapshot-artifact.v0.1",
+        "status": snapshot.status,
+        "repo": snapshot.repo,
+        "repository": {
+            "root": snapshot.repo_root,
+            "branch": snapshot.branch,
+            "head": snapshot.head,
+            "dirty": bool(snapshot.git_status_lines),
+            "git_status_lines": list(snapshot.git_status_lines),
+        },
+        "planner": {
+            "manifest": snapshot.manifest_path,
+            "status": snapshot.planner_status,
+            "counts": snapshot.planner_counts,
+        },
+        "current_task": {
+            "active_issue": snapshot.active_issue,
+            "next_issue": snapshot.next_issue,
+            "stop_reason": snapshot.stop_reason,
+            "resume_command": snapshot.resume_command,
+        },
+        "local_warnings": list(snapshot.local_warnings),
+        "artifacts": [
+            {
+                "label": artifact.label,
+                "path": artifact.path,
+                "exists": artifact.exists,
+            }
+            for artifact in snapshot.artifacts
+        ],
+        "notes": list(snapshot.notes),
+    }
+
+
+def write_handoff_snapshot_artifact(
+    snapshot: HandoffSnapshot,
+    path: str | Path,
+) -> Path:
+    """Write a local JSON handoff artifact without external mutation."""
+    artifact_path = Path(path)
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_text(
+        json.dumps(build_handoff_snapshot_artifact(snapshot), indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return artifact_path
 
 
 def plan_handoff_for_issue(repo: str, issue_number: int) -> HandoffPlan:
