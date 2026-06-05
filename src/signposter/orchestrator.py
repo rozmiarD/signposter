@@ -909,6 +909,8 @@ def format_orchestrator_next(result: OrchestratorNext) -> str:
         if takeover_plan:
             lines.extend(["", "Takeover plan:"])
             lines.extend(f"  {line}" for line in takeover_plan)
+        lines.extend(["", "Takeover output contract:"])
+        lines.extend(f"  {line}" for line in _format_takeover_output_contract_lines())
         if result.recovery_commands:
             lines.extend(["", "Recovery commands:"])
             lines.extend(f"  {command}" for command in result.recovery_commands)
@@ -961,6 +963,17 @@ def _format_takeover_plan_lines(category: str) -> list[str]:
         f"resume path: {resume_path}",
         f"manual fallback: {manual_fallback}",
         "mutation policy: this plan is read-only; apply/execute flags remain required",
+    ]
+
+
+def _format_takeover_output_contract_lines() -> list[str]:
+    """Return the shared read-only output contract for takeover plans."""
+    return [
+        "status: takeover planned",
+        "evidence: preserve local raw, summary, prompt, branch, and worktree context",
+        "order: inspect evidence, resume when safe, then use bounded manual fallback",
+        "gate: validate/report/gate must run before completion",
+        "safety: read-only; apply/execute flags still required",
     ]
 
 
