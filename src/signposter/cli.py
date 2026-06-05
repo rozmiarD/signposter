@@ -63,6 +63,7 @@ from signposter.handoff import (
     format_handoff_plan,
     format_handoff_snapshot,
     plan_handoff_for_issue,
+    write_handoff_snapshot_artifact,
 )
 from signposter.integration import (
     apply_integration,
@@ -942,6 +943,7 @@ def main() -> None:
     handoff_snapshot_parser.add_argument("--repo", required=True)
     handoff_snapshot_parser.add_argument("--manifest", type=Path, default=None)
     handoff_snapshot_parser.add_argument("--sync-github", action="store_true")
+    handoff_snapshot_parser.add_argument("--out", type=Path, default=None)
     handoff_snapshot_parser.set_defaults(func=run_handoff_snapshot)
 
     # pr subcommand group (planning only — HARDENING-013)
@@ -2131,6 +2133,15 @@ def run_handoff_snapshot(args: argparse.Namespace) -> int:
         local_warnings=collect_local_worker_state_warnings(planner_run=planner_run),
     )
     print(format_handoff_snapshot(snapshot))
+    out_path = getattr(args, "out", None)
+    if out_path is not None:
+        written = write_handoff_snapshot_artifact(snapshot, out_path)
+        print()
+        print("Artifact:")
+        print(f"  handoff snapshot: {written}")
+        print("  Local file only.")
+        print("  No GitHub mutation was performed.")
+        print("  No manifest mutation was performed.")
     return 0 if snapshot.status == "ready" else 1
 
 
