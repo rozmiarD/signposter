@@ -470,6 +470,92 @@ def test_merge_apply_refuses_when_plan_not_ready():
         assert "Refusing to merge" in result.get("error", "")
 
 
+def test_merge_apply_replans_and_aborts_when_ci_goes_stale_after_dry_run():
+    from signposter.merge import apply_merge
+
+    ready_plan = MergePlan(
+        pr_number=5,
+        title="test",
+        state="OPEN",
+        base_branch="main",
+        head_branch="work/issue-4-xxx",
+        mergeable="MERGEABLE",
+        review_decision="APPROVED",
+        checks_status="pass",
+        successful_checks=1,
+        failing_checks=0,
+        pending_checks=0,
+        github_approved=True,
+        approving_reviewers=["AlphaExatron"],
+        has_non_author_approval=True,
+        pr_author="ExatronOmega",
+        reviewer_gate_pass=True,
+        reviewer_verdict="APPROVE",
+        reviewer_confidence=0.95,
+        reviewer_risk="low",
+        associated_issue=4,
+        has_auto_close_keywords=False,
+        files_changed=1,
+        additions=8,
+        deletions=0,
+        risk_level="low",
+        size="small",
+        merge_method="squash",
+        delete_branch_after_merge=True,
+        command_preview="gh pr merge 5 -R test/repo --squash --delete-branch",
+        status="ready",
+        notes=[],
+    )
+    stale_ci_plan = MergePlan(
+        pr_number=5,
+        title="test",
+        state="OPEN",
+        base_branch="main",
+        head_branch="work/issue-4-xxx",
+        mergeable="MERGEABLE",
+        review_decision="APPROVED",
+        checks_status="failing",
+        successful_checks=1,
+        failing_checks=1,
+        pending_checks=0,
+        github_approved=True,
+        approving_reviewers=["AlphaExatron"],
+        has_non_author_approval=True,
+        pr_author="ExatronOmega",
+        reviewer_gate_pass=True,
+        reviewer_verdict="APPROVE",
+        reviewer_confidence=0.95,
+        reviewer_risk="low",
+        associated_issue=4,
+        has_auto_close_keywords=False,
+        files_changed=1,
+        additions=8,
+        deletions=0,
+        risk_level="low",
+        size="small",
+        merge_method="squash",
+        delete_branch_after_merge=True,
+        command_preview="gh pr merge 5 -R test/repo --squash --delete-branch",
+        status="blocked — checks are failing",
+        notes=[],
+    )
+
+    with patch(
+        "signposter.merge.plan_merge_for_pr",
+        side_effect=[ready_plan, stale_ci_plan],
+    ) as mock_plan, patch("signposter.merge.subprocess.run") as mock_run:
+        dry_run = apply_merge("test/repo", 5, apply=False)
+        result = apply_merge("test/repo", 5, apply=True)
+
+    assert dry_run["mode"] == "dry_run"
+    assert dry_run["would_execute"] is True
+    assert mock_plan.call_count == 2
+    mock_run.assert_not_called()
+    assert result["mode"] == "apply_blocked"
+    assert result["plan"].checks_status == "failing"
+    assert "Refusing to merge: blocked — checks are failing" in result["error"]
+
+
 def test_merge_apply_already_merged_does_not_call_subprocess():
     from signposter.merge import apply_merge
 
