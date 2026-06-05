@@ -267,6 +267,21 @@ def test_worktree_plan_blocks_existing_worktree_path(monkeypatch):
     assert plan.branch_collision_reason == "worktree path already exists"
 
 
+def test_worktree_recovery_reuse_smoke_surfaces_existing_worktree_resume(monkeypatch):
+    from signposter.worktree import format_worktree_plan, plan_worktree_for_issue
+
+    _patch_plan_inputs(monkeypatch, worktree_exists=True)
+
+    plan = plan_worktree_for_issue("test/repo", 77)
+    output = format_worktree_plan(plan)
+
+    assert plan.status.startswith("blocked — proposed worktree path already exists:")
+    assert "Existing worktree detected: inspect it and resume from that path" in output
+    assert "Resume worker: signposter run --repo <repo> --issue 77 --execute --worktree" in output
+    assert "Manual summary: signposter artifact write-worker-summary" in output
+    assert "No branches or worktrees were created." in output
+
+
 # --- HARDENING-008: guarded worktree apply tests ---
 
 
@@ -358,6 +373,45 @@ def test_format_worktree_apply_plan_blocked_existing_path_has_recovery_guidance(
     assert "Worktree collision: expected worktree path already exists." in output
     assert "Inspect worktree path: ../signposter-work/42" in output
     assert "No branches or worktrees were created." in output
+
+
+def test_worktree_recovery_reuse_smoke_apply_does_not_replace_existing_path(
+    monkeypatch,
+):
+    from signposter.worktree import WorktreePlan, apply_worktree_plan, format_worktree_apply_plan
+
+    plan = WorktreePlan(
+        issue_number=42,
+        title="Existing path",
+        state="ready",
+        route="worker",
+        gate="ci",
+        base_branch="main",
+        proposed_branch="work/issue-42-existing-path",
+        proposed_worktree="../signposter-work/42",
+        working_tree_clean=True,
+        branch_exists=False,
+        worktree_exists=True,
+        has_unresolved_dependencies=False,
+        dependency_block_reason=None,
+        status="blocked — proposed worktree path already exists: ../signposter-work/42",
+        notes=["No branches or worktrees were created."],
+        branch_collision_reason="worktree path already exists",
+    )
+    run_calls = []
+    monkeypatch.setattr(
+        "signposter.worktree.subprocess.run",
+        lambda *args, **kwargs: run_calls.append((args, kwargs)),
+    )
+
+    output = format_worktree_apply_plan(plan, dry_run=True)
+    commands = apply_worktree_plan(plan, dry_run=False)
+
+    assert commands == []
+    assert run_calls == []
+    assert "Refusing to create worktree." in output
+    assert "Worktree collision: expected worktree path already exists." in output
+    assert "No GitHub mutation was performed." in output
 
 
 def test_format_worktree_apply_plan_blocked_dirty_tree_has_recovery_guidance():
