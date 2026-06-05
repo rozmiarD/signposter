@@ -33,6 +33,19 @@ def _role_execution(backend: str = "codex-cli"):
     return resolve_role_execution(selection, backend=backend)
 
 
+def _subagent_contract(tmp_path):
+    return plan_codex_subagent_dispatch(
+        task_scope="bounded task",
+        prompt_artifact=tmp_path / "prompt.md",
+        working_dir=tmp_path,
+        raw_artifact=tmp_path / "raw.txt",
+        summary_artifact=tmp_path / "summary.md",
+        last_message_artifact=tmp_path / "last-message.txt",
+        role_execution=_role_execution(),
+        session_key="signposter-test-subagent",
+    )
+
+
 def test_plan_codex_subagent_dispatch_builds_bounded_contract(tmp_path) -> None:
     prompt = tmp_path / "prompt.md"
     prompt.write_text("do bounded work", encoding="utf-8")
@@ -157,6 +170,35 @@ def test_normalize_codex_subagent_output_marks_success_complete(tmp_path) -> Non
     assert "No GitHub mutation was performed." in output
 
 
+def test_normalize_codex_subagent_output_success_without_last_message_is_complete(
+    tmp_path,
+) -> None:
+    contract = _subagent_contract(tmp_path)
+
+    result = normalize_codex_subagent_output(
+        contract,
+        execution_status=" Success ",
+        exit_code=0,
+        raw_exists=True,
+        summary_exists=True,
+        last_message_exists=False,
+    )
+
+    assert result.execution_status == "success"
+    assert result.task_execution_complete is True
+    assert result.acceptance == "pass"
+    assert result.takeover_required is False
+    assert "last-message artifact is missing or was not produced" in result.guidance
+    assert "subagent output is normalized and ready for bounded summary use" in result.guidance
+
+    output = format_codex_subagent_output_normalization(result)
+    assert "Status:\n  complete" in output
+    assert "last_message:" in output
+    assert "(exists: no)" in output
+    assert "Raw output remains local." in output
+    assert "No Codex CLI execution was performed by this formatter." in output
+
+
 def test_normalize_codex_subagent_output_blocks_missing_summary(tmp_path) -> None:
     contract = plan_codex_subagent_dispatch(
         task_scope="bounded task",
@@ -189,6 +231,62 @@ def test_normalize_codex_subagent_output_blocks_missing_summary(tmp_path) -> Non
     assert "takeover_required: yes" in output
     assert "summary.md (exists: no)" in output
     assert "No Codex CLI execution was performed by this formatter." in output
+
+
+def test_subagent_output_unsupported_model_is_normalized_for_takeover(tmp_path) -> None:
+    contract = _subagent_contract(tmp_path)
+    output = normalize_codex_subagent_output(
+        contract,
+        execution_status=" unsupported-model ",
+        exit_code=1,
+        raw_exists=True,
+        summary_exists=True,
+        last_message_exists=False,
+    )
+
+    assert output.execution_status == "unsupported-model"
+    assert output.task_execution_complete is False
+    assert output.acceptance == "needs-work"
+    assert output.takeover_required is True
+    assert "subagent output requires takeover before gate evaluation" in output.guidance
+    assert "last-message artifact is missing or was not produced" in output.guidance
+
+    plan = plan_codex_subagent_takeover(output, validation_evidence_present=False)
+
+    assert plan.status == "ready"
+    assert plan.takeover_required is True
+    assert plan.artifact_repair_required is False
+    assert plan.validation_required is True
+    assert (
+        "preserve any existing raw and summary artifacts under non-canonical names"
+        in plan.required_actions
+    )
+    assert "no raw backend output posting to GitHub" in plan.forbidden_actions
+
+
+def test_subagent_takeover_blocks_unknown_non_success_status(tmp_path) -> None:
+    contract = _subagent_contract(tmp_path)
+    output = normalize_codex_subagent_output(
+        contract,
+        execution_status="policy-review-needed",
+        exit_code=1,
+        raw_exists=True,
+        summary_exists=True,
+        last_message_exists=True,
+    )
+
+    plan = plan_codex_subagent_takeover(output, validation_evidence_present=True)
+
+    assert plan.status == "blocked"
+    assert plan.takeover_required is True
+    assert plan.artifact_repair_required is False
+    assert plan.validation_required is False
+    assert "inspect local raw, summary, last-message, worktree, and issue comments" in (
+        plan.required_actions
+    )
+    assert "do not report, complete, merge, or close until evidence is understood" in (
+        plan.required_actions
+    )
 
 
 def test_plan_codex_subagent_takeover_not_required_for_complete_output(tmp_path) -> None:
