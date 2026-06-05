@@ -44,6 +44,17 @@ NEXT_ROADMAP_BOOTSTRAP_SAFETY_RULES = [
     "block with evidence when manifest validation or seed dry-run is not ready",
 ]
 
+PLANNER_SCOPE_CLASSES = ("narrow", "normal", "wide")
+PLANNER_VALIDATION_PROFILES = (
+    "docs-only",
+    "targeted",
+    "targeted-plus-lint",
+    "full-suite",
+    "manual-smoke-required",
+    "blocked-until-evidence",
+)
+PLANNER_DRY_RUN_POLICIES = ("required", "recommended", "optional")
+
 STOP_CONDITIONS = [
     "ruff check fails",
     "targeted pytest fails",
@@ -639,6 +650,382 @@ def evaluate_worker_issue_body_size(body: str) -> dict[str, Any]:
         "warnings": warnings,
         "errors": errors,
     }
+
+
+def classify_planner_task(issue: dict[str, Any]) -> dict[str, Any]:
+    """Classify planner task scope, validation profile, and dry-run policy."""
+    title = str(issue.get("title", ""))
+    body = str(issue.get("body", ""))
+    labels = issue.get("labels", [])
+    text = f"{title}\n{body}".lower()
+    area = str(issue.get("area") or _planner_label_value(labels, "area") or "").lower()
+    risk = str(issue.get("risk") or _planner_label_value(labels, "risk") or "medium")
+    risk = risk.lower()
+
+    docs_like = area == "docs" or any(
+        token in text
+        for token in (
+            "docs",
+            "documentation",
+            "readme",
+            "runbook",
+            "troubleshooting",
+            "operator-visible",
+            "guidance",
+        )
+    )
+    planner_like = area in {"planner", "scheduler"} or "planner" in text
+    smoke_like = "smoke" in text
+    shared_safety_like = area in {
+        "gate",
+        "lifecycle",
+        "merge",
+        "integration",
+        "cleanup",
+        "security",
+    } or any(
+        token in text
+        for token in (
+            "gate",
+            "lifecycle",
+            "merge",
+            "integration",
+            "cleanup",
+            "security",
+            "mutation boundary",
+        )
+    )
+    wide_like = any(
+        token in text
+        for token in (
+            "architecture",
+            "global",
+            "wide",
+            "final audit",
+            "bootstrap",
+            "roadmap",
+            "regenerate",
+            "intelligent planning",
+            "multiple independent modules",
+        )
+    )
+
+    if wide_like and not smoke_like:
+        scope_class = "wide"
+    elif docs_like or smoke_like or any(
+        token in text for token in ("wording", "compactness", "one small", "one file")
+    ):
+        scope_class = "narrow"
+    elif planner_like or shared_safety_like or area in {"github", "core"}:
+        scope_class = "normal"
+    else:
+        scope_class = "normal"
+
+    if docs_like and not planner_like and not shared_safety_like:
+        validation_profile = "docs-only"
+        required_evidence = [
+            "changed docs files only",
+            "no code behavior changes",
+            "git diff --check -- docs/",
+        ]
+    elif smoke_like:
+        validation_profile = "manual-smoke-required"
+        required_evidence = [
+            "manual smoke command output",
+            "bounded summary artifact",
+        ]
+    elif shared_safety_like or scope_class == "wide" or risk == "high":
+        validation_profile = "full-suite"
+        required_evidence = [
+            "targeted tests for changed surface",
+            "ruff check .",
+            "python -m pytest tests/ -q",
+        ]
+    elif planner_like:
+        validation_profile = "targeted-plus-lint"
+        required_evidence = [
+            "python -m pytest tests/test_planner.py -q",
+            "ruff check changed planner files/tests",
+        ]
+    else:
+        validation_profile = "targeted"
+        required_evidence = ["targeted tests for changed surface"]
+
+    if risk in {"medium", "high"} or scope_class == "wide":
+        dry_run_policy = "required"
+    elif validation_profile == "docs-only":
+        dry_run_policy = "optional"
+    else:
+        dry_run_policy = "recommended"
+
+    return {
+        "key": issue.get("key"),
+        "title": title,
+        "area": area or "unknown",
+        "risk": risk,
+        "scope_class": scope_class,
+        "validation_profile": validation_profile,
+        "dry_run_policy": dry_run_policy,
+        "required_evidence": required_evidence,
+        "reason": _planner_classification_reason(
+            scope_class=scope_class,
+            validation_profile=validation_profile,
+            dry_run_policy=dry_run_policy,
+        ),
+    }
+
+
+def build_planner_regeneration_plan(
+    *,
+    manifest: dict[str, Any],
+    manifest_path: str,
+    plan: dict[str, Any] | None = None,
+    repo: str | None = None,
+) -> dict[str, Any]:
+    """Build a local-only intelligent planning/regeneration proposal."""
+    issues = list(manifest.get("issues", []))
+    if plan and isinstance(plan.get("issues"), list):
+        plan_by_key = {item.get("key"): item for item in plan["issues"]}
+        enriched_issues = []
+        for issue in issues:
+            plan_issue = plan_by_key.get(issue.get("key"), {})
+            merged = dict(plan_issue)
+            merged.update(issue)
+            enriched_issues.append(merged)
+        issues = enriched_issues
+
+    classifications = [classify_planner_task(issue) for issue in issues]
+    combination_candidates = _planner_combination_candidates(classifications)
+    split_candidates = [
+        item for item in classifications if item["scope_class"] == "wide"
+    ]
+    validation_updates = [
+        item
+        for item in classifications
+        if item["validation_profile"] in {"docs-only", "targeted-plus-lint"}
+    ]
+    preserved = [item for item in classifications if item.get("key") == "H051-017"]
+
+    proposed_updates = [
+        {
+            "type": "combine",
+            "keys": candidate["keys"],
+            "reason": candidate["reason"],
+        }
+        for candidate in combination_candidates
+    ]
+    proposed_updates.extend(
+        {
+            "type": "split-or-escalate",
+            "keys": [item["key"]],
+            "reason": (
+                f"{item['key']} is wide; keep as audit/bootstrap or split "
+                "if scope grows"
+            ),
+        }
+        for item in split_candidates
+    )
+    proposed_updates.extend(
+        {
+            "type": "validation-profile",
+            "keys": [item["key"]],
+            "reason": (
+                f"{item['key']} should use {item['validation_profile']} "
+                f"validation and dry-run {item['dry_run_policy']}"
+            ),
+        }
+        for item in validation_updates[:8]
+    )
+
+    return {
+        "status": "ready" if issues else "blocked",
+        "repo": repo or manifest.get("repo", ""),
+        "manifest_path": manifest_path,
+        "goal": _planner_regeneration_goal(manifest, plan),
+        "tasks_inspected": len(issues),
+        "tasks_kept": len(issues),
+        "tasks_combined": len(combination_candidates),
+        "tasks_expanded": 0,
+        "tasks_split": len(split_candidates),
+        "tasks_needing_github_issue_updates": len(proposed_updates),
+        "classifications": classifications,
+        "combination_candidates": combination_candidates,
+        "split_candidates": split_candidates,
+        "proposed_issue_updates": proposed_updates,
+        "preserved_tasks": preserved,
+        "policy": {
+            "scope_classifier": "enabled",
+            "validation_profiles": "enabled",
+            "dry_run_optimization": "enabled",
+            "llm_analysis": False,
+        },
+        "notes": [
+            "Local regeneration proposal only.",
+            "No GitHub mutation was performed.",
+            "No backend execution was performed.",
+            "Use a separate guarded apply path before editing GitHub issues.",
+        ],
+    }
+
+
+def format_planner_regeneration_plan(result: dict[str, Any]) -> str:
+    """Format an intelligent planning regeneration proposal."""
+    lines = [
+        "Signposter Planner Regeneration",
+        "",
+        "Status:",
+        f"  {result.get('status', 'unknown')}",
+        "",
+        "Repo:",
+        f"  {result.get('repo') or 'unknown'}",
+        "",
+        "Manifest:",
+        f"  {result.get('manifest_path')}",
+        "",
+        "Goal:",
+        f"  {result.get('goal')}",
+        "",
+        "Plan:",
+        f"  tasks inspected: {result.get('tasks_inspected', 0)}",
+        f"  tasks kept: {result.get('tasks_kept', 0)}",
+        f"  tasks combined: {result.get('tasks_combined', 0)}",
+        f"  tasks expanded: {result.get('tasks_expanded', 0)}",
+        f"  tasks split: {result.get('tasks_split', 0)}",
+        (
+            "  tasks needing GitHub issue updates: "
+            f"{result.get('tasks_needing_github_issue_updates', 0)}"
+        ),
+        "",
+        "Policy:",
+        f"  scope classifier: {result['policy']['scope_classifier']}",
+        f"  validation profiles: {result['policy']['validation_profiles']}",
+        f"  dry-run optimization: {result['policy']['dry_run_optimization']}",
+        f"  LLM analysis: {str(result['policy']['llm_analysis']).lower()}",
+    ]
+
+    if result.get("preserved_tasks"):
+        lines.extend(["", "Required preserved tasks:"])
+        for item in result["preserved_tasks"]:
+            lines.append(
+                f"  {item['key']} — scope: {item['scope_class']} — "
+                f"validation: {item['validation_profile']}"
+            )
+
+    lines.extend(["", "Task classification sample:"])
+    for item in result.get("classifications", [])[:10]:
+        lines.append(
+            f"  {item['key']} — scope: {item['scope_class']} — "
+            f"validation: {item['validation_profile']} — "
+            f"dry-run: {item['dry_run_policy']}"
+        )
+
+    updates = result.get("proposed_issue_updates", [])
+    lines.extend(["", "Proposed issue updates:"])
+    if updates:
+        for update in updates[:12]:
+            keys = " + ".join(str(key) for key in update["keys"])
+            lines.append(f"  - {keys} -> {update['reason']}")
+        omitted = len(updates) - 12
+        if omitted > 0:
+            lines.append(f"  - ... {omitted} additional bounded proposals omitted")
+    else:
+        lines.append("  none")
+
+    lines.extend(
+        [
+            "",
+            "Dry-run policy:",
+            "  required: medium/high risk or wide workflow changes",
+            "  recommended: low-risk normal code changes",
+            "  optional: low-risk docs-only changes with no behavior change",
+            "",
+            "Notes:",
+        ]
+    )
+    lines.extend(f"  {note}" for note in result.get("notes", []))
+    return "\n".join(lines)
+
+
+def _planner_label_value(labels: Any, prefix: str) -> str | None:
+    if not isinstance(labels, list):
+        return None
+    label_prefix = f"{prefix}:"
+    for label in labels:
+        name = label.get("name") if isinstance(label, dict) else str(label)
+        if name.startswith(label_prefix):
+            return name.split(":", 1)[1].strip()
+    return None
+
+
+def _planner_classification_reason(
+    *,
+    scope_class: str,
+    validation_profile: str,
+    dry_run_policy: str,
+) -> str:
+    return (
+        f"{scope_class} scope with {validation_profile} validation; "
+        f"dry-run {dry_run_policy}"
+    )
+
+
+def _planner_regeneration_goal(
+    manifest: dict[str, Any],
+    plan: dict[str, Any] | None,
+) -> str:
+    if plan and plan.get("goal"):
+        return str(plan["goal"])
+    if manifest.get("goal"):
+        return str(manifest["goal"])
+    return "planner regeneration proposal for current manifest"
+
+
+def _planner_combination_candidates(
+    classifications: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    for left, right in zip(classifications, classifications[1:], strict=False):
+        if "H051-017" in {left.get("key"), right.get("key")}:
+            continue
+        if left["scope_class"] == "wide" or right["scope_class"] == "wide":
+            continue
+        if left["validation_profile"] != right["validation_profile"]:
+            continue
+        if left["area"] != right["area"]:
+            continue
+        if _planner_title_family(left["title"]) != _planner_title_family(right["title"]):
+            continue
+        candidates.append(
+            {
+                "keys": [left["key"], right["key"]],
+                "reason": (
+                    "combine related "
+                    f"{left['area']} tasks with {left['validation_profile']} validation"
+                ),
+            }
+        )
+    return candidates
+
+
+def _planner_title_family(title: str) -> str:
+    title = title.lower()
+    for token in (
+        "planner",
+        "github",
+        "runtime",
+        "reviewer",
+        "integration",
+        "cleanup",
+        "subagent",
+        "handoff",
+        "merge",
+    ):
+        if token in title:
+            return token
+    words = re.findall(r"[a-z0-9]+", title)
+    if len(words) > 1 and words[0].startswith("h0"):
+        return words[1]
+    return words[0] if words else ""
 
 
 
