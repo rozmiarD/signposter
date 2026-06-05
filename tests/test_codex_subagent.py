@@ -233,6 +233,66 @@ def test_normalize_codex_subagent_output_blocks_missing_summary(tmp_path) -> Non
     assert "No Codex CLI execution was performed by this formatter." in output
 
 
+def test_subagent_timeout_normalization_preserves_raw_evidence_path(tmp_path) -> None:
+    contract = _subagent_contract(tmp_path)
+
+    result = normalize_codex_subagent_output(
+        contract,
+        execution_status=" TIMEOUT ",
+        exit_code=124,
+        raw_exists=True,
+        summary_exists=False,
+        last_message_exists=False,
+    )
+
+    assert result.execution_status == "timeout"
+    assert result.task_execution_complete is False
+    assert result.takeover_required is True
+    assert result.raw_artifact == tmp_path / "raw.txt"
+    assert result.raw_exists is True
+    assert "raw artifact is missing" not in result.guidance
+    assert "summary artifact is missing" in result.guidance
+    assert "last-message artifact is missing or was not produced" in result.guidance
+
+    output = format_codex_subagent_output_normalization(result)
+    assert f"raw: {tmp_path / 'raw.txt'} (exists: yes)" in output
+    assert "Status:\n  blocked" in output
+    assert "takeover_required: yes" in output
+    assert "Raw output remains local." in output
+
+    plan = plan_codex_subagent_takeover(result, validation_evidence_present=False)
+    assert plan.status == "ready"
+    assert plan.artifact_repair_required is True
+    assert (
+        "preserve any existing raw and summary artifacts under non-canonical names"
+        in plan.required_actions
+    )
+
+
+def test_subagent_timeout_with_artifacts_still_requires_takeover(tmp_path) -> None:
+    contract = _subagent_contract(tmp_path)
+
+    result = normalize_codex_subagent_output(
+        contract,
+        execution_status="timeout",
+        exit_code=124,
+        raw_exists=True,
+        summary_exists=True,
+        last_message_exists=True,
+    )
+
+    assert result.task_execution_complete is False
+    assert result.acceptance == "needs-work"
+    assert result.takeover_required is True
+    assert result.guidance == ("subagent output requires takeover before gate evaluation",)
+
+    plan = plan_codex_subagent_takeover(result, validation_evidence_present=True)
+    assert plan.status == "ready"
+    assert plan.artifact_repair_required is False
+    assert plan.validation_required is False
+    assert "no raw backend output posting to GitHub" in plan.forbidden_actions
+
+
 def test_subagent_output_unsupported_model_is_normalized_for_takeover(tmp_path) -> None:
     contract = _subagent_contract(tmp_path)
     output = normalize_codex_subagent_output(
