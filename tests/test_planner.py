@@ -8,9 +8,11 @@ import pytest
 
 from signposter.cli import main
 from signposter.planner import (
+    NEXT_ROADMAP_MIN_DAG_NODES,
     PLAN_VERSION,
     apply_planner_advance_plan,
     apply_planner_seed_manifest,
+    build_next_roadmap_bootstrap_contract,
     build_planner_advance_plan_from_status,
     build_planner_draft,
     build_planner_impact_from_status,
@@ -26,6 +28,7 @@ from signposter.planner import (
     build_planner_step_from_next,
     evaluate_worker_issue_body_size,
     format_gh_issue_create_command,
+    format_next_roadmap_bootstrap_contract,
     format_planner_advance_apply_result,
     format_planner_advance_plan,
     format_planner_impact,
@@ -40,6 +43,7 @@ from signposter.planner import (
     format_seed_label_preflight,
     mark_planner_task,
     prepare_planner_seed_manifest,
+    validate_next_roadmap_bootstrap_contract,
     validate_planner_plan,
     validate_seed_plan_labels,
     write_planner_draft,
@@ -479,8 +483,10 @@ def test_format_planner_roadmap_uses_generic_roadmap_contract() -> None:
     assert "Validation strategy:" in roadmap
     assert "Stop conditions:" in roadmap
     assert "Follow-up policy:" in roadmap
+    assert "Next-roadmap bootstrap contract:" in roadmap
     assert "Done definition:" in roadmap
     assert "Preferred range: 60–120 lines." in roadmap
+    assert f"at least {NEXT_ROADMAP_MIN_DAG_NODES} small dependency-aware DAG nodes" in roadmap
     assert "Do not hard-code product-specific task names" in roadmap
     assert "WATCH-001" not in roadmap
     assert "Define lifecycle watch CLI contract" not in roadmap
@@ -496,6 +502,56 @@ def test_format_planner_roadmap_blocks_invalid_plan() -> None:
     assert "Status:\nblocked" in roadmap
     assert "Validation errors:" in roadmap
     assert "WATCH-001: contains auto-close keyword" in roadmap
+
+
+def test_next_roadmap_bootstrap_contract_formats_ready_output() -> None:
+    contract = build_next_roadmap_bootstrap_contract(
+        current_prefix="H050",
+        next_prefix="H051",
+    )
+
+    errors = validate_next_roadmap_bootstrap_contract(contract)
+    output = format_next_roadmap_bootstrap_contract(contract)
+
+    assert errors == []
+    assert output.startswith("Signposter Next Roadmap Bootstrap Contract")
+    assert "Status:\nready" in output
+    assert "current: H050" in output
+    assert "next: H051" in output
+    assert "minimum DAG nodes: 80" in output
+    assert "final current-roadmap completion audit" in output
+    assert "run seed/sync dry-run before any GitHub mutation" in output
+    assert "first eligible next task is identified" in output
+    assert "No GitHub mutation was performed." in output
+    assert "No issue was closed." in output
+
+
+def test_next_roadmap_bootstrap_contract_blocks_unsafe_contract() -> None:
+    contract = build_next_roadmap_bootstrap_contract(
+        current_prefix="H050",
+        next_prefix="H050",
+        minimum_dag_nodes=12,
+    )
+    contract["required_steps"].remove("run seed/sync dry-run before any GitHub mutation")
+    contract["safety_rules"] = []
+
+    errors = validate_next_roadmap_bootstrap_contract(contract)
+    output = format_next_roadmap_bootstrap_contract(contract)
+
+    assert "next_prefix must differ from current_prefix" in errors
+    assert "minimum_dag_nodes must be at least 80" in errors
+    assert (
+        "required_steps missing required item: run seed/sync dry-run before any GitHub mutation"
+        in errors
+    )
+    expected_safety_error = (
+        "safety_rules missing required item: "
+        "GitHub mutation only through guarded Signposter --apply paths"
+    )
+    assert expected_safety_error in errors
+    assert "Status:\nblocked" in output
+    assert "Validation errors:" in output
+    assert "No GitHub mutation was performed." in output
 
 
 def test_cli_planner_roadmap_prints_generic_template(

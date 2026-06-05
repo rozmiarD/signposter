@@ -12,11 +12,36 @@ from typing import Any
 from signposter.comments import contains_auto_close_keyword
 
 PLAN_VERSION = "planner.v0.1"
+NEXT_ROADMAP_BOOTSTRAP_VERSION = "planner.next-roadmap-bootstrap.v0.1"
 
 WORKER_ISSUE_PREFERRED_MIN_LINES = 60
 WORKER_ISSUE_PREFERRED_MAX_LINES = 120
 WORKER_ISSUE_HARD_MAX_LINES = 165
 WORKER_ISSUE_HARD_MAX_CHARS = 12000
+NEXT_ROADMAP_MIN_DAG_NODES = 80
+
+NEXT_ROADMAP_BOOTSTRAP_REQUIRED_STEPS = [
+    "final current-roadmap completion audit",
+    "verify planner and lifecycle status have no pending current-roadmap task",
+    "verify local validation and remote CI evidence",
+    "choose next roadmap direction from repository evidence",
+    "create a dependency-aware DAG with at least 80 small tasks",
+    "validate required task fields, dependencies, gates, risks, and acceptance criteria",
+    "run seed/sync dry-run before any GitHub mutation",
+    "seed/sync through Signposter only when the guarded plan is ready and --apply is explicit",
+    "verify root tasks are ready and dependent tasks are waiting",
+    "record issue mappings in the manifest when supported",
+    "identify the first eligible next task",
+    "return the operator to the standard Signposter execution loop",
+]
+
+NEXT_ROADMAP_BOOTSTRAP_SAFETY_RULES = [
+    "GitHub mutation only through guarded Signposter --apply paths",
+    "no worker/reviewer execution from the bootstrap contract itself",
+    "no manual issue closure; integration owns issue closure",
+    "do not seed duplicate tasks for an existing roadmap prefix",
+    "block with evidence when manifest validation or seed dry-run is not ready",
+]
 
 STOP_CONDITIONS = [
     "ruff check fails",
@@ -165,6 +190,150 @@ def validate_planner_plan(plan: dict[str, Any]) -> list[str]:
                     errors.append(f"{key}: unknown dependency {dependency}")
 
     return errors
+
+
+def build_next_roadmap_bootstrap_contract(
+    *,
+    current_prefix: str,
+    next_prefix: str,
+    minimum_dag_nodes: int = NEXT_ROADMAP_MIN_DAG_NODES,
+) -> dict[str, Any]:
+    """Return the deterministic contract for final roadmap bootstrap tasks."""
+    return {
+        "version": NEXT_ROADMAP_BOOTSTRAP_VERSION,
+        "current_prefix": current_prefix.strip(),
+        "next_prefix": next_prefix.strip(),
+        "minimum_dag_nodes": minimum_dag_nodes,
+        "required_steps": list(NEXT_ROADMAP_BOOTSTRAP_REQUIRED_STEPS),
+        "safety_rules": list(NEXT_ROADMAP_BOOTSTRAP_SAFETY_RULES),
+        "required_task_fields": [
+            "unique ID",
+            "title",
+            "purpose",
+            "concrete scope",
+            "non-goals",
+            "dependencies",
+            "route/role",
+            "expected model tier",
+            "gate",
+            "risk level",
+            "acceptance criteria",
+            "validation commands",
+            "done criteria",
+        ],
+        "done_criteria": [
+            "current roadmap audit is complete",
+            "next roadmap manifest or artifact is validated",
+            "seed/sync dry-run is ready before apply",
+            "root tasks and waiting tasks are consistent with dependencies",
+            "first eligible next task is identified",
+            "standard Signposter loop can continue from the next task",
+        ],
+    }
+
+
+def validate_next_roadmap_bootstrap_contract(contract: dict[str, Any]) -> list[str]:
+    """Return validation errors for a final-task next-roadmap bootstrap contract."""
+    errors: list[str] = []
+
+    _require(contract, "version", str, errors)
+    _require(contract, "current_prefix", str, errors)
+    _require(contract, "next_prefix", str, errors)
+    _require(contract, "minimum_dag_nodes", int, errors)
+    _require(contract, "required_steps", list, errors)
+    _require(contract, "safety_rules", list, errors)
+    _require(contract, "required_task_fields", list, errors)
+    _require(contract, "done_criteria", list, errors)
+
+    if contract.get("version") != NEXT_ROADMAP_BOOTSTRAP_VERSION:
+        errors.append(f"version must be {NEXT_ROADMAP_BOOTSTRAP_VERSION}")
+
+    if not str(contract.get("current_prefix", "")).strip():
+        errors.append("current_prefix must not be empty")
+    if not str(contract.get("next_prefix", "")).strip():
+        errors.append("next_prefix must not be empty")
+    if contract.get("current_prefix") == contract.get("next_prefix"):
+        errors.append("next_prefix must differ from current_prefix")
+
+    minimum = contract.get("minimum_dag_nodes")
+    if isinstance(minimum, int) and minimum < NEXT_ROADMAP_MIN_DAG_NODES:
+        errors.append(
+            "minimum_dag_nodes must be at least "
+            f"{NEXT_ROADMAP_MIN_DAG_NODES}"
+        )
+
+    _list_contains_all(
+        contract,
+        "required_steps",
+        NEXT_ROADMAP_BOOTSTRAP_REQUIRED_STEPS,
+        errors,
+    )
+    _list_contains_all(
+        contract,
+        "safety_rules",
+        NEXT_ROADMAP_BOOTSTRAP_SAFETY_RULES,
+        errors,
+    )
+    _list_contains_all(
+        contract,
+        "done_criteria",
+        [
+            "next roadmap manifest or artifact is validated",
+            "first eligible next task is identified",
+            "standard Signposter loop can continue from the next task",
+        ],
+        errors,
+    )
+
+    return errors
+
+
+def format_next_roadmap_bootstrap_contract(contract: dict[str, Any]) -> str:
+    """Format the next-roadmap bootstrap contract for operator review."""
+    errors = validate_next_roadmap_bootstrap_contract(contract)
+    status = "blocked" if errors else "ready"
+
+    lines = [
+        "Signposter Next Roadmap Bootstrap Contract",
+        "",
+        "Status:",
+        status,
+        "",
+        "Roadmap transition:",
+        f"  current: {contract.get('current_prefix', '')}",
+        f"  next: {contract.get('next_prefix', '')}",
+        f"  minimum DAG nodes: {contract.get('minimum_dag_nodes', '')}",
+    ]
+
+    if errors:
+        lines.extend(["", "Validation errors:"])
+        lines.extend(f"  - {error}" for error in errors)
+    else:
+        lines.extend(
+            [
+                "",
+                "Required steps:",
+                _markdown_bullets(contract["required_steps"]),
+                "",
+                "Safety:",
+                _markdown_bullets(contract["safety_rules"]),
+                "",
+                "Done criteria:",
+                _markdown_bullets(contract["done_criteria"]),
+            ]
+        )
+
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "  No GitHub mutation was performed.",
+            "  No manifest mutation was performed.",
+            "  No worker or reviewer execution was performed.",
+            "  No issue was closed.",
+        ]
+    )
+    return "\n".join(lines)
 
 
 
@@ -574,6 +743,13 @@ def format_planner_roadmap(plan: dict[str, Any]) -> str:
             "* Create follow-up tasks when scope exceeds worker task limits.",
             "* Use dependencies instead of embedding blockers inside oversized tasks.",
             "* Return to pending DAG items after blockers are resolved.",
+            "",
+            "Next-roadmap bootstrap contract:",
+            f"* Final roadmap tasks must create at least {NEXT_ROADMAP_MIN_DAG_NODES} "
+            "small dependency-aware DAG nodes for the next roadmap.",
+            "* Validate the next manifest or roadmap artifact before seeding.",
+            "* Run seed/sync dry-run before any guarded --apply path.",
+            "* Identify the first eligible next task and return to the execution loop.",
             "",
             "Done definition:",
             "* Roadmap has a clear issue DAG candidate.",
@@ -3366,6 +3542,22 @@ def _list_required(
         errors.append(f"{key}: {field} must be a list")
     elif field != "depends_on" and not value:
         errors.append(f"{key}: {field} must not be empty")
+
+
+def _list_contains_all(
+    obj: dict[str, Any],
+    field: str,
+    required: list[str],
+    errors: list[str],
+) -> None:
+    value = obj.get(field)
+    if not isinstance(value, list):
+        return
+
+    for item in required:
+        if item not in value:
+            errors.append(f"{field} missing required item: {item}")
+
 
 def _issue_status(issue: dict[str, Any]) -> str:
     return str(issue.get("status", "pending")).strip().lower() or "pending"
