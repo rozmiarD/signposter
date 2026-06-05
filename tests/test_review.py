@@ -654,6 +654,67 @@ def test_build_review_prompt_compacts_body_and_changed_files():
     assert f"...[omitted {omitted} additional changed files]" in prompt
 
 
+def test_build_review_prompt_budget_warning_preserves_review_contract_and_safety():
+    from signposter.review import REVIEW_PROMPT_LIMITS, build_review_prompt
+
+    plan = _review_plan_for_format(
+        pr_number=7,
+        title="workflow change",
+        files_changed=60,
+        additions=300,
+        deletions=20,
+        risk_level="high",
+        size="large",
+        associated_issue=6,
+        notes=["No review was executed.", "No merge was performed."],
+    )
+    body = "\n".join(f"body line {i} {'x' * 120}" for i in range(100))
+    diff = "+kept\n# Omitted due to budget\n# 120 diff lines omitted from 160 total lines."
+    file_paths = [f"src/signposter/file_{i}.py" for i in range(30)]
+
+    prompt = build_review_prompt(plan, body, diff, file_paths=file_paths)
+
+    assert "## Prompt Budget" in prompt
+    assert "Omitted sections are marked explicitly" in prompt
+    assert "...[omitted " in prompt
+    omitted_files = len(file_paths) - REVIEW_PROMPT_LIMITS["changed_files"]
+    assert f"...[omitted {omitted_files} additional changed files]" in prompt
+    assert "# Omitted due to budget" in prompt
+    assert "Verdict: APPROVE | NEEDS_CHANGES | BLOCK" in prompt
+    assert "Confidence: 0.00-1.00" in prompt
+    assert "Risk: low | medium | high" in prompt
+    assert "Scope match: yes | no" in prompt
+    assert "CI considered: yes | no" in prompt
+    assert "Merge recommendation: yes | no" in prompt
+    assert "Automerge eligible: yes | no" in prompt
+    assert "High-risk findings or uncertainty" in prompt
+    assert "You MUST NOT claim that you submitted a GitHub review" in prompt
+
+
+def test_build_review_prompt_budget_section_stays_compact_when_context_is_large():
+    from signposter.review import build_review_prompt
+
+    plan = _review_plan_for_format(pr_number=8, files_changed=80, additions=900)
+    body = "\n".join(f"body line {i} {'x' * 200}" for i in range(140))
+    diff = "+kept\n# Omitted due to budget\n# 200 diff lines omitted from 240 total lines."
+
+    prompt = build_review_prompt(
+        plan,
+        body,
+        diff,
+        file_paths=[f"tests/test_{i}.py" for i in range(40)],
+    )
+    budget_section = prompt.split("## Prompt Budget", 1)[1].split(
+        "## Selected Role Policy",
+        1,
+    )[0]
+
+    assert len(budget_section) < 450
+    assert "PR body excerpt: max" in budget_section
+    assert "Diff excerpt: max" in budget_section
+    assert "Omitted sections are marked explicitly" in budget_section
+
+
 def test_compact_review_text_respects_budget_with_omission_marker():
     from signposter.review import _compact_review_text
 
