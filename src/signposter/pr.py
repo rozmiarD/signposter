@@ -88,6 +88,24 @@ class PRExactCommitCISelectionStatus:
     notes: list[str]
 
 
+@dataclass(frozen=True)
+class PRFailedCIDiagnosisStatus:
+    """Read-only bounded diagnosis surface for failing PR checks."""
+
+    repo: str
+    pr_number: int
+    checks_status: str
+    successful_checks: int
+    failing_checks: int
+    pending_checks: int
+    failed_check_summaries: tuple[str, ...]
+    omitted_failed_checks: int
+    status: str
+    reason: str
+    inspect_command: str
+    notes: list[str]
+
+
 def run_github_command_with_timeout(
     command: list[str] | tuple[str, ...],
     *,
@@ -546,6 +564,132 @@ def format_pr_exact_commit_ci_selection_timeout_status(
         "",
         "Notes:",
     ]
+    lines.extend(f"  {note}" for note in result.notes)
+    return "\n".join(lines)
+
+
+def _bounded_failed_check_summaries(
+    failed_checks: list[str] | tuple[str, ...],
+    *,
+    max_checks: int,
+    max_chars: int,
+) -> tuple[tuple[str, ...], int]:
+    bounded_count = max(1, int(max_checks))
+    bounded_chars = max(20, int(max_chars))
+    summaries: list[str] = []
+
+    for check in failed_checks:
+        summary = _bounded_github_command_excerpt(
+            str(check),
+            max_chars=bounded_chars,
+            max_lines=2,
+        )
+        if summary:
+            summaries.append(summary)
+
+    selected = tuple(summaries[:bounded_count])
+    omitted = max(0, len(summaries) - len(selected))
+    return selected, omitted
+
+
+def plan_pr_failed_ci_diagnosis_status(
+    repo: str,
+    pr_number: int,
+    *,
+    checks_status: str,
+    failed_checks: list[str] | tuple[str, ...],
+    successful_checks: int = 0,
+    pending_checks: int = 0,
+    max_failed_checks: int = 5,
+    max_check_chars: int = 160,
+) -> PRFailedCIDiagnosisStatus:
+    """Return a compact read-only diagnosis for failing PR CI checks.
+
+    This helper does not poll GitHub. Callers provide already-observed check
+    summaries so status surfaces can show bounded failure evidence without
+    posting raw logs or continuing toward merge/integration.
+    """
+    normalized_status = (checks_status or "unknown").strip().lower()
+    successful = max(0, int(successful_checks))
+    pending = max(0, int(pending_checks))
+    failed_summaries, omitted = _bounded_failed_check_summaries(
+        failed_checks,
+        max_checks=max_failed_checks,
+        max_chars=max_check_chars,
+    )
+    failing = len(failed_summaries) + omitted
+
+    if normalized_status == "pass" and failing == 0:
+        status = "ready"
+        reason = "PR checks passed"
+    elif failing > 0:
+        status = "blocked — CI checks failing"
+        reason = f"{failing} failing check(s)"
+    else:
+        status = "blocked — failing CI evidence missing"
+        reason = "CI is not passing, but no failing check summary was provided"
+
+    notes = [
+        "Read-only PR failed-CI diagnosis.",
+        "Failed check summaries are bounded and redacted.",
+        "No GitHub mutation was performed.",
+        "No merge was performed.",
+        "No issue was closed.",
+        "Callers must stop before merge or integration while CI is failing.",
+    ]
+    return PRFailedCIDiagnosisStatus(
+        repo=repo,
+        pr_number=pr_number,
+        checks_status=normalized_status,
+        successful_checks=successful,
+        failing_checks=failing,
+        pending_checks=pending,
+        failed_check_summaries=failed_summaries,
+        omitted_failed_checks=omitted,
+        status=status,
+        reason=reason,
+        inspect_command=f"gh pr checks {pr_number} --repo {repo}",
+        notes=notes,
+    )
+
+
+def format_pr_failed_ci_diagnosis_status(
+    result: PRFailedCIDiagnosisStatus,
+) -> str:
+    """Render compact failed-CI diagnosis without raw logs."""
+    lines = [
+        f"Signposter PR Failed CI Diagnosis — PR #{result.pr_number}",
+        "",
+        "Checks:",
+        f"  status: {result.checks_status}",
+        f"  successful: {result.successful_checks}",
+        f"  failing: {result.failing_checks}",
+        f"  pending: {result.pending_checks}",
+        "",
+        "Status:",
+        f"  {result.status}",
+        "",
+        "Reason:",
+        f"  {result.reason}",
+        "",
+        "Failed checks:",
+    ]
+    if result.failed_check_summaries:
+        lines.extend(f"  - {summary}" for summary in result.failed_check_summaries)
+    else:
+        lines.append("  none provided")
+    if result.omitted_failed_checks:
+        lines.append(f"  ... {result.omitted_failed_checks} additional failing check(s) omitted")
+    lines.extend(
+        [
+            "",
+            "Recovery:",
+            f"  inspect command: {result.inspect_command}",
+            "  next: inspect failing checks, fix the scoped issue, rerun CI",
+            "",
+            "Notes:",
+        ]
+    )
     lines.extend(f"  {note}" for note in result.notes)
     return "\n".join(lines)
 
