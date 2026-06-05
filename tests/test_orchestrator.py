@@ -449,6 +449,78 @@ def test_orchestrator_next_uses_local_artifact_freshness_before_issue_updated_at
     assert result.takeover_reason is None
 
 
+def test_orchestrator_next_detects_missing_worker_summary_after_runtime_attempt(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    runs = tmp_path / "artifacts" / "runs"
+    runs.mkdir(parents=True)
+    (runs / "issue-46-worker.codex-runtime.summary.md").write_text(
+        "Status: unsupported-model\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    issue = LabeledItem(
+        number=46,
+        title="Issue 46",
+        html_url="https://github.com/example/repo/issues/46",
+        labels=["state:active"],
+        item_type="issue",
+        updated_at=datetime.now(UTC).isoformat(),
+    )
+
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=issue),
+    ):
+        result = plan_orchestrator_next("ExatronOmega/signposter", issue=46)
+
+    assert result.takeover_category == "missing-worker-artifact"
+    assert "preserved runtime evidence" in (result.takeover_reason or "")
+    assert result.recovery_commands == (
+        "signposter artifact write-worker-summary --repo ExatronOmega/signposter "
+        "--issue 46 --apply",
+        "signposter artifact validate-worker-summary --issue 46",
+        "signposter report --repo ExatronOmega/signposter --issue 46 --apply",
+        "signposter gate --repo ExatronOmega/signposter --issue 46",
+    )
+
+
+def test_format_orchestrator_next_includes_missing_worker_artifact_takeover(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    runs = tmp_path / "artifacts" / "runs"
+    runs.mkdir(parents=True)
+    (runs / "issue-46-worker.codex-runtime.raw.txt").write_text(
+        "backend unavailable\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    issue = LabeledItem(
+        number=46,
+        title="Issue 46",
+        html_url="https://github.com/example/repo/issues/46",
+        labels=["state:active"],
+        item_type="issue",
+        updated_at=datetime.now(UTC).isoformat(),
+    )
+
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=issue),
+    ):
+        result = plan_orchestrator_next("ExatronOmega/signposter", issue=46)
+
+    output = format_orchestrator_next(result)
+
+    assert "category: missing-worker-artifact" in output
+    assert "resume path: inspect preserved runtime artifacts" in output
+    assert "manual fallback: write a bounded manual worker summary" in output
+    assert "Recovery commands:" in output
+    assert "signposter artifact write-worker-summary --repo ExatronOmega/signposter" in output
+
+
 def test_orchestrator_step_dry_run_does_not_execute() -> None:
     lifecycle_next = _next(
         workflow_state="state:ready",
