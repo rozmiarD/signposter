@@ -1,14 +1,17 @@
 """Tests for handoff planning (HARDENING-012)."""
 
+import json
 from unittest.mock import patch
 
 from signposter.handoff import (
     HandoffSnapshot,
     HandoffSnapshotArtifact,
     build_handoff_snapshot,
+    build_handoff_snapshot_artifact,
     format_handoff_plan,
     format_handoff_snapshot,
     plan_handoff_for_issue,
+    write_handoff_snapshot_artifact,
 )
 
 
@@ -165,6 +168,81 @@ def test_format_handoff_snapshot_contains_resume_sections() -> None:
     assert "worker prompt: /repo/signposter/artifacts/prompts/issue-427.md (present)" in output
     assert "Resume:" in output
     assert "No GitHub mutation was performed." in output
+
+
+def test_build_handoff_snapshot_artifact_is_loop_resume_oriented() -> None:
+    snapshot = HandoffSnapshot(
+        repo="ExatronOmega/signposter",
+        repo_root="/repo/signposter",
+        branch="main",
+        head="abc1234",
+        git_status_lines=(" M src/signposter/handoff.py",),
+        manifest_path="docs/roadmaps/h051-seed-manifest.json",
+        planner_status="active",
+        planner_counts={"total": 80, "ready": 1, "waiting": 54, "merged": 25},
+        active_issue=None,
+        next_issue=557,
+        stop_reason="first dependency-ready open task selected",
+        resume_command="signposter run --repo ExatronOmega/signposter --issue 557 --dry-run",
+        local_warnings=("transient GitHub sync warning",),
+        artifacts=(
+            HandoffSnapshotArtifact(
+                label="worker prompt",
+                path="/repo/signposter/artifacts/prompts/issue-557.md",
+                exists=True,
+            ),
+        ),
+        status="ready",
+        notes=("Read-only handoff snapshot.", "No GitHub mutation was performed."),
+    )
+
+    artifact = build_handoff_snapshot_artifact(snapshot)
+
+    assert artifact["version"] == "handoff.snapshot-artifact.v0.1"
+    assert artifact["status"] == "ready"
+    assert artifact["repository"]["dirty"] is True
+    assert artifact["planner"]["manifest"] == "docs/roadmaps/h051-seed-manifest.json"
+    assert artifact["planner"]["counts"]["ready"] == 1
+    assert artifact["current_task"]["active_issue"] is None
+    assert artifact["current_task"]["next_issue"] == 557
+    assert artifact["current_task"]["resume_command"].endswith("--issue 557 --dry-run")
+    assert artifact["local_warnings"] == ["transient GitHub sync warning"]
+    assert artifact["artifacts"][0] == {
+        "label": "worker prompt",
+        "path": "/repo/signposter/artifacts/prompts/issue-557.md",
+        "exists": True,
+    }
+    assert "No GitHub mutation was performed." in artifact["notes"]
+
+
+def test_write_handoff_snapshot_artifact_writes_local_json(tmp_path) -> None:
+    snapshot = HandoffSnapshot(
+        repo="ExatronOmega/signposter",
+        repo_root="/repo/signposter",
+        branch="main",
+        head="abc1234",
+        git_status_lines=(),
+        manifest_path="docs/roadmaps/h051-seed-manifest.json",
+        planner_status="active",
+        planner_counts={"total": 80, "active": 1},
+        active_issue=557,
+        next_issue=None,
+        stop_reason="none",
+        resume_command="signposter lifecycle status --repo ExatronOmega/signposter --issue 557",
+        local_warnings=(),
+        artifacts=(),
+        status="ready",
+        notes=("Read-only handoff snapshot.",),
+    )
+    path = tmp_path / "artifacts" / "handoff.json"
+
+    written = write_handoff_snapshot_artifact(snapshot, path)
+    saved = json.loads(path.read_text(encoding="utf-8"))
+
+    assert written == path
+    assert saved["version"] == "handoff.snapshot-artifact.v0.1"
+    assert saved["current_task"]["active_issue"] == 557
+    assert saved["current_task"]["next_issue"] is None
 
 
 def test_build_handoff_snapshot_uses_manifest_active_issue_for_resume(

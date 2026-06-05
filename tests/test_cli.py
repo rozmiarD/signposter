@@ -119,6 +119,7 @@ def test_handoff_snapshot_help_lists_manifest_options(
     assert "usage: signposter handoff snapshot" in output
     assert "--manifest" in output
     assert "--sync-github" in output
+    assert "--out" in output
 
 
 def test_handoff_snapshot_blocks_missing_manifest(
