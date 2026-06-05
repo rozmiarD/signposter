@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from signposter.artifact import validate_worker_summary_artifact
 from signposter.lifecycle import LifecycleNext, plan_lifecycle_next
 from signposter.planner import build_planner_next_from_status, build_planner_status
 from signposter.scan import LabeledItem, fetch_issue_by_number, fetch_open_issues
@@ -196,6 +197,9 @@ def plan_orchestrator_next(
         lifecycle=lifecycle,
         takeover_category=takeover_category,
     )
+    if takeover_category == "malformed-worker-artifact" and status == "actionable":
+        status = "blocked"
+        stop_reason = f"takeover plan requires manual recovery: {takeover_category}"
 
     notes = [
         "Read-only orchestrator planning only.",
@@ -943,6 +947,10 @@ def _format_takeover_plan_lines(category: str) -> list[str]:
             "inspect preserved runtime artifacts before replacing worker output",
             "write a bounded manual worker summary or rerun execution after fixing the backend",
         ),
+        "malformed-worker-artifact": (
+            "inspect canonical worker summary validation findings before gate",
+            "repair or replace the worker summary with bounded parser-compatible evidence",
+        ),
     }
     selected = plans.get(category)
     if selected is None:
@@ -994,6 +1002,15 @@ def _plan_takeover_recovery_commands(
 
     if takeover_category == "missing-worker-artifact":
         return (
+            f"signposter artifact write-worker-summary --repo {repo} --issue {issue} --apply",
+            f"signposter artifact validate-worker-summary --issue {issue}",
+            f"signposter report --repo {repo} --issue {issue} --apply",
+            f"signposter gate --repo {repo} --issue {issue}",
+        )
+
+    if takeover_category == "malformed-worker-artifact":
+        return (
+            f"signposter artifact validate-worker-summary --issue {issue}",
             f"signposter artifact write-worker-summary --repo {repo} --issue {issue} --apply",
             f"signposter artifact validate-worker-summary --issue {issue}",
             f"signposter report --repo {repo} --issue {issue} --apply",
@@ -1695,6 +1712,9 @@ def _plan_takeover(
     if lifecycle.workflow_state != "state:active" or lifecycle.issue_number is None:
         return None, None
     if lifecycle.worker_summary_exists:
+        malformed_reason = _malformed_worker_artifact_reason(lifecycle.issue_number)
+        if malformed_reason:
+            return "malformed-worker-artifact", malformed_reason
         return None, None
 
     if _has_runtime_attempt_without_worker_summary(lifecycle.issue_number):
@@ -1742,6 +1762,38 @@ def _has_runtime_attempt_without_worker_summary(issue_number: int) -> bool:
         runs / f"issue-{issue_number}-worker.last-message.txt",
     ]
     return any(path.exists() for path in candidates)
+
+
+def _malformed_worker_artifact_reason(issue_number: int) -> str | None:
+    try:
+        validation = validate_worker_summary_artifact(issue_number)
+    except Exception as exc:
+        return (
+            "canonical worker summary could not be validated "
+            f"({type(exc).__name__}); repair or replace bounded worker evidence before gate"
+        )
+
+    if validation.status == "pass":
+        return None
+
+    details: list[str] = []
+    if validation.missing:
+        shown = ", ".join(validation.missing[:3])
+        if len(validation.missing) > 3:
+            shown = f"{shown}, ..."
+        details.append(f"missing fields: {shown}")
+    if validation.stale_signal:
+        details.append(f"summary unsafe marker: {validation.stale_signal}")
+    if validation.raw_stale_signal:
+        details.append(f"raw unsafe marker: {validation.raw_stale_signal}")
+    if not details:
+        details.append(f"validation status: {validation.status}")
+
+    return (
+        "canonical worker summary is malformed or unsafe; "
+        + "; ".join(details)
+        + "; repair or replace bounded worker evidence before gate"
+    )
 
 
 def _safe_issue_updated_at(repo: str, issue_number: int) -> str | None:
