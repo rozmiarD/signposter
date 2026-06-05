@@ -10,11 +10,13 @@ import shlex
 import subprocess
 from dataclasses import dataclass
 
-from signposter.comments import contains_auto_close_keyword
+from signposter.comments import contains_auto_close_keyword, redact_github_comment_body
 from signposter.handoff import HandoffPlan, plan_handoff_for_issue
 
 DEFAULT_GITHUB_COMMAND_TIMEOUT_SECONDS = 30
 DEFAULT_GITHUB_ISSUE_READ_FIELDS = ("number", "title", "state", "labels")
+DEFAULT_GITHUB_COMMAND_EXCERPT_MAX_CHARS = 300
+DEFAULT_GITHUB_COMMAND_EXCERPT_MAX_LINES = 6
 
 
 @dataclass(frozen=True)
@@ -104,6 +106,44 @@ def _timeout_output_text(value: str | bytes | None) -> str:
     return value
 
 
+def _bounded_github_command_excerpt(
+    value: str,
+    *,
+    max_chars: int = DEFAULT_GITHUB_COMMAND_EXCERPT_MAX_CHARS,
+    max_lines: int = DEFAULT_GITHUB_COMMAND_EXCERPT_MAX_LINES,
+) -> str:
+    """Return a redacted, bounded excerpt for operator-facing gh diagnostics."""
+    text = redact_github_comment_body(value or "").strip()
+    if not text:
+        return ""
+
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").splitlines()
+    selected = lines[: max(1, max_lines)]
+    excerpt = "\n".join(selected).strip()
+    truncated = len(lines) > len(selected) or len(excerpt) > max_chars
+
+    if not truncated and len(excerpt) <= max_chars:
+        return excerpt
+
+    marker = "\n... (truncated)"
+    budget = max(1, max_chars - len(marker))
+    excerpt = excerpt[:budget].rstrip()
+    return f"{excerpt}{marker}"
+
+
+def _append_bounded_stderr_excerpt(
+    lines: list[str],
+    result: GitHubCommandResult,
+) -> None:
+    excerpt = _bounded_github_command_excerpt(result.stderr)
+    if not excerpt:
+        return
+
+    lines.append("  stderr excerpt (bounded):")
+    for line in excerpt.splitlines():
+        lines.append(f"    {line}")
+
+
 def format_github_command_result(result: GitHubCommandResult) -> str:
     """Render a compact GitHub command attempt result."""
     lines = [
@@ -120,11 +160,16 @@ def format_github_command_result(result: GitHubCommandResult) -> str:
         "Output:",
         f"  stdout: {'present' if result.stdout else 'empty'}",
         f"  stderr: {'present' if result.stderr else 'empty'}",
-        "",
-        "Notes:",
-        "  No follow-up GitHub mutation was performed by this wrapper.",
-        "  Callers must stop after timeout unless an explicit recovery path is planned.",
     ]
+    _append_bounded_stderr_excerpt(lines, result)
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "  No follow-up GitHub mutation was performed by this wrapper.",
+            "  Callers must stop after timeout unless an explicit recovery path is planned.",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -178,11 +223,19 @@ def format_github_issue_read_result(
         "Output:",
         f"  stdout: {'present' if result.stdout else 'empty'}",
         f"  stderr: {'present' if result.stderr else 'empty'}",
-        "",
-        "Notes:",
-        "  No GitHub mutation was performed.",
-        "  Issue reads are read-only; callers must stop after timeout before later mutations.",
     ]
+    _append_bounded_stderr_excerpt(lines, result)
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "  No GitHub mutation was performed.",
+            (
+                "  Issue reads are read-only; callers must stop after timeout "
+                "before later mutations."
+            ),
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -252,12 +305,17 @@ def format_github_issue_edit_result(
         "Output:",
         f"  stdout: {'present' if result.stdout else 'empty'}",
         f"  stderr: {'present' if result.stderr else 'empty'}",
-        "",
-        "Notes:",
-        "  This helper is for guarded apply paths only.",
-        "  No follow-up GitHub mutation was performed after this command attempt.",
-        "  Callers must stop after timeout before any later mutation.",
     ]
+    _append_bounded_stderr_excerpt(lines, result)
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "  This helper is for guarded apply paths only.",
+            "  No follow-up GitHub mutation was performed after this command attempt.",
+            "  Callers must stop after timeout before any later mutation.",
+        ]
+    )
     return "\n".join(lines)
 
 
