@@ -1861,6 +1861,7 @@ def build_planner_status_artifact(
         "manifest_status": status.get("manifest_status", "unknown"),
         "status": status.get("status", "unknown"),
         "task_counts": build_planner_status_counts(status.get("tasks", [])),
+        "manifest_issue_mapping": build_manifest_issue_mapping_consistency(status),
         "next_roadmap_bootstrap": build_next_roadmap_bootstrap_status_artifact(status),
         "tasks": tasks,
         "notes": [
@@ -1868,6 +1869,77 @@ def build_planner_status_artifact(
             "No GitHub mutation was performed.",
             "No manifest mutation was performed.",
             "No task execution was performed.",
+        ],
+    }
+
+
+def build_manifest_issue_mapping_consistency(
+    status: dict[str, Any],
+) -> dict[str, Any]:
+    """Build compact consistency evidence for manifest issue mappings."""
+    counts = {
+        "total": 0,
+        "mapped": 0,
+        "unseeded": 0,
+        "ok": 0,
+        "unchecked": 0,
+        "stale": 0,
+        "missing": 0,
+        "mismatched": 0,
+    }
+    inconsistent_tasks: list[dict[str, Any]] = []
+
+    for task in status.get("tasks", []):
+        counts["total"] += 1
+        github_issue = task.get("github_issue")
+        if github_issue is None:
+            counts["unseeded"] += 1
+            continue
+
+        counts["mapped"] += 1
+        mapping_status = str(task.get("mapping_status", "") or "").lower()
+        state = str(task.get("state", "") or "").lower()
+        if mapping_status in {"stale", "missing", "mismatched"}:
+            counts[mapping_status] += 1
+            inconsistent_tasks.append(
+                {
+                    "key": task.get("key"),
+                    "github_issue": github_issue,
+                    "mapping_status": mapping_status,
+                    "mapping_reason": task.get("mapping_reason"),
+                    "expected_title": task.get("expected_title"),
+                    "github_title": task.get("github_title"),
+                }
+            )
+        elif mapping_status == "ok" or state in COMPLETED_PLANNER_STATES | {
+            "open",
+            "ready",
+            "active",
+            "done",
+            "closed",
+        }:
+            counts["ok"] += 1
+        else:
+            counts["unchecked"] += 1
+
+    if counts["stale"] or counts["missing"] or counts["mismatched"]:
+        mapping_status = "inconsistent"
+    elif counts["unchecked"]:
+        mapping_status = "unchecked"
+    elif counts["unseeded"]:
+        mapping_status = "partial"
+    else:
+        mapping_status = "consistent"
+
+    return {
+        "version": "planner.manifest-issue-mapping.v0.1",
+        "status": mapping_status,
+        "counts": counts,
+        "inconsistent_tasks": inconsistent_tasks,
+        "notes": [
+            "Read-only manifest issue mapping consistency evidence.",
+            "No GitHub mutation was performed.",
+            "No manifest mutation was performed.",
         ],
     }
 
@@ -3944,6 +4016,42 @@ def format_planner_status(status: dict[str, Any]) -> str:
         f"  blocked: {counts.get('blocked', 0)}",
         f"  completed: {counts.get('completed', 0)}",
     ]
+
+    mapping = status.get("manifest_issue_mapping")
+    if mapping is None:
+        mapping = build_manifest_issue_mapping_consistency(status)
+    mapping_counts = mapping.get("counts", {})
+    lines.extend(
+        [
+            "",
+            "Manifest issue mapping:",
+            f"  status: {mapping.get('status', 'unknown')}",
+            f"  mapped: {mapping_counts.get('mapped', 0)}",
+            f"  unseeded: {mapping_counts.get('unseeded', 0)}",
+            f"  unchecked: {mapping_counts.get('unchecked', 0)}",
+            f"  ok: {mapping_counts.get('ok', 0)}",
+            f"  stale: {mapping_counts.get('stale', 0)}",
+            f"  missing: {mapping_counts.get('missing', 0)}",
+            f"  mismatched: {mapping_counts.get('mismatched', 0)}",
+        ]
+    )
+    inconsistent_tasks = mapping.get("inconsistent_tasks", [])
+    if inconsistent_tasks:
+        lines.append("  inconsistent tasks:")
+        for item in inconsistent_tasks[:3]:
+            github_issue = item.get("github_issue")
+            issue_text = f"#{github_issue}" if github_issue is not None else "none"
+            line = (
+                f"    {item.get('key', 'unknown')} — issue: {issue_text} — "
+                f"{item.get('mapping_status', 'unknown')}"
+            )
+            reason = str(item.get("mapping_reason", "") or "").strip()
+            if reason:
+                line += f" — {reason}"
+            lines.append(line)
+        omitted = len(inconsistent_tasks) - 3
+        if omitted > 0:
+            lines.append(f"    ... {omitted} additional inconsistent task(s) omitted")
 
     bootstrap = status.get("next_roadmap_bootstrap")
     if bootstrap is None:
