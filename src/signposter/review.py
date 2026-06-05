@@ -1668,6 +1668,7 @@ def _missing_reviewer_summary_schema_fields(text: str) -> list[str]:
         "findings section": "findings:",
         "reasoning summary": "reasoning summary:",
         "validation considered section": "## validation considered",
+        "token usage accounting section": "## token usage accounting",
         "safety notes section": "## safety notes",
         "no github review safety note": "no github review was submitted",
         "no pr approval safety note": "no pr approval was submitted",
@@ -1677,7 +1678,24 @@ def _missing_reviewer_summary_schema_fields(text: str) -> list[str]:
     missing.extend(
         field for field, needle in required.items() if needle not in lowered
     )
+    if "## token usage accounting" in lowered and not _has_token_usage_status(lowered):
+        missing.append("token usage status")
     return missing
+
+
+def _has_token_usage_status(lowered_text: str) -> bool:
+    if "token usage status:" in lowered_text or "**token usage status:**" in lowered_text:
+        return True
+
+    marker = "## token usage accounting"
+    start = lowered_text.find(marker)
+    if start == -1:
+        return False
+    section = lowered_text[start + len(marker):]
+    next_heading = section.find("\n## ")
+    if next_heading != -1:
+        section = section[:next_heading]
+    return "\nstatus:" in section
 
 
 def _review_artifact_guidance(*, errors: list[str], raw_exists: bool) -> list[str]:
