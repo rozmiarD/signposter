@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 
 # Paths that are expected to be dirty during Signposter operation
@@ -17,6 +18,18 @@ ALLOWED_DIRTY_PREFIXES = (
     ".signposter/",
     ".openclaw/",
 )
+
+
+@dataclass(frozen=True)
+class BranchSyncStatus:
+    """Read-only local branch sync status against a remote-tracking branch."""
+
+    branch: str
+    upstream: str
+    ahead: int | None
+    behind: int | None
+    status: str
+    reason: str
 
 
 def get_git_status_short(cwd: str | Path = ".") -> list[str]:
@@ -134,6 +147,123 @@ def remote_branch_exists(
         return result.returncode == 0
     except Exception:
         return False
+
+
+def get_branch_sync_status(
+    cwd: str | Path = ".",
+    *,
+    branch: str = "main",
+    remote: str = "origin",
+) -> BranchSyncStatus:
+    """Return read-only sync status for `branch` against `remote/branch`.
+
+    This intentionally uses local git metadata only. It does not fetch, pull, or
+    mutate refs; callers that need a fresh view must perform an explicit sync
+    step before relying on this guard.
+    """
+    upstream = f"{remote}/{branch}"
+    if not branch:
+        return BranchSyncStatus(branch, upstream, None, None, "unknown", "branch is empty")
+
+    def ref_exists(ref: str) -> bool:
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
+                cwd=str(cwd),
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
+
+    if not ref_exists(branch):
+        return BranchSyncStatus(
+            branch,
+            upstream,
+            None,
+            None,
+            "unknown",
+            f"local branch {branch} was not found",
+        )
+    if not ref_exists(upstream):
+        return BranchSyncStatus(
+            branch,
+            upstream,
+            None,
+            None,
+            "unknown",
+            f"remote-tracking branch {upstream} was not found",
+        )
+
+    try:
+        result = subprocess.run(
+            ["git", "rev-list", "--left-right", "--count", f"{branch}...{upstream}"],
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except Exception as exc:
+        return BranchSyncStatus(
+            branch,
+            upstream,
+            None,
+            None,
+            "unknown",
+            f"failed to compare {branch} with {upstream}: {str(exc)[:120]}",
+        )
+
+    if result.returncode != 0:
+        stderr = (result.stderr or "").strip()[:120]
+        return BranchSyncStatus(
+            branch,
+            upstream,
+            None,
+            None,
+            "unknown",
+            f"failed to compare {branch} with {upstream}: {stderr or 'git returned non-zero'}",
+        )
+
+    parts = result.stdout.strip().split()
+    if len(parts) != 2:
+        return BranchSyncStatus(
+            branch,
+            upstream,
+            None,
+            None,
+            "unknown",
+            "git rev-list did not return ahead/behind counts",
+        )
+
+    try:
+        ahead = int(parts[0])
+        behind = int(parts[1])
+    except ValueError:
+        return BranchSyncStatus(
+            branch,
+            upstream,
+            None,
+            None,
+            "unknown",
+            "git rev-list returned non-integer ahead/behind counts",
+        )
+
+    if ahead == 0 and behind == 0:
+        status = "up-to-date"
+        reason = f"{branch} matches {upstream}"
+    elif ahead > 0 and behind == 0:
+        status = "ahead"
+        reason = f"{branch} is {ahead} commit(s) ahead of {upstream}"
+    elif ahead == 0 and behind > 0:
+        status = "behind"
+        reason = f"{branch} is {behind} commit(s) behind {upstream}"
+    else:
+        status = "diverged"
+        reason = f"{branch} has diverged from {upstream}: ahead={ahead}, behind={behind}"
+
+    return BranchSyncStatus(branch, upstream, ahead, behind, status, reason)
 
 
 def worktree_path_exists(path: str | Path) -> bool:

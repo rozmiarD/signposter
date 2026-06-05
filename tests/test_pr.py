@@ -3,6 +3,7 @@
 import subprocess
 
 from signposter.comments import contains_auto_close_keyword
+from signposter.git_utils import BranchSyncStatus
 from signposter.handoff import HandoffPlan
 from signposter.pr import (
     edit_github_issue_with_timeout,
@@ -64,6 +65,72 @@ def test_pr_plan_blocks_when_worktree_has_uncommitted_changes(monkeypatch):
     assert plan.status.startswith("blocked — worktree has uncommitted changes")
     assert plan.has_uncommitted_changes is True
     assert plan.changed_files == ["README.md"]
+
+
+def test_pr_plan_blocks_when_base_branch_is_not_synchronized(monkeypatch):
+    monkeypatch.setattr(
+        "signposter.pr.plan_handoff_for_issue",
+        lambda repo, issue: _handoff_plan(
+            has_changes=False,
+            changed_files=["tests/test_git_utils.py"],
+        ),
+    )
+    monkeypatch.setattr(
+        "signposter.pr.get_branch_sync_status",
+        lambda branch: BranchSyncStatus(
+            branch=branch,
+            upstream=f"origin/{branch}",
+            ahead=0,
+            behind=2,
+            status="behind",
+            reason=f"{branch} is 2 commit(s) behind origin/{branch}",
+        ),
+    )
+    monkeypatch.setattr(
+        "signposter.pr._get_branch_changed_files",
+        lambda worktree, base, source: ["tests/test_git_utils.py"],
+    )
+
+    plan = plan_pr_for_issue("test/repo", 4)
+
+    assert plan.status == "blocked — base branch main is not synchronized with origin/main (behind)"
+    output = format_pr_plan(plan)
+    assert "Base sync:" in output
+    assert "status: behind" in output
+    assert "reason: main is 2 commit(s) behind origin/main" in output
+
+
+def test_pr_plan_surfaces_unknown_base_sync_without_blocking(monkeypatch):
+    monkeypatch.setattr(
+        "signposter.pr.plan_handoff_for_issue",
+        lambda repo, issue: _handoff_plan(
+            has_changes=False,
+            changed_files=["tests/test_git_utils.py"],
+        ),
+    )
+    monkeypatch.setattr(
+        "signposter.pr.get_branch_sync_status",
+        lambda branch: BranchSyncStatus(
+            branch=branch,
+            upstream=f"origin/{branch}",
+            ahead=None,
+            behind=None,
+            status="unknown",
+            reason=f"remote-tracking branch origin/{branch} was not found",
+        ),
+    )
+    monkeypatch.setattr(
+        "signposter.pr._get_branch_changed_files",
+        lambda worktree, base, source: ["tests/test_git_utils.py"],
+    )
+
+    plan = plan_pr_for_issue("test/repo", 4)
+
+    assert plan.status == "ready"
+    output = format_pr_plan(plan)
+    assert "Base sync:" in output
+    assert "status: unknown" in output
+    assert "remote-tracking branch origin/main was not found" in output
 
 
 def test_github_command_timeout_wrapper_records_completed_attempt():
