@@ -228,6 +228,42 @@ def test_worker_summary_plan_includes_manual_takeover_provenance():
     assert "GitHub comment provenance: bounded report excerpt only." in plan.content
 
 
+def test_worker_summary_plan_includes_default_token_usage_accounting():
+    plan = plan_worker_summary(repo="test/repo", issue=32)
+    decision = evaluate_ci_gate(0, plan.content)
+
+    assert decision.decision == "pass"
+    assert "## Token usage accounting" in plan.content
+    assert "Token usage status: unknown" in plan.content
+    assert "Input tokens: unknown" in plan.content
+    assert "Output tokens: unknown" in plan.content
+    assert "Total tokens: unknown" in plan.content
+    assert "Estimated cost USD: unknown" in plan.content
+    assert "Source: manual summary did not receive backend token usage" in plan.content
+
+
+def test_worker_summary_plan_preserves_reported_token_usage_fields():
+    plan = plan_worker_summary(
+        repo="test/repo",
+        issue=32,
+        token_usage={
+            "status": "reported",
+            "input_tokens": 101,
+            "output_tokens": 29,
+            "total_tokens": 130,
+            "estimated_cost_usd": "0.0042",
+            "source": "codex-cli metadata",
+        },
+    )
+
+    assert "Token usage status: reported" in plan.content
+    assert "Input tokens: 101" in plan.content
+    assert "Output tokens: 29" in plan.content
+    assert "Total tokens: 130" in plan.content
+    assert "Estimated cost USD: 0.0042" in plan.content
+    assert "Source: codex-cli metadata" in plan.content
+
+
 def test_worker_summary_docs_only_plan_adds_preflight_fields(tmp_path):
     plan = plan_worker_summary(
         repo="test/repo",
