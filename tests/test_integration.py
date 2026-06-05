@@ -1240,6 +1240,109 @@ def test_noop_integration_apply_completed_does_not_mutate():
     assert result["results"] == ["no-op integration already completed"]
 
 
+def test_noop_integration_apply_is_idempotent_after_success(monkeypatch, tmp_path):
+    from signposter.integration import apply_noop_integration
+
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    monkeypatch.chdir(repo_path)
+
+    artifact_dir = repo_path / "artifacts" / "runs"
+    artifact_dir.mkdir(parents=True)
+    (artifact_dir / "issue-12-gate.summary.md").write_text(
+        """
+# Signposter Execution Summary
+
+**Repository:** test/repo
+**Issue:** #12 — noop
+**Agent:** worker
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+## Scoped completion evidence
+Validated no-op completion: requested behavior already exists.
+The existing implementation already provides deterministic completed no-op integration behavior.
+Existing ready output is deterministic and terminal-friendly.
+No additional code changes were needed for the worker result.
+
+## Files changed
+No files were changed in the isolated worktree.
+
+## Validation evidence
+Targeted validation in isolated worktree passed:
+- ruff check tests/test_integration.py
+- pytest tests/test_integration.py -q
+
+Full validation in isolated worktree passed:
+- ruff check .
+- pytest tests/ -q
+
+Manual CLI smoke passed.
+
+## Safety
+No GitHub mutation was performed by the worker step.
+No OpenClaw execution was performed by the worker step.
+No manifest mutation was performed.
+No unrelated files were changed.
+""",
+        encoding="utf-8",
+    )
+
+    class Proc:
+        def __init__(self, returncode=0, stdout="", stderr=""):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = stderr
+
+    issue_state = {
+        "state": "OPEN",
+        "labels": [{"name": "state:done"}, {"name": "phase:build"}],
+    }
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd[:3] == ["gh", "issue", "view"]:
+            labels = ",".join(
+                f'{{"name":"{label["name"]}"}}' for label in issue_state["labels"]
+            )
+            return Proc(
+                stdout=(
+                    '{"number":12,"title":"noop","state":"'
+                    f'{issue_state["state"]}","labels":[{labels}]}}'
+                )
+            )
+        if cmd[:3] == ["git", "branch", "--list"]:
+            return Proc(stdout="")
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return Proc(stdout="[]")
+        if cmd[:3] == ["gh", "issue", "edit"]:
+            issue_state["labels"] = [{"name": "state:merged"}, {"name": "phase:build"}]
+            return Proc()
+        if cmd[:3] == ["gh", "issue", "close"]:
+            issue_state["state"] = "CLOSED"
+            return Proc()
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    first = apply_noop_integration("test/repo", 12, apply=True)
+    second = apply_noop_integration("test/repo", 12, apply=True)
+
+    assert first["mode"] == "apply"
+    assert first["success"] is True
+    assert second["mode"] == "apply_completed"
+    assert second["success"] is True
+    assert second["results"] == ["no-op integration already completed"]
+
+    edit_calls = [cmd for cmd in calls if cmd[:3] == ["gh", "issue", "edit"]]
+    close_calls = [cmd for cmd in calls if cmd[:3] == ["gh", "issue", "close"]]
+    assert len(edit_calls) == 1
+    assert len(close_calls) == 1
+
+
 def test_noop_integration_apply_stops_after_label_transition_failure(monkeypatch):
     from signposter.integration import NoopIntegrationPlan, apply_noop_integration
 
