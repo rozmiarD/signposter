@@ -1705,6 +1705,14 @@ def _validate_seed_manifest_idempotence(manifest: dict[str, Any]) -> list[str]:
             )
         issues_by_number[github_issue_number] = key
 
+        mapping_status = str(issue.get("mapping_status", "") or "").strip().lower()
+        if mapping_status in {"stale", "missing", "mismatched"}:
+            mapping_reason = str(issue.get("mapping_reason", "") or "").strip()
+            error = f"{key}: GitHub issue mapping is {mapping_status}"
+            if mapping_reason:
+                error += f": {mapping_reason}"
+            errors.append(error)
+
     return errors
 
 
