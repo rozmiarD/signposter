@@ -10,8 +10,10 @@ from signposter.pr import (
     format_github_issue_edit_result,
     format_github_issue_read_result,
     format_pr_ci_pending_timeout_status,
+    format_pr_exact_commit_ci_selection_timeout_status,
     format_pr_plan,
     plan_pr_ci_pending_timeout_status,
+    plan_pr_exact_commit_ci_selection_timeout_status,
     plan_pr_for_issue,
     read_github_issue_with_timeout,
     run_github_command_with_timeout,
@@ -367,6 +369,58 @@ def test_pr_ci_pending_status_ready_when_checks_pass():
     assert result.status == "ready"
     assert result.reason == "PR checks passed"
     assert result.pending_checks == 0
+
+
+def test_pr_exact_commit_ci_selection_ready_with_run_id():
+    result = plan_pr_exact_commit_ci_selection_timeout_status(
+        "owner/repo",
+        branch="main",
+        commit_sha="abc123",
+        run_id="987",
+        elapsed_seconds=2,
+        timeout_seconds=30,
+    )
+    output = format_pr_exact_commit_ci_selection_timeout_status(result)
+
+    assert result.status == "ready"
+    assert result.reason == "selected CI run 987 for exact commit abc123"
+    assert "run id: 987" in output
+    assert "--commit abc123" in output
+    assert "No merge was performed." in output
+
+
+def test_pr_exact_commit_ci_selection_pending_before_timeout():
+    result = plan_pr_exact_commit_ci_selection_timeout_status(
+        "owner/repo",
+        branch="main",
+        commit_sha="abc123",
+        run_id=None,
+        elapsed_seconds=5,
+        timeout_seconds=30,
+    )
+    output = format_pr_exact_commit_ci_selection_timeout_status(result)
+
+    assert result.status == "pending — exact commit CI run not registered yet"
+    assert result.reason == "no CI run found for exact commit abc123; 25s wait budget remaining"
+    assert "Status:\n  pending — exact commit CI run not registered yet" in output
+
+
+def test_pr_exact_commit_ci_selection_blocks_after_timeout():
+    result = plan_pr_exact_commit_ci_selection_timeout_status(
+        "owner/repo",
+        branch="main",
+        commit_sha="abc123",
+        run_id="",
+        elapsed_seconds=31,
+        timeout_seconds=30,
+    )
+    output = format_pr_exact_commit_ci_selection_timeout_status(result)
+
+    assert result.status == "blocked — exact commit CI run selection timeout"
+    assert result.reason == "no CI run found for exact commit abc123 on main after 30s"
+    assert "command: gh run list -R owner/repo --branch main --commit abc123" in output
+    assert "Callers must stop after selection timeout before merge or integration." in output
+    assert "No issue was closed." in output
 
 
 def test_pr_plan_ready_for_clean_branch_with_committed_changes(monkeypatch):
