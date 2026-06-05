@@ -2922,6 +2922,155 @@ def test_apply_planner_advance_plan_executes_multi_target_apply(
     ]
 
 
+def test_apply_planner_advance_plan_stops_after_failed_mutation() -> None:
+    advance_plan = {
+        "status": "ready",
+        "issue": 10,
+        "targets": [
+            {
+                "key": "WATCH-002",
+                "github_issue": 11,
+                "labels_to_add": ["state:ready"],
+            },
+            {
+                "key": "WATCH-003",
+                "github_issue": 12,
+                "labels_to_add": ["state:ready"],
+            },
+            {
+                "key": "WATCH-004",
+                "github_issue": 13,
+                "labels_to_add": ["state:ready"],
+            },
+        ],
+        "planned_github_mutations": [],
+        "reasons": [],
+    }
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str]) -> _FakeGhIssueCreateResult:
+        calls.append(command)
+        if command[3] == "12":
+            return _FakeGhIssueCreateResult(
+                1,
+                stdout="",
+                stderr="label update rejected",
+            )
+        return _FakeGhIssueCreateResult(0, stdout="")
+
+    result = apply_planner_advance_plan(
+        advance_plan,
+        repo="ExatronOmega/signposter",
+        run_command=fake_run,
+    )
+
+    assert result["status"] == "partial"
+    assert result["promoted"] == [
+        {
+            "key": "WATCH-002",
+            "github_issue": 11,
+            "labels_added": ["state:ready"],
+        }
+    ]
+    assert result["commands"] == [
+        "gh issue edit 11 -R ExatronOmega/signposter --add-label state:ready"
+    ]
+    assert result["failed"] == [
+        {
+            "key": "WATCH-003",
+            "github_issue": 12,
+            "command": (
+                "gh issue edit 12 -R ExatronOmega/signposter "
+                "--add-label state:ready"
+            ),
+            "status": "failed",
+            "returncode": 1,
+            "stdout": "",
+            "stderr": "label update rejected",
+        }
+    ]
+    assert result["skipped"] == [{"key": "WATCH-004", "github_issue": 13}]
+    assert result["errors"] == [
+        "stopped after failed promoting WATCH-003 (#12)"
+    ]
+    assert [command[3] for command in calls] == ["11", "12"]
+
+    output = format_planner_advance_apply_result(result)
+    assert "Status:\n  partial" in output
+    assert "Failed mutation:" in output
+    assert "WATCH-003 -> #12" in output
+    assert "Skipped mutations after stop:" in output
+    assert "WATCH-004 -> #13" in output
+    assert "No later GitHub mutation was attempted after the failed command." in output
+
+
+def test_apply_planner_advance_plan_blocks_after_timeout_before_mutation() -> None:
+    advance_plan = {
+        "status": "ready",
+        "issue": 10,
+        "targets": [
+            {
+                "key": "WATCH-002",
+                "github_issue": 11,
+                "labels_to_add": ["state:ready"],
+            },
+            {
+                "key": "WATCH-003",
+                "github_issue": 12,
+                "labels_to_add": ["state:ready"],
+            },
+        ],
+        "planned_github_mutations": [],
+        "reasons": [],
+    }
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str]) -> _FakeGhIssueCreateResult:
+        calls.append(command)
+        raise subprocess.TimeoutExpired(
+            cmd=command,
+            timeout=30,
+            output=b"partial stdout",
+            stderr=b"partial stderr",
+        )
+
+    result = apply_planner_advance_plan(
+        advance_plan,
+        repo="ExatronOmega/signposter",
+        run_command=fake_run,
+    )
+
+    assert result["status"] == "blocked"
+    assert result["promoted"] == []
+    assert result["commands"] == []
+    assert result["failed"] == [
+        {
+            "key": "WATCH-002",
+            "github_issue": 11,
+            "command": (
+                "gh issue edit 11 -R ExatronOmega/signposter "
+                "--add-label state:ready"
+            ),
+            "status": "timeout",
+            "returncode": None,
+            "stdout": "partial stdout",
+            "stderr": "partial stderr",
+        }
+    ]
+    assert result["skipped"] == [{"key": "WATCH-003", "github_issue": 12}]
+    assert result["errors"] == [
+        "stopped after timeout promoting WATCH-002 (#11)"
+    ]
+    assert [command[3] for command in calls] == ["11"]
+
+    output = format_planner_advance_apply_result(result)
+    assert "Status:\n  blocked" in output
+    assert "status: timeout" in output
+    assert "stdout: present" in output
+    assert "stderr: present" in output
+    assert "No later GitHub mutation was attempted after the failed command." in output
+
+
 def test_build_planner_run_plan_from_status_reports_next_open_task(
     tmp_path: Path,
 ) -> None:
