@@ -11,7 +11,7 @@ from signposter.artifact import (
     validate_worker_summary_artifact,
     write_manual_artifact,
 )
-from signposter.gate import evaluate_ci_gate
+from signposter.gate import evaluate_ci_gate, evaluate_human_gate
 from signposter.review import evaluate_review_gate
 
 
@@ -296,6 +296,36 @@ def test_worker_summary_docs_only_plan_adds_preflight_fields(tmp_path):
     assert "Dirty guard: clean" in plan.content
     assert "No code changes" not in plan.content
     assert "No scope broadening" not in plan.content
+    assert decision.decision == "pass"
+
+
+def test_worker_summary_human_gate_plan_adds_structured_evidence(tmp_path):
+    plan = plan_worker_summary(
+        repo="test/repo",
+        issue=34,
+        changed_files=["src/signposter/artifact.py", "tests/test_artifact.py"],
+        implemented_behavior=["Human gate worker summary fields were verified."],
+        targeted_validation=[
+            "ruff check src/signposter/artifact.py tests/test_artifact.py",
+            "python -m pytest tests/test_artifact.py -q",
+        ],
+        human_gate=True,
+        runs_dir=tmp_path,
+    )
+    write_manual_artifact(plan, apply=True)
+
+    validation = validate_worker_summary_artifact(34, runs_dir=tmp_path)
+    decision = evaluate_human_gate(0, plan.content)
+
+    assert validation.status == "pass"
+    assert "## Human gate evidence" in plan.content
+    assert "Human approval: yes" in plan.content
+    assert "Human gate approval: approved" in plan.content
+    assert "Scope reviewed: yes" in plan.content
+    assert "Scope match: yes" in plan.content
+    assert "Validation passed: yes" in plan.content
+    assert "Safety reviewed: yes" in plan.content
+    assert "Execution backend: no live backend output used for implementation" in plan.content
     assert decision.decision == "pass"
 
 
