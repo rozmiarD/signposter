@@ -72,6 +72,22 @@ class PRCIPendingTimeoutStatus:
     notes: list[str]
 
 
+@dataclass(frozen=True)
+class PRExactCommitCISelectionStatus:
+    """Read-only status for selecting a remote CI run for an exact commit."""
+
+    repo: str
+    branch: str
+    commit_sha: str
+    elapsed_seconds: int
+    timeout_seconds: int
+    run_id: str | None
+    status: str
+    reason: str
+    select_command: str
+    notes: list[str]
+
+
 def run_github_command_with_timeout(
     command: list[str] | tuple[str, ...],
     *,
@@ -431,6 +447,102 @@ def format_pr_ci_pending_timeout_status(result: PRCIPendingTimeoutStatus) -> str
         "Recovery:",
         f"  inspect command: {result.inspect_command}",
         "  next: inspect checks, wait explicitly if appropriate, then rerun plan",
+        "",
+        "Notes:",
+    ]
+    lines.extend(f"  {note}" for note in result.notes)
+    return "\n".join(lines)
+
+
+def plan_pr_exact_commit_ci_selection_timeout_status(
+    repo: str,
+    *,
+    branch: str,
+    commit_sha: str,
+    run_id: str | None,
+    elapsed_seconds: int,
+    timeout_seconds: int,
+) -> PRExactCommitCISelectionStatus:
+    """Return read-only status for exact-commit CI run selection.
+
+    This helper does not poll GitHub itself. Callers provide the observed run ID
+    and wait budget so automation can stop safely when CI for the exact commit
+    cannot be selected.
+    """
+    bounded_elapsed = max(0, int(elapsed_seconds))
+    bounded_timeout = max(1, int(timeout_seconds))
+    normalized_run_id = (run_id or "").strip() or None
+    normalized_sha = (commit_sha or "").strip()
+    normalized_branch = (branch or "").strip()
+
+    if normalized_run_id:
+        status = "ready"
+        reason = f"selected CI run {normalized_run_id} for exact commit {normalized_sha}"
+    elif bounded_elapsed >= bounded_timeout:
+        status = "blocked — exact commit CI run selection timeout"
+        reason = (
+            f"no CI run found for exact commit {normalized_sha} on "
+            f"{normalized_branch} after {bounded_timeout}s"
+        )
+    else:
+        status = "pending — exact commit CI run not registered yet"
+        reason = (
+            f"no CI run found for exact commit {normalized_sha}; "
+            f"{bounded_timeout - bounded_elapsed}s wait budget remaining"
+        )
+
+    select_command = (
+        "gh run list "
+        f"-R {repo} --branch {normalized_branch} --commit {normalized_sha} "
+        "--limit 1 --json databaseId --jq '.[0].databaseId'"
+    )
+    notes = [
+        "Read-only exact-commit CI selection status.",
+        "No GitHub mutation was performed.",
+        "No merge was performed.",
+        "No issue was closed.",
+        "Callers must stop after selection timeout before merge or integration.",
+    ]
+
+    return PRExactCommitCISelectionStatus(
+        repo=repo,
+        branch=normalized_branch,
+        commit_sha=normalized_sha,
+        elapsed_seconds=bounded_elapsed,
+        timeout_seconds=bounded_timeout,
+        run_id=normalized_run_id,
+        status=status,
+        reason=reason,
+        select_command=select_command,
+        notes=notes,
+    )
+
+
+def format_pr_exact_commit_ci_selection_timeout_status(
+    result: PRExactCommitCISelectionStatus,
+) -> str:
+    """Render compact exact-commit CI selection status."""
+    lines = [
+        "Signposter PR Exact-Commit CI Selection",
+        "",
+        "Target:",
+        f"  repo: {result.repo}",
+        f"  branch: {result.branch}",
+        f"  commit: {result.commit_sha}",
+        f"  run id: {result.run_id or 'none'}",
+        "",
+        "Wait budget:",
+        f"  elapsed_seconds: {result.elapsed_seconds}",
+        f"  timeout_seconds: {result.timeout_seconds}",
+        "",
+        "Status:",
+        f"  {result.status}",
+        "",
+        "Reason:",
+        f"  {result.reason}",
+        "",
+        "Selection:",
+        f"  command: {result.select_command}",
         "",
         "Notes:",
     ]
