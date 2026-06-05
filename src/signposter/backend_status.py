@@ -225,6 +225,13 @@ def format_backend_status_report(report: BackendStatusReport) -> str:
         f"Default backend: {report.default_backend}",
         "Fallback order: " + " -> ".join(report.fallback_order),
         "",
+        "Compact summary:",
+        f"  default: {report.default_backend}",
+        "  codex-cli: " + _backend_status_by_name(report.backends, "codex-cli"),
+        "  openclaw: " + _backend_status_by_name(report.backends, "openclaw"),
+        f"  runtime availability: {report.runtime_diagnostics_status}",
+        f"  runtime diagnostics shown: {len(report.runtime_diagnostics)}",
+        "",
         "Backends:",
     ]
     for backend in report.backends:

@@ -56,6 +56,9 @@ def test_backend_status_format_is_bounded_and_read_only(tmp_path) -> None:
     assert "Signposter Backend Status" in out
     assert "Default backend: codex-cli" in out
     assert "Fallback order: codex-cli -> openclaw" in out
+    assert "Compact summary:" in out
+    assert "default: codex-cli" in out
+    assert "runtime diagnostics shown: 0" in out
     assert "reason: legacy fallback:" in out
     assert "Audit:" in out
     assert "current default backend: codex-cli" in out
@@ -128,6 +131,7 @@ def test_backend_status_reports_recent_runtime_availability_diagnostics(tmp_path
     assert diagnostic.model == "openai/gpt-5.4"
     assert diagnostic.status == "unsupported-model"
     assert "runtime availability: warnings" in out
+    assert "runtime diagnostics shown: 1" in out
     assert "- unsupported-model" in out
     assert "model: openai/gpt-5.4" in out
     assert diagnostic.artifact_path in {
