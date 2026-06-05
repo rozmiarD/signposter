@@ -1541,6 +1541,16 @@ def apply_planner_advance_plan(
     run_command,
 ) -> dict[str, Any]:
     """Apply one guarded planner advance label mutation."""
+    if advance_plan.get("status") == "completed":
+        return {
+            "status": "completed",
+            "issue": advance_plan.get("issue"),
+            "promoted": [],
+            "commands": [],
+            "already_ready": advance_plan.get("already_ready_downstream", []),
+            "errors": [],
+        }
+
     if advance_plan.get("status") != "ready":
         return {
             "status": "blocked",
@@ -1713,6 +1723,10 @@ def format_planner_advance_apply_result(result: dict[str, Any]) -> str:
             "  applied — GitHub label mutations listed below were executed because "
             "--apply was provided."
         ),
+        "completed": (
+            "  completed — downstream issue labels already show state:ready; "
+            "no GitHub mutation was needed."
+        ),
         "partial": (
             "  partial — one or more GitHub label mutations executed, then "
             "Signposter stopped after a failed mutation."
@@ -1735,6 +1749,14 @@ def format_planner_advance_apply_result(result: dict[str, Any]) -> str:
             lines.append(
                 f"  {item['key']} -> #{item['github_issue']} "
                 f"added labels: {labels}"
+            )
+
+    if result.get("already_ready"):
+        lines.extend(["", "Already ready GitHub issues:"])
+        for item in result["already_ready"]:
+            lines.append(
+                f"  {item['key']} -> #{item['github_issue']} "
+                "already has state:ready"
             )
 
     if result.get("commands"):
@@ -2029,6 +2051,7 @@ def build_planner_advance_plan_from_status(
 
     targets = []
     blocked_downstream = []
+    already_ready_downstream = []
     planned_github_mutations = []
     for task in downstream:
         github_issue = task.get("github_issue")
@@ -2038,6 +2061,14 @@ def build_planner_advance_plan_from_status(
         if github_issue is None:
             continue
         if state == "ready" or workflow_state == "ready" or "state:ready" in labels:
+            already_ready_downstream.append(
+                {
+                    "key": task["key"],
+                    "github_issue": github_issue,
+                    "state": task.get("state"),
+                    "workflow_state": task.get("workflow_state"),
+                }
+            )
             continue
         if state not in {"open", "unknown"}:
             continue
@@ -2070,13 +2101,24 @@ def build_planner_advance_plan_from_status(
         command += " --add-label state:ready"
         planned_github_mutations.append(command)
 
-    status_value = "ready" if targets else "blocked"
+    status_value = (
+        "ready"
+        if targets
+        else "completed"
+        if already_ready_downstream and not blocked_downstream
+        else "blocked"
+    )
     reasons = [
         f"source issue is completed: state={source_task.get('state')}",
         "advance dry-run used zero LLM tokens",
     ]
     if targets:
         reasons.append("one or more downstream tasks can be promoted")
+    elif already_ready_downstream and not blocked_downstream:
+        reasons.append(
+            "one or more downstream tasks are already state:ready; "
+            "no duplicate mutation is planned"
+        )
     elif downstream:
         reasons.append("no downstream task is currently promotable")
         if blocked_downstream:
@@ -2092,6 +2134,7 @@ def build_planner_advance_plan_from_status(
         "issue": issue,
         "source_task": source_task,
         "targets": targets,
+        "already_ready_downstream": already_ready_downstream,
         "planned_github_mutations": planned_github_mutations,
         "planned_manifest_mutations": [],
         "requires_llm_analysis": False,
@@ -2104,11 +2147,17 @@ def format_planner_advance_plan(result: dict[str, Any]) -> str:
     """Format a dry-run planner advance plan."""
     issue = result["issue"]
     status = str(result.get("status", "unknown"))
-    status_detail = (
-        "ready — dry-run only; use planner advance --apply to add listed labels"
-        if status == "ready"
-        else "blocked — dry-run only; do not run apply until reasons are resolved"
-    )
+    if status == "ready":
+        status_detail = (
+            "ready — dry-run only; use planner advance --apply to add listed labels"
+        )
+    elif status == "completed":
+        status_detail = (
+            "completed — downstream issue labels already show state:ready; "
+            "no apply mutation is needed"
+        )
+    else:
+        status_detail = "blocked — dry-run only; do not run apply until reasons are resolved"
     lines = [
         f"Signposter Planner Advance — Issue #{issue}",
         "",
@@ -2139,6 +2188,15 @@ def format_planner_advance_plan(result: dict[str, Any]) -> str:
             )
     else:
         lines.append("  none")
+
+    already_ready = result.get("already_ready_downstream", [])
+    if already_ready:
+        lines.extend(["", "Already ready downstream:"])
+        for target in already_ready:
+            lines.append(
+                f"  {target['key']} — issue: #{target['github_issue']} — "
+                "no duplicate state:ready mutation planned"
+            )
 
     lines.extend(["", "Planned GitHub mutations:"])
     mutations = result.get("planned_github_mutations", [])
