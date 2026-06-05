@@ -186,6 +186,81 @@ def format_github_issue_read_result(
     return "\n".join(lines)
 
 
+def edit_github_issue_with_timeout(
+    repo: str,
+    issue_number: int,
+    *,
+    title: str | None = None,
+    body: str | None = None,
+    add_labels: tuple[str, ...] = (),
+    remove_labels: tuple[str, ...] = (),
+    state: str | None = None,
+    timeout_seconds: int = DEFAULT_GITHUB_COMMAND_TIMEOUT_SECONDS,
+    run_command=subprocess.run,
+) -> GitHubCommandResult:
+    """Run one guarded gh issue edit command with bounded timeout evidence."""
+    command = ["gh", "issue", "edit", str(issue_number), "-R", repo]
+    has_edit = False
+
+    if title:
+        command.extend(["--title", title])
+        has_edit = True
+    if body:
+        command.extend(["--body", body])
+        has_edit = True
+    if add_labels:
+        command.extend(["--add-label", ",".join(add_labels)])
+        has_edit = True
+    if remove_labels:
+        command.extend(["--remove-label", ",".join(remove_labels)])
+        has_edit = True
+    if state:
+        command.extend(["--state", state])
+        has_edit = True
+
+    if not has_edit:
+        raise ValueError("GitHub issue edit helper requires at least one explicit edit argument")
+
+    return run_github_command_with_timeout(
+        command,
+        timeout_seconds=timeout_seconds,
+        run_command=run_command,
+    )
+
+
+def format_github_issue_edit_result(
+    repo: str,
+    issue_number: int,
+    result: GitHubCommandResult,
+) -> str:
+    """Render a compact GitHub issue edit attempt result."""
+    lines = [
+        "Signposter GitHub Issue Edit Result",
+        "",
+        "Issue:",
+        f"  repo: {repo}",
+        f"  issue: #{issue_number}",
+        "",
+        "Command:",
+        "  " + shlex.join(result.command),
+        "",
+        "Status:",
+        f"  {result.status}",
+        f"  returncode: {result.returncode if result.returncode is not None else 'none'}",
+        f"  timeout_seconds: {result.timeout_seconds}",
+        "",
+        "Output:",
+        f"  stdout: {'present' if result.stdout else 'empty'}",
+        f"  stderr: {'present' if result.stderr else 'empty'}",
+        "",
+        "Notes:",
+        "  This helper is for guarded apply paths only.",
+        "  No follow-up GitHub mutation was performed after this command attempt.",
+        "  Callers must stop after timeout before any later mutation.",
+    ]
+    return "\n".join(lines)
+
+
 def _get_branch_changed_files(
     worktree_path: str,
     base_branch: str,
