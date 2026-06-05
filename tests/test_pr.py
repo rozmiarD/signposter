@@ -457,12 +457,55 @@ def test_format_pr_plan_preserves_safe_related_issue_wording(monkeypatch):
     assert "Fixes #4" not in output
 
 
+def test_pr_plan_generated_body_and_output_pass_auto_close_scanner_smoke(monkeypatch):
+    monkeypatch.setattr(
+        "signposter.pr.plan_handoff_for_issue",
+        lambda repo, issue: _handoff_plan(
+            has_changes=False,
+            suggested_commit_message="work: h051-051-pr-body-auto-close-scanner-smoke",
+        ),
+    )
+    monkeypatch.setattr(
+        "signposter.pr._get_branch_changed_files",
+        lambda worktree, base, source: ["src/signposter/pr.py", "tests/test_pr.py"],
+    )
+
+    plan = plan_pr_for_issue("test/repo", 4)
+    output = format_pr_plan(plan)
+
+    assert plan.status == "ready"
+    assert contains_auto_close_keyword(plan.suggested_pr_title) is False
+    assert contains_auto_close_keyword(plan.suggested_pr_body) is False
+    assert contains_auto_close_keyword(output) is False
+    assert "Related issue: #4" in plan.suggested_pr_body
+
+
 def test_pr_plan_blocks_auto_close_keyword_in_suggested_metadata(monkeypatch):
     monkeypatch.setattr(
         "signposter.pr.plan_handoff_for_issue",
         lambda repo, issue: _handoff_plan(
             has_changes=False,
             suggested_commit_message="fix: closes #4",
+        ),
+    )
+    monkeypatch.setattr(
+        "signposter.pr._get_branch_changed_files",
+        lambda worktree, base, source: ["README.md"],
+    )
+
+    plan = plan_pr_for_issue("test/repo", 4)
+
+    assert plan.status == "blocked — suggested PR metadata contains auto-close keyword"
+
+
+def test_pr_plan_blocks_url_auto_close_keyword_in_suggested_metadata(monkeypatch):
+    monkeypatch.setattr(
+        "signposter.pr.plan_handoff_for_issue",
+        lambda repo, issue: _handoff_plan(
+            has_changes=False,
+            suggested_commit_message=(
+                "work: resolves https://github.com/ExatronOmega/signposter/issues/4"
+            ),
         ),
     )
     monkeypatch.setattr(
