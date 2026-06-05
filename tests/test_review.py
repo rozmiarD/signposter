@@ -2279,6 +2279,93 @@ def test_validate_review_artifact_ready(tmp_path):
     assert "GitHub comment impact: bounded summaries only" in plan.content
 
 
+def test_review_summary_plan_includes_default_token_usage_accounting(tmp_path):
+    from signposter.artifact import plan_review_summary, write_manual_artifact
+    from signposter.review import validate_review_artifact
+
+    plan = plan_review_summary(pr=38, risk="medium", runs_dir=tmp_path)
+    write_manual_artifact(plan, apply=True)
+
+    result = validate_review_artifact(38, summary_path=plan.path)
+
+    assert result.status == "ready"
+    assert "## Token usage accounting" in plan.content
+    assert "Token usage status: unknown" in plan.content
+    assert "Input tokens: unknown" in plan.content
+    assert "Output tokens: unknown" in plan.content
+    assert "Total tokens: unknown" in plan.content
+    assert "Estimated cost USD: unknown" in plan.content
+    assert "Source: manual reviewer summary did not receive backend token usage" in plan.content
+
+
+def test_review_summary_plan_preserves_reported_token_usage_fields(tmp_path):
+    from signposter.artifact import plan_review_summary, write_manual_artifact
+    from signposter.review import validate_review_artifact
+
+    plan = plan_review_summary(
+        pr=38,
+        risk="medium",
+        runs_dir=tmp_path,
+        token_usage={
+            "status": "reported",
+            "input_tokens": 201,
+            "output_tokens": 44,
+            "total_tokens": 245,
+            "estimated_cost_usd": "0.0099",
+            "source": "codex-cli metadata",
+        },
+    )
+    write_manual_artifact(plan, apply=True)
+
+    result = validate_review_artifact(38, summary_path=plan.path)
+
+    assert result.status == "ready"
+    assert "Token usage status: reported" in plan.content
+    assert "Input tokens: 201" in plan.content
+    assert "Output tokens: 44" in plan.content
+    assert "Total tokens: 245" in plan.content
+    assert "Estimated cost USD: 0.0099" in plan.content
+    assert "Source: codex-cli metadata" in plan.content
+
+
+def test_validate_review_artifact_requires_token_usage_accounting(tmp_path):
+    from signposter.artifact import plan_review_summary
+    from signposter.review import validate_review_artifact
+
+    plan = plan_review_summary(pr=38, risk="medium", runs_dir=tmp_path)
+    text = plan.content.replace(
+        "\n## Token usage accounting\n\n"
+        "Token usage status: unknown\n"
+        "Input tokens: unknown\n"
+        "Output tokens: unknown\n"
+        "Total tokens: unknown\n"
+        "Estimated cost USD: unknown\n"
+        "Source: manual reviewer summary did not receive backend token usage\n",
+        "\n",
+    )
+    path = tmp_path / "pr-38-reviewer.summary.md"
+    path.write_text(text, encoding="utf-8")
+
+    result = validate_review_artifact(38, summary_path=str(path))
+
+    assert result.status == "blocked"
+    assert "Schema: missing token usage accounting section" in result.errors
+
+
+def test_validate_review_artifact_accepts_runtime_token_usage_status_field(tmp_path):
+    from signposter.artifact import plan_review_summary
+    from signposter.review import validate_review_artifact
+
+    plan = plan_review_summary(pr=38, risk="medium", runs_dir=tmp_path)
+    text = plan.content.replace("Token usage status: unknown", "Status: unknown")
+    path = tmp_path / "pr-38-reviewer.summary.md"
+    path.write_text(text, encoding="utf-8")
+
+    result = validate_review_artifact(38, summary_path=str(path))
+
+    assert result.status == "ready"
+
+
 def test_validate_review_artifact_blocks_missing_summary(tmp_path):
     from signposter.review import validate_review_artifact
 

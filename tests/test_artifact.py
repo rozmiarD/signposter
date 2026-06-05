@@ -264,6 +264,17 @@ def test_worker_summary_plan_preserves_reported_token_usage_fields():
     assert "Source: codex-cli metadata" in plan.content
 
 
+def test_validate_worker_summary_accepts_runtime_token_usage_status_field(tmp_path):
+    plan = plan_worker_summary(repo="test/repo", issue=32, runs_dir=tmp_path)
+    text = plan.content.replace("Token usage status: unknown", "Status: unknown")
+    (tmp_path / "issue-32-worker.summary.md").write_text(text, encoding="utf-8")
+
+    validation = validate_worker_summary_artifact(32, runs_dir=tmp_path)
+
+    assert validation.status == "pass"
+    assert "token usage status" not in validation.missing
+
+
 def test_worker_summary_docs_only_plan_adds_preflight_fields(tmp_path):
     plan = plan_worker_summary(
         repo="test/repo",

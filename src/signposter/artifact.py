@@ -123,7 +123,6 @@ WORKER_SUMMARY_REQUIRED_FIELDS = {
     "targeted validation": "targeted validation passed",
     "full validation": "full validation passed",
     "token usage accounting": "## token usage accounting",
-    "token usage status": "token usage status:",
     "safety section": "## safety",
     "no github mutation safety note": "no github mutation was performed",
     "no openclaw execution safety note": "no openclaw execution was performed",
@@ -647,8 +646,10 @@ def build_review_summary(
     risk: str = "high",
     findings: list[str] | None = None,
     reasoning: str | None = None,
+    token_usage: dict[str, object] | None = None,
 ) -> str:
     """Build a parser-compatible manual reviewer summary."""
+    token_usage = token_usage or {}
     findings = findings or [
         "Scoped change reviewed against the requested task.",
         "Validation evidence was considered.",
@@ -692,6 +693,19 @@ def build_review_summary(
             "Full validation command provenance: recorded in worker summary.",
             "PR CI provenance: GitHub PR check rollup was considered.",
             "GitHub comment impact: bounded summaries only; raw logs remain local.",
+            "",
+            "## Token usage accounting",
+            "",
+            f"Token usage status: {_artifact_field(token_usage.get('status'))}",
+            f"Input tokens: {_artifact_field(token_usage.get('input_tokens'))}",
+            f"Output tokens: {_artifact_field(token_usage.get('output_tokens'))}",
+            f"Total tokens: {_artifact_field(token_usage.get('total_tokens'))}",
+            f"Estimated cost USD: {_artifact_field(token_usage.get('estimated_cost_usd'))}",
+            "Source: "
+            + _artifact_field(
+                token_usage.get("source"),
+                default="manual reviewer summary did not receive backend token usage",
+            ),
             "",
             "## Safety notes",
             "",
@@ -752,6 +766,7 @@ def plan_review_summary(
     risk: str = "high",
     findings: list[str] | None = None,
     reasoning: str | None = None,
+    token_usage: dict[str, object] | None = None,
     runs_dir: str | Path = "artifacts/runs",
 ) -> ManualArtifactPlan:
     path = Path(runs_dir) / f"pr-{pr}-reviewer.summary.md"
@@ -763,6 +778,7 @@ def plan_review_summary(
         risk=risk,
         findings=findings,
         reasoning=reasoning,
+        token_usage=token_usage,
     )
     return ManualArtifactPlan(
         artifact_type="review-summary",
@@ -926,6 +942,8 @@ def _missing_worker_summary_fields(text: str) -> list[str]:
         for name, needle in WORKER_SUMMARY_REQUIRED_FIELDS.items()
         if needle not in lowered
     ]
+    if "## token usage accounting" in lowered and not _has_token_usage_status(lowered):
+        missing.append("token usage status")
     if _requires_docs_only_worker_summary_fields(text):
         missing.extend(
             name
@@ -933,6 +951,21 @@ def _missing_worker_summary_fields(text: str) -> list[str]:
             if needle not in lowered
         )
     return missing
+
+
+def _has_token_usage_status(lowered_text: str) -> bool:
+    if "token usage status:" in lowered_text or "**token usage status:**" in lowered_text:
+        return True
+
+    marker = "## token usage accounting"
+    start = lowered_text.find(marker)
+    if start == -1:
+        return False
+    section = lowered_text[start + len(marker):]
+    next_heading = section.find("\n## ")
+    if next_heading != -1:
+        section = section[:next_heading]
+    return "\nstatus:" in section
 
 
 def format_worker_artifact_validation(result: WorkerArtifactValidation) -> str:
