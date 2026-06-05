@@ -48,6 +48,33 @@ def test_plan_complete_valid():
     assert "gate:review" in plan.labels_to_remove
 
 
+def test_complete_after_takeover_keeps_issue_open_regression():
+    """Completing a manual/human-gated takeover must not close the issue."""
+    from signposter.transitions import perform_transition_mutation
+
+    labels = [
+        "state:active",
+        "gate:human",
+        "phase:build",
+        "risk:high",
+        "role:worker",
+    ]
+    plan = plan_complete(labels, 570)
+
+    commands = perform_transition_mutation(plan, "ExatronOmega/signposter", dry_run=True)
+
+    assert plan.valid is True
+    assert "state:done" in plan.labels_to_add
+    assert "gate:human" in plan.labels_to_remove
+    assert len(commands) == 2
+    assert "gh issue edit 570" in commands[0]
+    assert "--add-label state:done" in commands[0]
+    assert "--remove-label state:active,gate:human" in commands[0]
+    assert "gh issue comment 570" in commands[1]
+    assert "`state:active → state:done` · issue remains open" in commands[1]
+    assert not any("gh issue close" in command for command in commands)
+
+
 def test_plan_fail_valid():
     labels = make_labels("active", "ci")
     plan = plan_fail(labels, 7)
