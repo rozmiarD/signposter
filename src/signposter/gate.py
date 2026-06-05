@@ -37,6 +37,15 @@ class GateHeuristicAudit:
     notes: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class WorkerDisqualifierContext:
+    """Structured location for a worker disqualifier phrase."""
+
+    signal: str
+    section: str
+    line: str
+
+
 def build_gate_heuristic_audit() -> GateHeuristicAudit:
     """Return a compact static audit of current gate heuristics.
 
@@ -57,6 +66,7 @@ def build_gate_heuristic_audit() -> GateHeuristicAudit:
             "stale/failover artifact markers block before scoped evidence checks",
             "actual Python exception output requires traceback framing, not the word alone",
             "worker disqualifier phrases are ignored only in neutral policy/audit context",
+            "worker disqualifier reasons include bounded section and line context",
             "scoped code/test/no-op paths require validation and safety statements",
             "validated no-op completion requires explicit unchanged-tree evidence",
             "human gate structured fields: Human approval, Scope reviewed/match, "
@@ -259,10 +269,16 @@ def evaluate_ci_gate(
         "execution failed",
     ]
     for signal in negative_signals:
-        if _has_contextual_worker_disqualifier_signal(text, signal):
+        disqualifier_context = _find_contextual_worker_disqualifier_signal(text, signal)
+        if disqualifier_context:
             return GateDecision(
                 decision="needs-work",
-                reason=f"Worker output mentioned: '{signal}'",
+                reason=(
+                    "Worker output mentioned "
+                    f"'{disqualifier_context.signal}' in "
+                    f"{disqualifier_context.section}: "
+                    f"'{disqualifier_context.line}'"
+                ),
                 confidence="medium",
                 proposed_transition="state:active (worker should be re-run)",
                 proposed_command=None,
@@ -722,6 +738,14 @@ def _has_contextual_worker_disqualifier(
 
 def _has_contextual_worker_disqualifier_signal(text: str, signal: str) -> bool:
     """Block real worker disqualifiers while allowing explicit policy examples."""
+    return _find_contextual_worker_disqualifier_signal(text, signal) is not None
+
+
+def _find_contextual_worker_disqualifier_signal(
+    text: str,
+    signal: str,
+) -> WorkerDisqualifierContext | None:
+    """Return structured context for real worker disqualifiers."""
     neutral_context = (
         "example",
         "examples",
@@ -774,8 +798,12 @@ def _has_contextual_worker_disqualifier_signal(text: str, signal: str) -> bool:
             and _is_neutral_worker_disqualifier_discussion(line)
         ):
             continue
-        return True
-    return False
+        return WorkerDisqualifierContext(
+            signal=signal,
+            section=current_section or "unsectioned output",
+            line=line[:160],
+        )
+    return None
 
 
 def _is_neutral_worker_disqualifier_discussion(line: str) -> bool:

@@ -1478,6 +1478,29 @@ Critical blocker still blocks validation: pytest output is not trustworthy.
     assert "critical blocker" in decision.reason
 
 
+def test_evaluate_ci_gate_reports_disqualifier_section_context():
+    """Blocked worker disqualifiers should tell the operator where they appeared."""
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+## Validation evidence
+
+Execution failed during targeted pytest validation.
+"""
+
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "needs-work"
+    assert "execution failed" in decision.reason
+    assert "validation evidence" in decision.reason
+    assert "targeted pytest validation" in decision.reason
+
+
 def test_evaluate_ci_gate_blocks_actual_traceback_output():
     from signposter.gate import evaluate_ci_gate
 
