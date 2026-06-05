@@ -57,7 +57,8 @@ def test_build_backend_command_shape_for_codex_cli_is_plan_only() -> None:
     assert shape.startswith("codex exec ")
     assert "--model openai/gpt-5.4" in shape
     assert "- < artifacts/prompts/issue-1.md" in shape
-    assert "reasoning=medium" in shape
+    assert "requested_reasoning=medium" in shape
+    assert "reasoning_transport=metadata-only" in shape
     assert "--agent" not in shape
     assert "--session-key" not in shape
     assert "--prompt-file" not in shape
