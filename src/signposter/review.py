@@ -1320,6 +1320,9 @@ class ReviewArtifactValidation:
     raw_exists: bool = False
     raw_stale_signal: str | None = None
     guidance: list[str] | None = None
+    takeover_category: str | None = None
+    takeover_reason: str | None = None
+    diagnostic_artifacts: tuple[str, ...] = ()
 
 
 _REVIEW_VALID_RISKS = ("low", "medium", "high")
@@ -1520,6 +1523,30 @@ def validate_review_artifact(
             if raw_path and raw_exists
             else None
         )
+        diagnostic_artifacts = _review_diagnostic_artifact_paths(
+            pr_number,
+            summary_path,
+        )
+        takeover_category = "missing-reviewer-artifact" if diagnostic_artifacts else None
+        takeover_reason = (
+            "reviewer execution left preserved runtime artifacts but canonical "
+            "reviewer summary is missing"
+            if diagnostic_artifacts
+            else None
+        )
+        guidance = [
+            "write a parser-compatible reviewer summary before review gate",
+            "keep raw reviewer output local for diagnostic evidence",
+            *_REVIEW_MANUAL_TAKEOVER_GUIDANCE,
+        ]
+        if diagnostic_artifacts:
+            guidance.extend(
+                [
+                    "takeover: missing-reviewer-artifact",
+                    "inspect preserved runtime artifacts before replacing reviewer output",
+                    "write bounded reviewer evidence before review gate or submit",
+                ]
+            )
         return ReviewArtifactValidation(
             pr_number=pr_number,
             summary_path=summary_path,
@@ -1530,11 +1557,10 @@ def validate_review_artifact(
             raw_path=raw_path,
             raw_exists=raw_exists,
             raw_stale_signal=raw_stale_signal,
-            guidance=[
-                "write a parser-compatible reviewer summary before review gate",
-                "keep raw reviewer output local for diagnostic evidence",
-                *_REVIEW_MANUAL_TAKEOVER_GUIDANCE,
-            ],
+            guidance=guidance,
+            takeover_category=takeover_category,
+            takeover_reason=takeover_reason,
+            diagnostic_artifacts=diagnostic_artifacts,
         )
 
     with open(resolved_summary_path, encoding="utf-8") as f:
@@ -1611,6 +1637,22 @@ def _review_raw_path_for_summary(summary_path: str) -> str | None:
     return resolved or str(raw_path)
 
 
+def _review_diagnostic_artifact_paths(
+    pr_number: int,
+    summary_path: str,
+) -> tuple[str, ...]:
+    root = Path(summary_path).parent
+    if str(root) == "":
+        root = Path(".")
+    candidates = (
+        root / f"pr-{pr_number}-reviewer.codex-runtime.summary.md",
+        root / f"pr-{pr_number}-reviewer.codex-runtime.raw.txt",
+        root / f"pr-{pr_number}-reviewer.codex-runtime.last-message.txt",
+        root / f"pr-{pr_number}-reviewer.last-message.txt",
+    )
+    return tuple(str(path) for path in candidates if path.exists())
+
+
 def _missing_reviewer_summary_schema_fields(text: str) -> list[str]:
     lowered = (text or "").lower()
     required_any = {
@@ -1681,6 +1723,15 @@ def format_review_artifact_validation(result: ReviewArtifactValidation) -> str:
         lines.append("")
         lines.append("Raw unsafe marker:")
         lines.append(f"  {result.raw_stale_signal}")
+    if result.takeover_category:
+        lines.append("")
+        lines.append("Takeover:")
+        lines.append(f"  category: {result.takeover_category}")
+        lines.append(f"  reason: {result.takeover_reason or 'none'}")
+    if result.diagnostic_artifacts:
+        lines.append("")
+        lines.append("Diagnostic artifacts:")
+        lines.extend(f"  - {path}" for path in result.diagnostic_artifacts)
     if result.errors:
         lines.append("")
         lines.append("Errors:")
@@ -1709,6 +1760,8 @@ def format_review_artifact_validation_summary(result: ReviewArtifactValidation) 
         f"risk: {o.risk or 'unknown'}",
         f"error: {first_error}",
     ]
+    if result.takeover_category:
+        lines.append(f"takeover: {result.takeover_category}")
     return "\n".join(lines)
 
 
