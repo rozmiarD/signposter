@@ -1286,6 +1286,11 @@ def main() -> None:
         help="Manual smoke command or evidence line; may be repeated",
     )
     worker_artifact_parser.add_argument(
+        "--human-gate",
+        action="store_true",
+        help="Include structured human gate approval/scope/validation/safety fields",
+    )
+    worker_artifact_parser.add_argument(
         "--runs-dir",
         default="artifacts/runs",
         help="Directory for local run artifacts",
@@ -1861,6 +1866,7 @@ def run_artifact_worker_summary(args: argparse.Namespace) -> int:
     targeted_validation = getattr(args, "targeted_validation", []) or None
     full_validation = getattr(args, "full_validation", []) or None
     manual_smoke = getattr(args, "manual_smoke", []) or None
+    human_gate = getattr(args, "human_gate", False)
     apply_flag = getattr(args, "apply", False)
 
     plan = plan_worker_summary(
@@ -1872,6 +1878,7 @@ def run_artifact_worker_summary(args: argparse.Namespace) -> int:
         targeted_validation=targeted_validation,
         full_validation=full_validation,
         manual_smoke=manual_smoke,
+        human_gate=human_gate,
         runs_dir=args.runs_dir,
     )
     write_manual_artifact(plan, apply=apply_flag)
