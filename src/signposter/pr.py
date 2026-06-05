@@ -54,6 +54,24 @@ class PRPlan:
     notes: list[str]
 
 
+@dataclass(frozen=True)
+class PRCIPendingTimeoutStatus:
+    """Read-only operator status for PR checks that remain pending too long."""
+
+    repo: str
+    pr_number: int
+    checks_status: str
+    successful_checks: int
+    failing_checks: int
+    pending_checks: int
+    elapsed_seconds: int
+    timeout_seconds: int
+    status: str
+    reason: str
+    inspect_command: str
+    notes: list[str]
+
+
 def run_github_command_with_timeout(
     command: list[str] | tuple[str, ...],
     *,
@@ -316,6 +334,107 @@ def format_github_issue_edit_result(
             "  Callers must stop after timeout before any later mutation.",
         ]
     )
+    return "\n".join(lines)
+
+
+def plan_pr_ci_pending_timeout_status(
+    repo: str,
+    pr_number: int,
+    *,
+    checks_status: str,
+    pending_checks: int,
+    successful_checks: int = 0,
+    failing_checks: int = 0,
+    elapsed_seconds: int,
+    timeout_seconds: int,
+) -> PRCIPendingTimeoutStatus:
+    """Return a compact read-only status for a pending PR CI wait.
+
+    This helper does not poll GitHub itself. Callers provide the current check
+    state and elapsed wait time so workflow loops can report timeout evidence
+    without performing any hidden mutation or retry.
+    """
+    bounded_elapsed = max(0, int(elapsed_seconds))
+    bounded_timeout = max(1, int(timeout_seconds))
+    normalized_status = (checks_status or "unknown").strip().lower()
+    pending = max(0, int(pending_checks))
+    successful = max(0, int(successful_checks))
+    failing = max(0, int(failing_checks))
+
+    if normalized_status == "pending" and pending > 0:
+        if bounded_elapsed >= bounded_timeout:
+            status = "blocked — CI pending timeout"
+            reason = (
+                f"{pending} pending check(s) exceeded "
+                f"{bounded_timeout}s wait budget"
+            )
+        else:
+            status = "pending — CI checks still running"
+            reason = (
+                f"{pending} pending check(s), "
+                f"{bounded_timeout - bounded_elapsed}s wait budget remaining"
+            )
+    elif normalized_status == "pass":
+        status = "ready"
+        reason = "PR checks passed"
+    elif normalized_status == "failing" or failing > 0:
+        status = "blocked — checks are failing"
+        reason = f"{failing} failing check(s)"
+    else:
+        status = "blocked — checks status is unknown"
+        reason = "GitHub check state is unavailable or ambiguous"
+
+    notes = [
+        "Read-only PR CI wait status.",
+        "No GitHub mutation was performed.",
+        "No merge was performed.",
+        "No issue was closed.",
+        "Callers must stop after pending timeout before merge or integration.",
+    ]
+    return PRCIPendingTimeoutStatus(
+        repo=repo,
+        pr_number=pr_number,
+        checks_status=normalized_status,
+        successful_checks=successful,
+        failing_checks=failing,
+        pending_checks=pending,
+        elapsed_seconds=bounded_elapsed,
+        timeout_seconds=bounded_timeout,
+        status=status,
+        reason=reason,
+        inspect_command=f"gh pr checks {pr_number} --repo {repo}",
+        notes=notes,
+    )
+
+
+def format_pr_ci_pending_timeout_status(result: PRCIPendingTimeoutStatus) -> str:
+    """Render a compact read-only PR CI pending timeout status."""
+    lines = [
+        f"Signposter PR CI Status — PR #{result.pr_number}",
+        "",
+        "Checks:",
+        f"  status: {result.checks_status}",
+        f"  successful: {result.successful_checks}",
+        f"  failing: {result.failing_checks}",
+        f"  pending: {result.pending_checks}",
+        "",
+        "Wait budget:",
+        f"  elapsed_seconds: {result.elapsed_seconds}",
+        f"  timeout_seconds: {result.timeout_seconds}",
+        "",
+        "Status:",
+        f"  {result.status}",
+        "",
+        "Reason:",
+        f"  {result.reason}",
+        "",
+        "Recovery:",
+        f"  inspect command: {result.inspect_command}",
+        "  next: inspect checks, wait explicitly if appropriate, then rerun plan",
+        "",
+        "Notes:",
+    ]
+    lines.extend(f"  {note}" for note in result.notes)
     return "\n".join(lines)
 
 

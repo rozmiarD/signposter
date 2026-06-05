@@ -9,7 +9,9 @@ from signposter.pr import (
     format_github_command_result,
     format_github_issue_edit_result,
     format_github_issue_read_result,
+    format_pr_ci_pending_timeout_status,
     format_pr_plan,
+    plan_pr_ci_pending_timeout_status,
     plan_pr_for_issue,
     read_github_issue_with_timeout,
     run_github_command_with_timeout,
@@ -308,6 +310,63 @@ def test_github_issue_edit_timeout_helper_rejects_empty_edit():
         assert "at least one explicit edit argument" in str(exc)
     else:
         raise AssertionError("expected ValueError")
+
+
+def test_pr_ci_pending_status_reports_waiting_before_timeout():
+    result = plan_pr_ci_pending_timeout_status(
+        "owner/repo",
+        44,
+        checks_status="pending",
+        successful_checks=1,
+        failing_checks=0,
+        pending_checks=2,
+        elapsed_seconds=120,
+        timeout_seconds=300,
+    )
+    output = format_pr_ci_pending_timeout_status(result)
+
+    assert result.status == "pending — CI checks still running"
+    assert result.reason == "2 pending check(s), 180s wait budget remaining"
+    assert "Signposter PR CI Status — PR #44" in output
+    assert "inspect command: gh pr checks 44 --repo owner/repo" in output
+    assert "No GitHub mutation was performed." in output
+
+
+def test_pr_ci_pending_status_blocks_after_timeout():
+    result = plan_pr_ci_pending_timeout_status(
+        "owner/repo",
+        44,
+        checks_status="pending",
+        successful_checks=1,
+        failing_checks=0,
+        pending_checks=2,
+        elapsed_seconds=301,
+        timeout_seconds=300,
+    )
+    output = format_pr_ci_pending_timeout_status(result)
+
+    assert result.status == "blocked — CI pending timeout"
+    assert result.reason == "2 pending check(s) exceeded 300s wait budget"
+    assert "Status:\n  blocked — CI pending timeout" in output
+    assert "Callers must stop after pending timeout before merge or integration." in output
+    assert "No merge was performed." in output
+
+
+def test_pr_ci_pending_status_ready_when_checks_pass():
+    result = plan_pr_ci_pending_timeout_status(
+        "owner/repo",
+        44,
+        checks_status="pass",
+        successful_checks=3,
+        failing_checks=0,
+        pending_checks=0,
+        elapsed_seconds=12,
+        timeout_seconds=300,
+    )
+
+    assert result.status == "ready"
+    assert result.reason == "PR checks passed"
+    assert result.pending_checks == 0
 
 
 def test_pr_plan_ready_for_clean_branch_with_committed_changes(monkeypatch):
