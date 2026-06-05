@@ -43,6 +43,15 @@ def test_pr_linkage_detects_generic_issue_reference_without_branch() -> None:
     assert result.confidence == "low"
 
 
+def test_pr_linkage_does_not_use_auto_close_keyword_as_generic_body_link() -> None:
+    result = detect_pr_issue_linkage("feature/test", "Closes issue #12")
+
+    assert result.associated_issue is None
+    assert result.status == "missing"
+    assert result.source == "unknown"
+    assert result.candidates == {}
+
+
 def test_pr_linkage_blocks_ambiguous_branch_and_body() -> None:
     result = detect_pr_issue_linkage(
         "work/issue-4-test-task",
