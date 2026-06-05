@@ -163,6 +163,7 @@ def test_format_integration_plan_contains_key_sections():
     assert "close reason: completed" in output
     assert "Pending issue closure:" in output
     assert "category: pending-issue-closure" in output
+    assert "status: ready — issue closure pending" in output
     assert "reason: PR #5 is merged but issue #4 remains open" in output
     assert (
         "apply command: signposter integration apply --repo <repo> --pr 5 --apply"
@@ -621,6 +622,7 @@ def test_integration_apply_dry_run_ready_when_main_ci_pass():
 
     assert "main CI: pass" in output
     assert "Pending issue closure:" in output
+    assert "status: ready — issue closure pending" in output
     assert (
         "apply command: signposter integration apply --repo <repo> --pr 5 --apply"
         in output

@@ -385,6 +385,7 @@ def _integration_pending_issue_closure_lines(
     repo_arg = repo or "<repo>"
     return [
         "category: pending-issue-closure",
+        "status: ready — issue closure pending",
         (
             "reason: "
             f"PR #{plan.pr_number} is merged but issue #{plan.associated_issue} "
