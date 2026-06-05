@@ -1629,6 +1629,42 @@ def test_validate_review_artifact_blocks_unsafe_raw_marker(tmp_path):
     assert "preserve unsafe backend output separately" in out
 
 
+def test_validate_review_artifact_allows_preserved_diagnostic_runtime_pair(tmp_path):
+    from signposter.artifact import (
+        audit_run_artifacts,
+        format_run_artifact_audit,
+        plan_review_summary,
+        write_manual_artifact,
+    )
+    from signposter.review import validate_review_artifact
+
+    plan = plan_review_summary(pr=73, risk="medium", runs_dir=tmp_path)
+    write_manual_artifact(plan, apply=True)
+    (tmp_path / "pr-73-reviewer.codex-runtime.summary.md").write_text(
+        "runtime diagnostic summary",
+        encoding="utf-8",
+    )
+    (tmp_path / "pr-73-reviewer.codex-runtime.raw.txt").write_text(
+        "The model is not supported for this account.\n",
+        encoding="utf-8",
+    )
+
+    validation = validate_review_artifact(73, summary_path=plan.path)
+    audit = audit_run_artifacts(runs_dir=tmp_path)
+    out = format_run_artifact_audit(audit)
+
+    assert validation.status == "ready"
+    assert validation.raw_exists is False
+    assert any("raw reviewer artifact not found" in item for item in validation.guidance)
+    assert audit.diagnostic_pairs == 1
+    assert (
+        "pr-73-reviewer.codex-runtime.raw.txt: model is not supported"
+        in audit.unsafe_markers
+    )
+    assert "retained diagnostic raw/summary pairs: 1" in out
+    assert "diagnostic suffixes such as .codex-runtime.*" in out
+
+
 def test_validate_review_artifact_missing_summary_reports_stale_raw_takeover_fields(tmp_path):
     from signposter.review import format_review_artifact_validation, validate_review_artifact
 
