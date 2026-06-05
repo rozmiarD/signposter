@@ -5,7 +5,9 @@ import subprocess
 from signposter.comments import contains_auto_close_keyword
 from signposter.handoff import HandoffPlan
 from signposter.pr import (
+    edit_github_issue_with_timeout,
     format_github_command_result,
+    format_github_issue_edit_result,
     format_github_issue_read_result,
     format_pr_plan,
     plan_pr_for_issue,
@@ -169,6 +171,76 @@ def test_github_issue_read_timeout_helper_records_timeout():
     assert result.stderr == "partial issue error"
     assert "Status:\n  timeout" in output
     assert "callers must stop after timeout before later mutations" in output
+
+
+def test_github_issue_edit_timeout_helper_builds_bounded_edit_command():
+    def fake_run(command, **kwargs):
+        assert command == [
+            "gh",
+            "issue",
+            "edit",
+            "45",
+            "-R",
+            "owner/repo",
+            "--add-label",
+            "state:active,gate:ci",
+            "--remove-label",
+            "state:ready",
+        ]
+        assert kwargs["timeout"] == 6
+        assert kwargs["capture_output"] is True
+        assert kwargs["text"] is True
+        return type("Proc", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+    result = edit_github_issue_with_timeout(
+        "owner/repo",
+        45,
+        add_labels=("state:active", "gate:ci"),
+        remove_labels=("state:ready",),
+        timeout_seconds=6,
+        run_command=fake_run,
+    )
+    output = format_github_issue_edit_result("owner/repo", 45, result)
+
+    assert result.status == "completed"
+    assert result.returncode == 0
+    assert "Signposter GitHub Issue Edit Result" in output
+    assert "This helper is for guarded apply paths only." in output
+
+
+def test_github_issue_edit_timeout_helper_records_timeout():
+    def fake_run(command, **kwargs):
+        raise subprocess.TimeoutExpired(
+            cmd=command,
+            timeout=kwargs["timeout"],
+            output="partial edit output",
+            stderr="partial edit error",
+        )
+
+    result = edit_github_issue_with_timeout(
+        "owner/repo",
+        45,
+        state="closed",
+        timeout_seconds=7,
+        run_command=fake_run,
+    )
+    output = format_github_issue_edit_result("owner/repo", 45, result)
+
+    assert result.status == "timeout"
+    assert result.returncode is None
+    assert result.stdout == "partial edit output"
+    assert result.stderr == "partial edit error"
+    assert "Status:\n  timeout" in output
+    assert "Callers must stop after timeout before any later mutation." in output
+
+
+def test_github_issue_edit_timeout_helper_rejects_empty_edit():
+    try:
+        edit_github_issue_with_timeout("owner/repo", 45)
+    except ValueError as exc:
+        assert "at least one explicit edit argument" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")
 
 
 def test_pr_plan_ready_for_clean_branch_with_committed_changes(monkeypatch):
