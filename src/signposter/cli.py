@@ -4042,6 +4042,10 @@ def run_planner_status(args: argparse.Namespace) -> int:
         print()
         print("Artifact:")
         print(f"  roadmap status: {args.out}")
+        mapping = artifact.get("manifest_issue_mapping", {})
+        mapping_status = mapping.get("status")
+        if mapping_status:
+            print(f"  manifest issue mapping: {mapping_status}")
         bootstrap = artifact.get("next_roadmap_bootstrap", {})
         bootstrap_status = bootstrap.get("status")
         if bootstrap_status and bootstrap_status != "not-found":
