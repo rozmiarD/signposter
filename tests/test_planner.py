@@ -13,6 +13,7 @@ from signposter.planner import (
     PLAN_VERSION,
     apply_planner_advance_plan,
     apply_planner_seed_manifest,
+    build_manifest_issue_mapping_consistency,
     build_next_roadmap_bootstrap_contract,
     build_next_roadmap_bootstrap_status_artifact,
     build_planner_advance_plan_from_status,
@@ -2427,11 +2428,19 @@ def test_build_planner_status_surfaces_stale_and_mismatched_issue_mappings(
     )
 
     counts = build_planner_status_counts(status["tasks"])
+    mapping = build_manifest_issue_mapping_consistency(status)
     next_result = build_planner_next_from_status(status)
     output = format_planner_status(status)
     next_output = format_planner_next_from_status(next_result)
 
     assert counts["blocked"] == 2
+    assert mapping["status"] == "inconsistent"
+    assert mapping["counts"]["mapped"] == 5
+    assert mapping["counts"]["stale"] == 1
+    assert mapping["counts"]["mismatched"] == 1
+    assert mapping["counts"]["unchecked"] == 3
+    assert mapping["inconsistent_tasks"][0]["key"] == "WATCH-001"
+    assert mapping["inconsistent_tasks"][1]["key"] == "WATCH-002"
     assert status["tasks"][0]["mapping_status"] == "stale"
     assert status["tasks"][1]["mapping_status"] == "mismatched"
     assert status["tasks"][1]["expected_title"] == status["tasks"][1]["title"]
@@ -2447,6 +2456,14 @@ def test_build_planner_status_surfaces_stale_and_mismatched_issue_mappings(
     assert next_result["blocked"][1]["expected_title"] == status["tasks"][1]["title"]
     assert next_result["blocked"][1]["github_title"] == "Unexpected title"
     assert "mapping: stale — issue not found" in output
+    assert "Manifest issue mapping:" in output
+    assert "status: inconsistent" in output
+    assert "stale: 1" in output
+    assert "mismatched: 1" in output
+    assert (
+        "WATCH-001 — issue: #10 — stale — issue not found"
+        in output
+    )
     assert (
         "mapping: mismatched — GitHub issue title does not match planner manifest"
         in output
@@ -2499,6 +2516,8 @@ def test_build_planner_status_artifact_is_compact_and_recovery_oriented(
     assert artifact["version"] == "planner.status-artifact.v0.1"
     assert artifact["manifest"] == str(manifest_path)
     assert artifact["task_counts"]["blocked"] == 1
+    assert artifact["manifest_issue_mapping"]["status"] == "inconsistent"
+    assert artifact["manifest_issue_mapping"]["counts"]["mismatched"] == 1
     assert artifact["next_roadmap_bootstrap"]["status"] == "not-found"
     assert artifact["tasks"][0] == {
         "key": "WATCH-001",
@@ -2512,6 +2531,51 @@ def test_build_planner_status_artifact_is_compact_and_recovery_oriented(
     assert "body_file" not in artifact["tasks"][0]
     assert "github_url" not in artifact["tasks"][0]
     assert "No GitHub mutation was performed." in artifact["notes"]
+
+
+def test_manifest_issue_mapping_consistency_bounds_inconsistent_tasks() -> None:
+    status = {
+        "tasks": [
+            {
+                "key": f"TASK-{index}",
+                "github_issue": 100 + index,
+                "state": "stale",
+                "mapping_status": "stale",
+                "mapping_reason": f"missing issue {index}",
+            }
+            for index in range(5)
+        ],
+    }
+
+    mapping = build_manifest_issue_mapping_consistency(status)
+    output = format_planner_status(
+        {
+            "manifest_status": "applied",
+            "repo": "ExatronOmega/signposter",
+            "status": "active",
+            "tasks": [
+                {
+                    **task,
+                    "github_url": (
+                        "https://github.com/ExatronOmega/signposter/issues/"
+                        f"{task['github_issue']}"
+                    ),
+                    "depends_on": [],
+                    "labels": [],
+                }
+                for task in status["tasks"]
+            ],
+            "notes": ["No GitHub mutation was performed."],
+        }
+    )
+
+    assert mapping["status"] == "inconsistent"
+    assert mapping["counts"]["stale"] == 5
+    assert len(mapping["inconsistent_tasks"]) == 5
+    assert "TASK-0 — issue: #100 — stale — missing issue 0" in output
+    assert "TASK-2 — issue: #102 — stale — missing issue 2" in output
+    assert "TASK-3 — issue: #103 — stale" not in output
+    assert "... 2 additional inconsistent task(s) omitted" in output
 
 
 def test_build_next_roadmap_bootstrap_status_artifact_reports_locked_task() -> None:
@@ -2793,6 +2857,7 @@ def test_cli_planner_status_out_writes_compact_status_artifact(
     assert artifact["tasks"][0]["key"] == "WATCH-001"
     assert "Artifact:" in captured
     assert f"roadmap status: {out_path}" in captured
+    assert "manifest issue mapping: unchecked" in captured
     assert "Local file only." in captured
     assert "No GitHub mutation was performed." in captured
 
