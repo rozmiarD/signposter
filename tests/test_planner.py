@@ -5114,6 +5114,99 @@ def test_side_task_insertion_smoke_selects_side_task_then_returns_to_mainline() 
     assert "mainline waiting on side-task: no" in output
 
 
+def test_side_task_return_advance_waits_for_side_then_promotes_mainline() -> None:
+    manifest = _side_task_plan_manifest()
+    result = build_planner_side_task_plan(
+        manifest=manifest,
+        manifest_path="/tmp/manifest.json",
+        key="H049-S003",
+        title="Fix discovered scheduler edge",
+        reason="planner advance exposed a dependency edge",
+        depends_on=["H049-010"],
+        parent=210,
+        return_to=211,
+        risk="high",
+    )
+
+    assert result["status"] == "ready"
+
+    represented_manifest = json.loads(json.dumps(manifest))
+    represented_manifest["issues"][0]["labels"].append("state:merged")
+    represented_manifest["issues"][1]["depends_on"].append("H049-S003")
+
+    side_task = json.loads(json.dumps(result["planned_task"]))
+    side_task.update(
+        {
+            "github_issue": 212,
+            "github_url": "https://github.com/ExatronOmega/signposter/issues/212",
+            "labels": [*side_task["labels"], "state:ready"],
+        }
+    )
+    represented_manifest["issues"].append(side_task)
+
+    status_with_side_ready = build_planner_status(
+        represented_manifest,
+        {210: "merged", 211: "open", 212: "open"},
+    )
+    parent_advance = build_planner_advance_plan_from_status(
+        status_with_side_ready,
+        issue=210,
+        manifest_path="/tmp/manifest.json",
+    )
+
+    assert parent_advance["status"] == "blocked"
+    assert parent_advance["targets"] == []
+    assert "one or more downstream tasks are waiting for dependencies" in parent_advance[
+        "reasons"
+    ]
+    assert "H049-011 waits for dependencies: H049-S003" in parent_advance["reasons"]
+
+    side_task["labels"] = [
+        label for label in side_task["labels"] if label != "state:ready"
+    ]
+    side_task["labels"].append("state:merged")
+    represented_manifest["issues"][-1] = side_task
+
+    status_after_side_merge = build_planner_status(
+        represented_manifest,
+        {210: "merged", 211: "open", 212: "merged"},
+    )
+    side_advance = build_planner_advance_plan_from_status(
+        status_after_side_merge,
+        issue=212,
+        manifest_path="/tmp/manifest.json",
+    )
+
+    assert side_advance["status"] == "ready"
+    assert side_advance["targets"] == [
+        {
+            "key": "H049-011",
+            "github_issue": 211,
+            "github_url": "https://github.com/ExatronOmega/signposter/issues/211",
+            "state": "open",
+            "labels_to_add": ["state:ready"],
+        }
+    ]
+    assert side_advance["planned_github_mutations"] == [
+        "gh issue edit 211 -R ExatronOmega/signposter --add-label state:ready"
+    ]
+
+    represented_manifest["issues"][1]["labels"].append("state:ready")
+    status_after_return_promotion = build_planner_status(
+        represented_manifest,
+        {210: "merged", 211: "open", 212: "merged"},
+    )
+    next_after_return_promotion = build_planner_next_from_status(
+        status_after_return_promotion
+    )
+    completed_side_task = status_after_return_promotion["tasks"][-1]
+
+    assert next_after_return_promotion["status"] == "ready"
+    assert next_after_return_promotion["next"]["key"] == "H049-011"
+    assert completed_side_task["return_status"]["ready"] is True
+    assert completed_side_task["return_status"]["mainline_waiting"] is False
+
+
 def test_build_planner_side_task_plan_does_not_mutate_input_manifest() -> None:
     manifest = _side_task_plan_manifest()
     before = json.loads(json.dumps(manifest))
