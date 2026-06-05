@@ -3758,6 +3758,143 @@ def test_build_planner_advance_plan_from_status_blocks_incomplete_multi_dependen
     assert "H049-005 waits for dependencies: H049-004" in result["reasons"]
 
 
+def test_build_planner_advance_plan_reports_locked_final_task_unlock(
+    tmp_path: Path,
+) -> None:
+    manifest_path = tmp_path / "seed-manifest.json"
+    status = {
+        "repo": "ExatronOmega/signposter",
+        "tasks": [
+            {
+                "key": "H051-078",
+                "title": "H051-078 — Final hardening audit",
+                "github_issue": 608,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/608",
+                "state": "merged",
+                "depends_on": [],
+                "labels": [],
+            },
+            {
+                "key": "H051-079",
+                "title": "H051-079 — Final roadmap readiness smoke",
+                "github_issue": 609,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/609",
+                "state": "open",
+                "depends_on": ["H051-078"],
+                "labels": [],
+            },
+            {
+                "key": "H051-080",
+                "title": "H051-080 — H051 final audit and H052 bootstrap",
+                "github_issue": 610,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/610",
+                "state": "open",
+                "depends_on": ["H051-078", "H051-079"],
+                "labels": [],
+            },
+        ],
+    }
+
+    result = build_planner_advance_plan_from_status(
+        status,
+        issue=608,
+        manifest_path=str(manifest_path),
+    )
+    output = format_planner_advance_plan(result)
+
+    assert result["status"] == "ready"
+    assert result["targets"][0]["key"] == "H051-079"
+    assert result["final_task_unlocks"] == [
+        {
+            "key": "H051-080",
+            "title": "H051-080 — H051 final audit and H052 bootstrap",
+            "github_issue": 610,
+            "status": "locked",
+            "contract_status": "ready",
+            "current_prefix": "H051",
+            "next_prefix": "H052",
+            "minimum_dag_nodes": NEXT_ROADMAP_MIN_DAG_NODES,
+            "waiting_on": ["H051-079"],
+            "errors": [],
+            "safety_note": (
+                "final task unlock is dry-run only until planner advance --apply "
+                "is explicit"
+            ),
+        }
+    ]
+    assert "Final-task unlock contract:" in output
+    assert "H051-080 — issue: #610 — status: locked" in output
+    assert "contract: ready" in output
+    assert "next prefix: H052" in output
+    assert "waiting on: H051-079" in output
+    assert "No GitHub mutation was performed." in output
+
+
+def test_build_planner_advance_plan_reports_ready_final_task_unlock(
+    tmp_path: Path,
+) -> None:
+    manifest_path = tmp_path / "seed-manifest.json"
+    status = {
+        "repo": "ExatronOmega/signposter",
+        "tasks": [
+            {
+                "key": "H051-078",
+                "title": "H051-078 — Final hardening audit",
+                "github_issue": 608,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/608",
+                "state": "merged",
+                "depends_on": [],
+                "labels": [],
+            },
+            {
+                "key": "H051-079",
+                "title": "H051-079 — Final roadmap readiness smoke",
+                "github_issue": 609,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/609",
+                "state": "merged",
+                "depends_on": ["H051-078"],
+                "labels": [],
+            },
+            {
+                "key": "H051-080",
+                "title": "H051-080 — H051 final audit and H052 bootstrap",
+                "github_issue": 610,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/610",
+                "state": "open",
+                "depends_on": ["H051-078", "H051-079"],
+                "labels": [],
+            },
+        ],
+    }
+
+    result = build_planner_advance_plan_from_status(
+        status,
+        issue=609,
+        manifest_path=str(manifest_path),
+    )
+    output = format_planner_advance_plan(result)
+
+    assert result["status"] == "ready"
+    assert result["targets"] == [
+        {
+            "key": "H051-080",
+            "github_issue": 610,
+            "github_url": "https://github.com/ExatronOmega/signposter/issues/610",
+            "state": "open",
+            "labels_to_add": ["state:ready"],
+        }
+    ]
+    assert result["final_task_unlocks"][0]["status"] == "ready"
+    assert result["final_task_unlocks"][0]["contract_status"] == "ready"
+    assert result["final_task_unlocks"][0]["current_prefix"] == "H051"
+    assert result["final_task_unlocks"][0]["next_prefix"] == "H052"
+    assert result["final_task_unlocks"][0]["waiting_on"] == []
+    assert "H051-080 — issue: #610 — status: ready" in output
+    assert "minimum DAG nodes: 80" in output
+    assert "waiting on:" not in output
+    assert "No manifest mutation was performed." in output
+
+
 def test_build_planner_advance_plan_from_status_promotes_after_all_dependencies_done(
     tmp_path: Path,
 ) -> None:
