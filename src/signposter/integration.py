@@ -944,7 +944,16 @@ def plan_noop_integration_for_issue(repo: str, issue_number: int) -> NoopIntegra
     summary_path, gate_decision, gate_reason = _load_noop_gate_evidence(issue_number)
 
     status = "ready"
-    if issue_state != "OPEN":
+    if issue_state == "CLOSED" and workflow_state == "state:merged":
+        if worktree_exists:
+            status = f"blocked — worktree still exists ({worktree_path})"
+        elif local_branch_exists:
+            status = f"blocked — local work branch still exists for issue #{issue_number}"
+        elif associated_pr_detected:
+            status = f"blocked — associated PR exists for issue #{issue_number}; use PR integration"
+        else:
+            status = "completed"
+    elif issue_state != "OPEN":
         status = f"blocked — issue is {issue_state.lower()}"
     elif workflow_state != "state:done":
         status = f"blocked — issue workflow state is {workflow_state or 'unknown'}"
@@ -1089,6 +1098,14 @@ def apply_noop_integration(
         return {
             "mode": "dry_run",
             "plan": plan,
+        }
+
+    if plan.status == "completed":
+        return {
+            "mode": "apply_completed",
+            "plan": plan,
+            "success": True,
+            "results": ["no-op integration already completed"],
         }
 
     if plan.status != "ready":
