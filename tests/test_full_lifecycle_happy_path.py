@@ -459,6 +459,101 @@ def test_docs_only_lifecycle_smoke_from_worker_summary_to_cleanup() -> None:
     assert lifecycle.cleanup_complete is True
 
 
+def test_code_change_lifecycle_smoke_exercises_review_and_merge_gates() -> None:
+    """Smoke a representative code-change path through worker and merge gates."""
+    from signposter.artifact import build_worker_summary
+    from signposter.gate import evaluate_ci_gate
+
+    repo = "test/repo"
+    issue = 47
+    pr = 48
+    branch = "work/issue-47-code-change-lifecycle-smoke"
+    changed_files = ["src/signposter/report.py", "tests/test_report.py"]
+    worker_summary = build_worker_summary(
+        repo=repo,
+        issue=issue,
+        agent="human/operator",
+        changed_files=changed_files,
+        implemented_behavior=[
+            "Scoped code-change lifecycle smoke behavior was covered.",
+        ],
+        targeted_validation=[
+            "python -m pytest tests/test_full_lifecycle_happy_path.py -q",
+        ],
+        full_validation=[
+            "ruff check .",
+            "python -m pytest tests/ -q",
+        ],
+        manual_smoke=[
+            "python -m pytest tests/test_full_lifecycle_happy_path.py -q",
+        ],
+    )
+
+    gate_decision = evaluate_ci_gate(0, worker_summary)
+    assert gate_decision.decision == "pass"
+    assert gate_decision.proposed_transition == "state:active → state:done"
+    assert "Code behavior unchanged: yes" not in worker_summary
+
+    pr_body = f"Related issue: #{issue}"
+    with (
+        patch("signposter.merge._run_gh_pr_view") as mock_view,
+        patch("signposter.merge._fetch_pr_reviews_and_author") as mock_reviews,
+        patch("signposter.merge.evaluate_review_gate") as mock_review_gate,
+        patch("signposter.merge._fetch_pr_checks_for_merge") as mock_checks,
+    ):
+        mock_view.return_value = {
+            "title": "H050 code-change lifecycle smoke",
+            "state": "OPEN",
+            "baseRefName": "main",
+            "headRefName": branch,
+            "mergeable": "MERGEABLE",
+            "reviewDecision": "APPROVED",
+            "body": pr_body,
+            "files": [{"path": path} for path in changed_files],
+            "additions": 110,
+            "deletions": 4,
+        }
+        mock_reviews.return_value = {
+            "pr_author": "ExatronOmega",
+            "review_decision": "APPROVED",
+            "approving_reviewers": ["AlphaExatron"],
+        }
+        mock_review_gate.return_value = _review_gate_result(risk="medium")
+        mock_checks.return_value = {
+            "status": "pass",
+            "successful": 1,
+            "failing": 0,
+            "pending": 0,
+        }
+
+        blocked_without_scope_override = plan_merge_for_pr(
+            repo,
+            pr,
+            allow_medium_risk=True,
+        )
+        ready_with_overrides = plan_merge_for_pr(
+            repo,
+            pr,
+            allow_medium_risk=True,
+            allow_medium_scope=True,
+        )
+
+    assert blocked_without_scope_override.status == "blocked — PR scope is medium"
+    assert blocked_without_scope_override.reviewer_gate_pass is True
+    assert blocked_without_scope_override.reviewer_risk == "medium"
+    assert ready_with_overrides.status == "ready"
+    assert ready_with_overrides.risk_level == "medium"
+    assert ready_with_overrides.size == "medium"
+    assert ready_with_overrides.has_non_author_approval is True
+    assert ready_with_overrides.has_auto_close_keywords is False
+    assert "Medium-risk override explicitly allowed" in "\n".join(
+        ready_with_overrides.notes
+    )
+    assert "Medium-scope override explicitly allowed" in "\n".join(
+        ready_with_overrides.notes
+    )
+
+
 def test_full_lifecycle_blocked_paths_stop_before_mutation() -> None:
     failing_gate = _plan_merge_with(gate_pass=False)
     assert failing_gate.status == "blocked — local reviewer gate is not pass"
