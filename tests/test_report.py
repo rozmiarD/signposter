@@ -17,6 +17,7 @@ from signposter.report import (
     derive_raw_path,
     find_report_artifact_safety_signal,
     format_comment,
+    format_report_comment_audit,
     load_raw_output,
     load_summary,
     post_comment,
@@ -192,6 +193,18 @@ PASS — report body guard implemented.
     assert "raw execution line 1999" not in body
 
 
+def test_format_report_comment_audit_shows_bounded_status():
+    body = "# Signposter Runner Report\n\nbounded evidence"
+
+    audit = format_report_comment_audit(body)
+
+    assert "Report comment boundedness audit:" in audit
+    assert "status: pass" in audit
+    assert f"chars: {len(body)}/{REPORT_COMMENT_MAX_CHARS}" in audit
+    assert "bounded: yes" in audit
+    assert "raw logs: local only" in audit
+
+
 def test_format_comment_without_structured_summary_bounds_large_raw_log():
     summary = "**Agent:** worker\n**Exit Code:** 0"
     raw = "\n".join(f"raw execution line {i} {'x' * 90}" for i in range(500))
@@ -364,6 +377,10 @@ def test_report_main_dry_run_passes_dry_run_to_post_comment(
     out = capsys.readouterr().out
     assert exit_code == 0
     assert "=== Signposter Report (dry-run mode)" in out
+    assert "Report comment boundedness audit:" in out
+    assert "status: pass" in out
+    assert f"/{REPORT_COMMENT_MAX_CHARS}" in out
+    assert "raw logs: local only" in out
     assert "=== Dry-run: No GitHub mutation performed ===" in out
     assert mock_post.call_args.kwargs["dry_run"] is True
 

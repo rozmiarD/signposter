@@ -17,7 +17,11 @@ from signposter.artifact import (
     validate_worker_summary_artifact,
 )
 from signposter.artifact_safety import find_stale_or_failover_signal
-from signposter.comments import DEFAULT_MAX_COMMENT_CHARS, ensure_github_comment_body
+from signposter.comments import (
+    DEFAULT_MAX_COMMENT_CHARS,
+    audit_github_comment_body,
+    ensure_github_comment_body,
+)
 
 # Regex to strip ANSI escape sequences (colors, cursor moves, etc.)
 _ANSI_ESCAPE_RE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
@@ -207,6 +211,25 @@ def _fit_report_comment(lines: list[str], excerpt_source: str) -> str:
         ]
     )
     return ensure_github_comment_body(fallback, max_chars=REPORT_COMMENT_MAX_CHARS)
+
+
+def format_report_comment_audit(body: str) -> str:
+    """Return a compact boundedness audit for the final GitHub report comment."""
+    audit = audit_github_comment_body(body, max_chars=REPORT_COMMENT_MAX_CHARS)
+    status = "pass" if audit.valid else "blocked"
+    bounded = "yes" if audit.char_count <= REPORT_COMMENT_MAX_CHARS else "no"
+    lines = [
+        "Report comment boundedness audit:",
+        f"  status: {status}",
+        f"  chars: {audit.char_count}/{REPORT_COMMENT_MAX_CHARS}",
+        f"  bounded: {bounded}",
+        "  raw logs: local only",
+    ]
+    for error in audit.errors:
+        lines.append(f"  error: {error}")
+    for note in audit.notes:
+        lines.append(f"  note: {note}")
+    return "\n".join(lines)
 
 
 def _extract_preferred_summary_sections(summary_content: str) -> str | None:
@@ -402,12 +425,23 @@ def report_main(
             prompt_path=prompt_path,
             raw_content=raw_content,
         )
+        comment_audit = audit_github_comment_body(
+            comment_body,
+            max_chars=REPORT_COMMENT_MAX_CHARS,
+        )
+        if not comment_audit.valid:
+            print("Report blocked: final comment body failed boundedness audit.")
+            print(format_report_comment_audit(comment_body))
+            print("No GitHub mutation was performed.")
+            return 1
 
         dry_run = not apply
 
         print("=== Signposter Report (dry-run mode)" if dry_run else "=== Signposter Report")
         print(f"Target: {repo}#{issue}")
         print(f"Source summary: {summary_p}")
+        print("")
+        print(format_report_comment_audit(comment_body))
         print("\n--- Proposed Comment Body ---\n")
         print(comment_body)
         print("\n--- End of Comment ---\n")
