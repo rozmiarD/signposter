@@ -1685,6 +1685,41 @@ def test_validate_review_artifact_missing_summary_reports_stale_raw_takeover_fie
     assert "manual reviewer summary required sections" in out
 
 
+def test_validate_review_artifact_missing_summary_reports_diagnostic_takeover(
+    tmp_path,
+):
+    from signposter.review import (
+        format_review_artifact_validation,
+        format_review_artifact_validation_summary,
+        validate_review_artifact,
+    )
+
+    summary_path = tmp_path / "pr-73-reviewer.summary.md"
+    diagnostic_summary = tmp_path / "pr-73-reviewer.codex-runtime.summary.md"
+    diagnostic_raw = tmp_path / "pr-73-reviewer.codex-runtime.raw.txt"
+    diagnostic_summary.write_text("Status: unsupported-model\n", encoding="utf-8")
+    diagnostic_raw.write_text(
+        "The selected model is not supported for this account.\n",
+        encoding="utf-8",
+    )
+
+    result = validate_review_artifact(73, summary_path=str(summary_path))
+    out = format_review_artifact_validation(result)
+    concise = format_review_artifact_validation_summary(result)
+
+    assert result.status == "blocked"
+    assert result.raw_exists is False
+    assert result.takeover_category == "missing-reviewer-artifact"
+    assert "canonical reviewer summary is missing" in (result.takeover_reason or "")
+    assert str(diagnostic_summary) in result.diagnostic_artifacts
+    assert str(diagnostic_raw) in result.diagnostic_artifacts
+    assert "Takeover:" in out
+    assert "category: missing-reviewer-artifact" in out
+    assert "Diagnostic artifacts:" in out
+    assert "takeover: missing-reviewer-artifact" in concise
+    assert any("write bounded reviewer evidence" in item for item in result.guidance or [])
+
+
 def test_validate_review_artifact_stale_raw_guidance_lists_manual_takeover_fields(
     tmp_path,
 ):
