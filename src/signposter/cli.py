@@ -119,6 +119,7 @@ from signposter.planner import (
     build_planner_impact_from_status,
     build_planner_next,
     build_planner_next_from_status,
+    build_planner_regeneration_plan,
     build_planner_run_plan_from_status,
     build_planner_seed_manifest,
     build_planner_seed_plan,
@@ -133,6 +134,7 @@ from signposter.planner import (
     format_planner_mark_result,
     format_planner_next,
     format_planner_next_from_status,
+    format_planner_regeneration_plan,
     format_planner_roadmap,
     format_planner_run_plan,
     format_planner_seed_apply_result,
@@ -829,6 +831,35 @@ def main() -> None:
         help="Optional output path for the rendered roadmap Markdown",
     )
     planner_roadmap_parser.set_defaults(func=run_planner_roadmap)
+
+    planner_regenerate_parser = planner_subparsers.add_parser(
+        "regenerate",
+        help="Show a local-only intelligent planner regeneration proposal",
+    )
+    planner_regenerate_parser.add_argument("--repo", default=None)
+    planner_regenerate_parser.add_argument(
+        "--manifest",
+        required=True,
+        type=Path,
+        help="Path to the local planner seed manifest JSON file",
+    )
+    planner_regenerate_parser.add_argument(
+        "--plan",
+        default=None,
+        type=Path,
+        help="Optional planner draft JSON; defaults to manifest plan path when present",
+    )
+    planner_regenerate_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Required: show proposal only",
+    )
+    planner_regenerate_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Reserved for future guarded GitHub issue update apply paths",
+    )
+    planner_regenerate_parser.set_defaults(func=run_planner_regenerate)
 
     planner_status_parser = planner_subparsers.add_parser(
         "status",
@@ -3736,6 +3767,71 @@ def run_planner_roadmap(args: argparse.Namespace) -> int:
         print(f"  {args.out}")
 
     return 1 if "Status:\nblocked" in roadmap else 0
+
+
+def run_planner_regenerate(args: argparse.Namespace) -> int:
+    """Show local-only intelligent planner regeneration output."""
+    if args.apply:
+        print("Signposter Planner Regeneration")
+        print()
+        print("Status:")
+        print("  blocked")
+        print()
+        print("Reason:")
+        print("  --apply is not implemented for planner regeneration")
+        print()
+        print("Notes:")
+        print("  No GitHub mutation was performed.")
+        print("  No manifest mutation was performed.")
+        print("  No backend execution was performed.")
+        return 1
+
+    if not args.dry_run:
+        print("Signposter Planner Regeneration")
+        print()
+        print("Status:")
+        print("  blocked")
+        print()
+        print("Reason:")
+        print("  --dry-run is required")
+        print()
+        print("Notes:")
+        print("  No GitHub mutation was performed.")
+        print("  No manifest mutation was performed.")
+        print("  No backend execution was performed.")
+        return 1
+
+    if not args.manifest.exists():
+        print("Signposter Planner Regeneration")
+        print()
+        print("Status:")
+        print("  blocked")
+        print()
+        print("Reason:")
+        print(f"  manifest file not found: {args.manifest}")
+        print()
+        print("Notes:")
+        print("  No GitHub mutation was performed.")
+        print("  No manifest mutation was performed.")
+        print("  No backend execution was performed.")
+        return 1
+
+    manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+    plan = None
+    plan_path = args.plan
+    if plan_path is None and manifest.get("plan"):
+        plan_path = Path(str(manifest["plan"]))
+    if plan_path is not None and plan_path.exists():
+        plan = load_planner_plan(plan_path)
+
+    result = build_planner_regeneration_plan(
+        manifest=manifest,
+        manifest_path=str(args.manifest),
+        plan=plan,
+        repo=args.repo or str(manifest.get("repo", "")),
+    )
+    print(format_planner_regeneration_plan(result))
+    return 0 if result["status"] == "ready" else 1
 
 
 def _planner_workflow_state_from_issue_payload(payload: dict[str, object]) -> str | None:
