@@ -1086,6 +1086,15 @@ def test_merge_plan_allows_medium_scope_with_explicit_override():
     assert allowed.size == "medium"
     assert allowed.has_non_author_approval is True
     assert allowed.has_auto_close_keywords is False
+    assert (
+        "Medium-scope override explicitly allowed by operator for planning only."
+        in allowed.notes
+    )
+
+    output = format_merge_plan(allowed)
+
+    assert "Status:\n  ready" in output
+    assert "Medium-scope override explicitly allowed by operator for planning only." in output
 
 
 def test_merge_plan_allows_large_scope_with_explicit_override():
