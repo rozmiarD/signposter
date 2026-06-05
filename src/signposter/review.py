@@ -1768,7 +1768,9 @@ def format_review_artifact_validation(result: ReviewArtifactValidation) -> str:
 def format_review_artifact_validation_summary(result: ReviewArtifactValidation) -> str:
     """Format concise review artifact validation output for automation logs."""
     o = result.opinion
-    first_error = result.errors[0] if result.errors else "none"
+    first_error = _compact_review_artifact_summary_value(
+        result.errors[0] if result.errors else "none"
+    )
     lines = [
         "Signposter Review Artifact Summary",
         f"pr: #{result.pr_number}",
@@ -1781,6 +1783,15 @@ def format_review_artifact_validation_summary(result: ReviewArtifactValidation) 
     if result.takeover_category:
         lines.append(f"takeover: {result.takeover_category}")
     return "\n".join(lines)
+
+
+def _compact_review_artifact_summary_value(value: str, *, limit: int = 160) -> str:
+    """Return a single bounded line for automation-oriented review summaries."""
+    compacted = " ".join(value.split())
+    if len(compacted) <= limit:
+        return compacted
+    omitted = len(compacted) - limit
+    return f"{compacted[:limit].rstrip()}... [truncated {omitted} chars]"
 
 
 def evaluate_review_gate(
