@@ -348,6 +348,28 @@ def test_cleanup_apply_deletes_branch_when_worktree_already_absent():
     assert calls == [["git", "branch", "-D", plan.local_branch]]
 
 
+def test_cleanup_apply_skips_already_deleted_branch_after_ready_plan():
+    """apply is idempotent when a branch-only cleanup target disappears after planning."""
+    plan = _make_plan(status="ready", worktree_exists=False, local_branch_exists=True)
+
+    with (
+        patch("signposter.cleanup.plan_cleanup_for_pr", return_value=plan),
+        patch("signposter.cleanup._local_branch_exists", return_value=False),
+        patch("signposter.cleanup.subprocess.run") as mock_run,
+    ):
+        result = apply_cleanup("ExatronOmega/signposter", 5, apply=True)
+
+    mock_run.assert_not_called()
+    assert result["success"] is True
+    assert result["branch_deleted"] is False
+    assert result["results"] == ["worktree already absent"]
+
+    output = format_cleanup_apply_result(result)
+    assert "worktree already absent" in output
+    assert "deleted local branch: no (was not present)" in output
+    assert "No GitHub mutation was performed." in output
+
+
 def test_cli_cleanup_apply_dry_run_returns_blocked_exit_for_blocked_plan(
     monkeypatch, capsys
 ):
