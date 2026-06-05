@@ -96,7 +96,7 @@ def test_backend_status_reports_recent_runtime_availability_diagnostics(tmp_path
                 "**Backend:** codex-cli",
                 "**Agent:** codex_worker_core",
                 "**Model:** openai/gpt-5.4",
-                "**Reasoning:** medium",
+                "**Requested Reasoning:** medium",
                 "**Exit Code:** 1",
                 "**Status:** unsupported-model",
                 "",

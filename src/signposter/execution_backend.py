@@ -84,6 +84,7 @@ def build_backend_command_shape(
         return (
             f"codex exec --model {model} - < {prompt_path} "
             f"(Signposter metadata: agent={agent}, session_key={session_key}, "
-            f"reasoning={reasoning_effort})"
+            f"requested_reasoning={reasoning_effort}, "
+            "reasoning_transport=metadata-only)"
         )
     raise ValueError(f"unsupported execution backend '{backend}'")
