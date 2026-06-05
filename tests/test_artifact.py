@@ -215,6 +215,19 @@ def test_worker_summary_plan_is_gate_compatible():
     assert "No unrelated files were changed" in plan.content
 
 
+def test_worker_summary_plan_includes_manual_takeover_provenance():
+    plan = plan_worker_summary(repo="test/repo", issue=32)
+    decision = evaluate_ci_gate(0, plan.content)
+
+    assert decision.decision == "pass"
+    assert "## Manual takeover provenance" in plan.content
+    assert "Takeover agent: human/operator" in plan.content
+    assert "Takeover artifact: parser-compatible worker summary." in plan.content
+    assert "Runtime artifact handling: raw backend output remains local" in plan.content
+    assert "Validation provenance: signposter.validation-result.v1 records above." in plan.content
+    assert "GitHub comment provenance: bounded report excerpt only." in plan.content
+
+
 def test_worker_summary_docs_only_plan_adds_preflight_fields(tmp_path):
     plan = plan_worker_summary(
         repo="test/repo",
