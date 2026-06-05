@@ -11,6 +11,8 @@ def test_pr_linkage_prefers_branch_when_body_matches() -> None:
     assert result.status == "detected"
     assert result.source == "branch-pattern"
     assert result.confidence == "high"
+    assert "confidence: high" in result.reason
+    assert "strongest Signposter signal" in result.reason
 
 
 def test_pr_linkage_prefers_branch_when_generic_body_matches() -> None:
@@ -32,6 +34,8 @@ def test_pr_linkage_detects_related_issue_without_branch() -> None:
     assert result.status == "detected"
     assert result.source == "pr-body-related-issue"
     assert result.confidence == "medium"
+    assert "confidence: medium" in result.reason
+    assert "Related issue line fallback" in result.reason
 
 
 def test_pr_linkage_detects_generic_issue_reference_without_branch() -> None:
@@ -41,6 +45,8 @@ def test_pr_linkage_detects_generic_issue_reference_without_branch() -> None:
     assert result.status == "detected"
     assert result.source == "pr-body-issue-reference"
     assert result.confidence == "low"
+    assert "confidence: low" in result.reason
+    assert "generic issue mention fallback" in result.reason
 
 
 def test_pr_linkage_does_not_use_auto_close_keyword_as_generic_body_link() -> None:
@@ -64,6 +70,8 @@ def test_pr_linkage_blocks_ambiguous_branch_and_body() -> None:
     assert result.ambiguous is True
     assert "branch-pattern=#4" in result.reason
     assert "pr-body-related-issue=#5" in result.reason
+    assert "confidence: low" in result.reason
+    assert "conflicting linkage signals require inspection" in result.reason
 
 
 def test_pr_linkage_missing_when_no_safe_signal() -> None:
@@ -71,3 +79,4 @@ def test_pr_linkage_missing_when_no_safe_signal() -> None:
 
     assert result.associated_issue is None
     assert result.status == "missing"
+    assert result.reason == "associated issue could not be detected; confidence: low"
