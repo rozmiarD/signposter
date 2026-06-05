@@ -333,6 +333,33 @@ def test_control_plane_status_surfaces_missing_worker_artifact_takeover() -> Non
     ) in output
 
 
+def test_control_plane_status_surfaces_malformed_worker_artifact_takeover() -> None:
+    orchestrator = SimpleNamespace(
+        status="blocked",
+        action="check-gate",
+        stop_reason="takeover plan requires manual recovery: malformed-worker-artifact",
+        takeover_category="malformed-worker-artifact",
+        takeover_reason="canonical worker summary is malformed or unsafe",
+        recovery_commands=(
+            "signposter artifact validate-worker-summary --issue 562",
+            "signposter artifact write-worker-summary --repo ExatronOmega/signposter "
+            "--issue 562 --apply",
+        ),
+    )
+
+    result = build_control_plane_status(
+        repo="ExatronOmega/signposter",
+        orchestrator_next=orchestrator,
+    )
+
+    output = format_control_plane_status(result)
+
+    assert result.status == "blocked"
+    assert "takeover: malformed-worker-artifact" in output
+    assert "canonical worker summary is malformed or unsafe" in output
+    assert "recovery command: signposter artifact validate-worker-summary --issue 562" in output
+
+
 def test_control_plane_status_blocks_disagreed_targets() -> None:
     planner = {
         "planner_status": "active",
