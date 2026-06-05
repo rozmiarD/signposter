@@ -554,6 +554,278 @@ def test_code_change_lifecycle_smoke_exercises_review_and_merge_gates() -> None:
     )
 
 
+def test_stuck_worker_recovery_smoke_from_active_artifact_to_cleanup(
+    tmp_path,
+) -> None:
+    """Smoke stuck worker recovery from artifact diagnosis through final cleanup."""
+    from signposter.artifact import build_worker_summary
+    from signposter.gate import evaluate_ci_gate
+    from signposter.lifecycle import LifecycleNext, LifecyclePreflight
+    from signposter.orchestrator import run_orchestrator_step
+
+    repo = "test/repo"
+    issue = 49
+    pr = 50
+    branch = "work/issue-49-stuck-worker-recovery-smoke"
+    changed_files = ["tests/test_full_lifecycle_happy_path.py"]
+    runtime_summary = tmp_path / "issue-49-worker.summary.md"
+    runtime_summary.write_text(
+        "\n".join(
+            [
+                "# Signposter Codex CLI Execution Summary",
+                "**Backend:** codex-cli",
+                "**Status:** unsupported-model",
+                (
+                    "**Reason:** Codex CLI exited with code 1; "
+                    "classified as unsupported-model."
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    lifecycle_next = LifecycleNext(
+        query_issue=issue,
+        query_pr=None,
+        issue_number=issue,
+        pr_number=None,
+        issue_state="OPEN",
+        workflow_state="state:active",
+        pr_state=None,
+        worktree_exists=True,
+        local_branch_exists=True,
+        prompt_exists=True,
+        worker_summary_exists=False,
+        preflight=LifecyclePreflight(
+            labels_status="pass",
+            sync_status="up-to-date",
+            worktree_status="clean",
+        ),
+        blocked_next_action=None,
+        action="execute-worker",
+        command=f"signposter run --repo {repo} --issue {issue} --execute --worktree",
+        status="actionable",
+        reason="active issue has a prompt but no worker summary",
+        notes=["Read-only recommendation only."],
+    )
+    proc = type(
+        "Proc",
+        (),
+        {
+            "returncode": 1,
+            "stdout": (
+                f"Execution completed for issue #{issue}\n"
+                "  Exit code: 1\n"
+                f"  Raw output: artifacts/runs/issue-{issue}-worker.raw.txt\n"
+                f"  Summary:   {runtime_summary}\n"
+            ),
+            "stderr": "",
+        },
+    )()
+
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=None),
+    ):
+        recovery_step = run_orchestrator_step(
+            repo,
+            issue=issue,
+            apply=True,
+            execute=True,
+            run_command=lambda *args, **kwargs: proc,
+        )
+
+    assert recovery_step.status == "failed"
+    assert recovery_step.diagnosis_status == "unsupported-model"
+    assert recovery_step.raw_artifact_path == f"artifacts/runs/issue-{issue}-worker.raw.txt"
+    assert recovery_step.summary_artifact_path == str(runtime_summary)
+    assert recovery_step.fallback_commands == (
+        f"signposter artifact write-worker-summary --repo {repo} --issue {issue} --apply",
+        f"signposter artifact validate-worker-summary --issue {issue}",
+        f"signposter report --repo {repo} --issue {issue} --apply",
+        f"signposter gate --repo {repo} --issue {issue}",
+    )
+
+    manual_summary = build_worker_summary(
+        repo=repo,
+        issue=issue,
+        agent="human/operator",
+        changed_files=changed_files,
+        implemented_behavior=[
+            "Stuck worker recovery smoke path was completed with manual takeover.",
+        ],
+        targeted_validation=[
+            "python -m pytest tests/test_full_lifecycle_happy_path.py -q",
+        ],
+        full_validation=[
+            "ruff check .",
+            "python -m pytest tests/ -q",
+        ],
+        manual_smoke=[
+            "python -m pytest tests/test_full_lifecycle_happy_path.py -q",
+        ],
+    )
+    gate_decision = evaluate_ci_gate(0, manual_summary)
+    assert gate_decision.decision == "pass"
+    assert gate_decision.proposed_transition == "state:active → state:done"
+
+    handoff = HandoffPlan(
+        issue_number=issue,
+        title="H050 stuck recovery smoke",
+        workflow_state="done",
+        github_issue_state="OPEN",
+        worktree_path=f"../signposter-work/{issue}",
+        branch=branch,
+        worktree_exists=True,
+        current_branch_in_worktree=branch,
+        status_lines=[],
+        changed_files=[],
+        has_changes=False,
+        suggested_commit_message="test: h050 stuck recovery smoke",
+        suggested_next_commands=[],
+        status="ready",
+        notes=["No commit, push, PR, merge, or issue close was performed."],
+    )
+
+    with (
+        patch("signposter.pr.plan_handoff_for_issue", return_value=handoff),
+        patch("signposter.pr._get_branch_changed_files", return_value=changed_files),
+    ):
+        pr_plan = plan_pr_for_issue(repo, issue)
+
+    pr_body = pr_plan.suggested_pr_body
+    assert pr_plan.status == "ready"
+    assert f"Related issue: #{issue}" in pr_body
+    assert contains_auto_close_keyword(pr_body) is False
+
+    with (
+        patch("signposter.merge._run_gh_pr_view") as mock_view,
+        patch("signposter.merge._fetch_pr_reviews_and_author") as mock_reviews,
+        patch("signposter.merge.evaluate_review_gate") as mock_review_gate,
+        patch("signposter.merge._fetch_pr_checks_for_merge") as mock_checks,
+    ):
+        mock_view.return_value = {
+            "title": pr_plan.suggested_pr_title,
+            "state": "OPEN",
+            "baseRefName": "main",
+            "headRefName": branch,
+            "mergeable": "MERGEABLE",
+            "reviewDecision": "APPROVED",
+            "body": pr_body,
+            "files": [{"path": path} for path in changed_files],
+            "additions": 60,
+            "deletions": 2,
+        }
+        mock_reviews.return_value = {
+            "pr_author": "ExatronOmega",
+            "review_decision": "APPROVED",
+            "approving_reviewers": ["AlphaExatron"],
+        }
+        mock_review_gate.return_value = _review_gate_result(risk="medium")
+        mock_checks.return_value = {
+            "status": "pass",
+            "successful": 1,
+            "failing": 0,
+            "pending": 0,
+        }
+
+        merge_plan = plan_merge_for_pr(repo, pr, allow_medium_risk=True)
+
+    assert merge_plan.status == "ready"
+    assert merge_plan.associated_issue == issue
+    assert merge_plan.has_non_author_approval is True
+    assert merge_plan.has_auto_close_keywords is False
+
+    with (
+        patch("signposter.integration._fetch_pr_merge_details") as mock_pr,
+        patch("signposter.integration.fetch_issue_by_number") as mock_issue,
+        patch("signposter.integration.fetch_issue_context") as mock_ctx,
+        patch("signposter.integration._fetch_main_ci_status", return_value="pass"),
+    ):
+        mock_pr.return_value = {
+            "number": pr,
+            "title": pr_plan.suggested_pr_title,
+            "state": "MERGED",
+            "baseRefName": "main",
+            "headRefName": branch,
+            "mergeCommit": {"oid": "fed456abc123"},
+            "body": pr_body,
+        }
+        mock_issue.return_value = type("Issue", (), {"labels": ["state:done"]})()
+        mock_ctx.return_value = {"state": "OPEN"}
+
+        integration_plan = plan_integration_for_pr(repo, pr)
+
+    assert integration_plan.status == "ready"
+    assert integration_plan.associated_issue == issue
+    assert integration_plan.close_issue is True
+
+    with (
+        patch("signposter.cleanup._run_gh_pr_view") as mock_cleanup_pr,
+        patch("signposter.cleanup.fetch_issue_context") as mock_cleanup_ctx,
+        patch("signposter.cleanup._worktree_exists", return_value=True),
+        patch("signposter.cleanup._local_branch_exists", return_value=True),
+    ):
+        mock_cleanup_pr.return_value = {
+            "state": "MERGED",
+            "headRefName": branch,
+            "body": pr_body,
+        }
+        mock_cleanup_ctx.return_value = {
+            "state": "CLOSED",
+            "labels": [{"name": "state:merged"}],
+        }
+
+        cleanup_plan = plan_cleanup_for_pr(repo, pr)
+
+    assert cleanup_plan.status == "ready"
+    assert cleanup_plan.associated_issue == issue
+    assert cleanup_plan.worktree_exists is True
+    assert cleanup_plan.local_branch_exists is True
+
+    with (
+        patch("signposter.lifecycle.fetch_issue_by_number") as mock_lifecycle_issue,
+        patch("signposter.lifecycle.fetch_issue_context") as mock_lifecycle_ctx,
+        patch("signposter.lifecycle._detect_associated_pr_from_issue", return_value=pr),
+        patch("signposter.lifecycle._run_gh_pr_view") as mock_lifecycle_pr,
+        patch("signposter.lifecycle._worktree_exists", return_value=False),
+        patch("signposter.lifecycle._local_branch_exists", return_value=False),
+    ):
+        mock_lifecycle_issue.return_value = type(
+            "Issue",
+            (),
+            {
+                "labels": [
+                    "state:merged",
+                    "phase:build",
+                    "risk:medium",
+                    "role:worker",
+                    "area:tests",
+                ]
+            },
+        )()
+        mock_lifecycle_ctx.return_value = {
+            "state": "CLOSED",
+            "labels": [{"name": "state:merged"}],
+        }
+        mock_lifecycle_pr.return_value = {
+            "number": pr,
+            "state": "MERGED",
+            "baseRefName": "main",
+            "headRefName": branch,
+            "mergeCommit": {"oid": "fed456abc123"},
+            "body": pr_body,
+            "reviews": [{"state": "APPROVED", "author": {"login": "AlphaExatron"}}],
+        }
+
+        lifecycle = plan_lifecycle_status(repo, issue=issue)
+
+    assert lifecycle.status == "complete"
+    assert lifecycle.pr_number == pr
+    assert lifecycle.integrated is True
+    assert lifecycle.cleanup_complete is True
+
+
 def test_full_lifecycle_blocked_paths_stop_before_mutation() -> None:
     failing_gate = _plan_merge_with(gate_pass=False)
     assert failing_gate.status == "blocked — local reviewer gate is not pass"
