@@ -780,6 +780,65 @@ def test_cli_planner_seed_dry_run_preview_excludes_apply_sections(
     assert "Written seed manifest:" not in captured
 
 
+def test_cli_planner_seed_write_manifest_without_apply_never_runs_apply_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    write_planner_draft("build lifecycle watch", plan_path)
+
+    def fail_label_preflight(repo: str) -> set[str]:
+        raise AssertionError(f"label preflight must not run in dry-run mode: {repo}")
+
+    def fail_seed_apply(*args, **kwargs):
+        raise AssertionError("seed apply must not run without --apply")
+
+    monkeypatch.setattr("signposter.cli._fetch_repo_label_names", fail_label_preflight)
+    monkeypatch.setattr("signposter.cli.apply_planner_seed_manifest", fail_seed_apply)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "seed",
+            "--plan",
+            str(plan_path),
+            "--repo",
+            "ExatronOmega/signposter",
+            "--write-bodies",
+            "--body-dir",
+            str(body_dir),
+            "--write-manifest",
+            "--manifest",
+            str(manifest_path),
+            "--show-commands",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    captured = capsys.readouterr().out
+
+    assert exc_info.value.code in (None, 0)
+    assert manifest["status"] == "dry-run"
+    assert manifest["issues"][0]["github_issue"] is None
+    assert (body_dir / "WATCH-001.md").exists()
+    assert "command preview:" in captured
+    assert "Command previews are not executed." in captured
+    assert "Prepared seed manifest:" in captured
+    assert "No GitHub mutation was performed during manifest preparation." in captured
+    assert "No GitHub issue was created." in captured
+    assert "Seed Label Preflight" not in captured
+    assert "Planner Seed Apply" not in captured
+    assert "Executed:" not in captured
+
+
 def test_write_planner_seed_issue_bodies_writes_markdown_files(tmp_path: Path) -> None:
     plan = build_planner_draft("build lifecycle watch")
     seed_plan = build_planner_seed_plan(plan)
