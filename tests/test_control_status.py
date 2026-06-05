@@ -304,6 +304,35 @@ def test_control_plane_status_surfaces_blocked_state() -> None:
     ) in output
 
 
+def test_control_plane_status_surfaces_missing_worker_artifact_takeover() -> None:
+    orchestrator = SimpleNamespace(
+        status="blocked",
+        action="execute-worker",
+        stop_reason="worker evidence is incomplete",
+        takeover_category="missing-worker-artifact",
+        takeover_reason="runtime evidence exists but canonical worker summary is missing",
+        recovery_commands=(
+            "signposter artifact write-worker-summary --repo ExatronOmega/signposter "
+            "--issue 561 --apply",
+        ),
+    )
+
+    result = build_control_plane_status(
+        repo="ExatronOmega/signposter",
+        orchestrator_next=orchestrator,
+    )
+
+    output = format_control_plane_status(result)
+
+    assert result.status == "blocked"
+    assert "takeover: missing-worker-artifact" in output
+    assert "runtime evidence exists but canonical worker summary is missing" in output
+    assert (
+        "recovery command: signposter artifact write-worker-summary "
+        "--repo ExatronOmega/signposter --issue 561 --apply"
+    ) in output
+
+
 def test_control_plane_status_blocks_disagreed_targets() -> None:
     planner = {
         "planner_status": "active",

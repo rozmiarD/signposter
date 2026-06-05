@@ -16,6 +16,7 @@ from signposter.lifecycle import (
     LifecycleWatchRequest,
     LifecycleWatchSnapshot,
     _contains_auto_close_keyword,
+    _worker_summary_exists,
     collect_lifecycle_watch_data,
     format_lifecycle_next,
     format_lifecycle_status,
@@ -454,6 +455,28 @@ def test_lifecycle_next_blocked_output_avoids_ready_apply_wording():
     assert "\n  command: signposter labels ensure" not in out
     assert "Status:\n  ready" not in out
     assert "No GitHub mutation was performed." in out
+
+
+def test_worker_summary_exists_ignores_preserved_runtime_diagnostics(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runs = tmp_path / "artifacts" / "runs"
+    runs.mkdir(parents=True)
+    (runs / "issue-46-worker.codex-runtime.summary.md").write_text(
+        "Status: unsupported-model\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert _worker_summary_exists(46) is False
+
+    (runs / "issue-46-worker.summary.md").write_text(
+        "# Signposter Execution Summary\n",
+        encoding="utf-8",
+    )
+
+    assert _worker_summary_exists(46) is True
 
 
 def test_lifecycle_status_handler_summary_output(capsys):
