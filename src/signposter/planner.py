@@ -3832,6 +3832,14 @@ def build_planner_status(
                     else None
                 )
                 state = str(raw_state).strip().lower() if raw_state else "unknown"
+                if (
+                    state == "open"
+                    and github_state == "open"
+                    and workflow_state is None
+                    and manifest_workflow_state
+                ):
+                    workflow_state = manifest_workflow_state
+                    state = workflow_state
                 mapping_status = (
                     str(raw_mapping_status).strip().lower()
                     if raw_mapping_status

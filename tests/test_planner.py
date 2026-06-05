@@ -2991,6 +2991,51 @@ def test_cli_planner_status_sync_github_fetches_issue_states(
     assert "No task execution was performed." in captured
 
 
+def test_build_planner_status_keeps_seeded_root_ready_and_children_waiting(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+
+    issue_states = {
+        issue["github_issue"]: {
+            "state": "open",
+            "github_state": "open",
+            "workflow_state": None,
+            "mapping_status": "ok",
+        }
+        for issue in manifest["issues"]
+    }
+
+    status = build_planner_status(manifest, issue_states)
+    counts = build_planner_status_counts(status["tasks"])
+    next_result = build_planner_next_from_status(status)
+
+    assert status["tasks"][0]["key"] == "WATCH-001"
+    assert status["tasks"][0]["state"] == "ready"
+    assert status["tasks"][0]["workflow_state"] == "ready"
+    assert status["tasks"][1]["key"] == "WATCH-002"
+    assert status["tasks"][1]["state"] == "open"
+    assert counts["ready"] == 1
+    assert counts["waiting"] == 4
+    assert counts["blocked"] == 0
+    assert next_result["status"] == "ready"
+    assert next_result["next"]["key"] == "WATCH-001"
+    assert next_result["waiting"][0]["key"] == "WATCH-002"
+
+
 def test_cli_planner_status_sync_github_surfaces_stale_and_mismatched_mappings(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
