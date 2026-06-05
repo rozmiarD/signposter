@@ -197,6 +197,7 @@ def build_worker_summary(
     full_validation: list[str] | None = None,
     manual_smoke: list[str] | None = None,
     token_usage: dict[str, object] | None = None,
+    human_gate: bool = False,
 ) -> str:
     """Build a gate-friendly manual worker summary."""
     changed_files = changed_files or ["src/signposter/<file>.py", "tests/test_<file>.py"]
@@ -227,6 +228,24 @@ def build_worker_summary(
         "",
         "PASS - scoped worker task completed with validation evidence.",
     ]
+    if human_gate:
+        lines.extend(
+            [
+                "",
+                "## Human gate evidence",
+                "",
+                "Human approval: yes",
+                "Human gate approval: approved",
+                "Scope reviewed: yes",
+                "Scope match: yes",
+                "Validation passed: yes",
+                "Safety reviewed: yes",
+                "GitHub mutation: none by implemented code",
+                "Execution backend: no live backend output used for implementation",
+                "Issue closure: none by implemented code",
+                "Merge performed: no",
+            ]
+        )
     if docs_only:
         lines.extend(
             [
@@ -729,6 +748,7 @@ def plan_worker_summary(
     full_validation: list[str] | None = None,
     manual_smoke: list[str] | None = None,
     token_usage: dict[str, object] | None = None,
+    human_gate: bool = False,
     runs_dir: str | Path = "artifacts/runs",
 ) -> ManualArtifactPlan:
     path = Path(runs_dir) / f"issue-{issue}-worker.summary.md"
@@ -742,6 +762,7 @@ def plan_worker_summary(
         full_validation=full_validation,
         manual_smoke=manual_smoke,
         token_usage=token_usage,
+        human_gate=human_gate,
     )
     return ManualArtifactPlan(
         artifact_type="worker-summary",
