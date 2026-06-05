@@ -74,6 +74,7 @@ def test_check_codex_cli_preflight_reports_missing_binary(tmp_path) -> None:
 
     assert result.ok is False
     assert result.status == "missing-binary"
+    assert result.model_availability_status == "not-checked"
 
 
 def test_check_codex_cli_preflight_reports_missing_prompt(tmp_path) -> None:
@@ -89,6 +90,31 @@ def test_check_codex_cli_preflight_reports_missing_prompt(tmp_path) -> None:
 
     assert result.ok is False
     assert result.status == "missing-prompt"
+    assert result.model_availability_status == "not-checked"
+
+
+def test_check_codex_cli_preflight_ready_does_not_claim_model_availability(
+    tmp_path,
+) -> None:
+    prompt = tmp_path / "prompt.md"
+    prompt.write_text("do work", encoding="utf-8")
+    invocation = plan_codex_cli_invocation(
+        agent="worker_core",
+        session_key="signposter-test",
+        model="openai/gpt-5.4",
+        reasoning_effort="medium",
+        prompt_path=prompt,
+    )
+
+    result = check_codex_cli_preflight(
+        invocation,
+        which_command=lambda _: "/usr/bin/codex",
+    )
+
+    assert result.ok is True
+    assert result.status == "ready"
+    assert result.model_availability_status == "not-checked"
+    assert "model availability is not verified without execution" in result.reason
 
 
 def test_execute_codex_cli_invocation_captures_success_artifacts(tmp_path) -> None:
@@ -130,6 +156,9 @@ def test_execute_codex_cli_invocation_captures_success_artifacts(tmp_path) -> No
     assert "**Backend:** codex-cli" in summary
     assert "**Agent:** worker_core" in summary
     assert "**Model:** openai/gpt-5.4" in summary
+    assert "**Model Availability:** verified" in summary
+    assert "Model Availability: verified" in summary
+    assert "Local Preflight Scope: codex binary and prompt artifact only" in summary
     assert "**Reasoning:** medium" in summary
     assert "**Exit Code:** 0" in summary
     assert "**Status:** success" in summary
@@ -171,6 +200,7 @@ def test_execute_codex_cli_invocation_writes_preflight_artifacts(tmp_path) -> No
     summary = result.summary_path.read_text(encoding="utf-8")
     assert "**Exit Code:** 1" in summary
     assert "**Status:** missing-binary" in summary
+    assert "**Model Availability:** not-checked" in summary
     assert "**Automatic Fallback:** no" in summary
     assert "**Takeover Required:** yes" in summary
     assert "**Task execution complete:** no" in summary
@@ -286,6 +316,9 @@ def test_execute_codex_cli_invocation_captures_unsupported_model_status(tmp_path
     summary = result.summary_path.read_text(encoding="utf-8")
     assert "**Exit Code:** 1" in summary
     assert "**Status:** unsupported-model" in summary
+    assert "**Model Availability:** unsupported" in summary
+    assert "Model Availability: unsupported" in summary
+    assert "Codex CLI rejected the selected model" in summary
     assert "**Token Usage Status:** unknown" in summary
     assert "**Automatic Fallback:** no" in summary
     assert "**Takeover Required:** yes" in summary

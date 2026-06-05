@@ -99,6 +99,10 @@ class CodexCliPreflight:
     status: str
     reason: str
     command_path: str | None = None
+    model_availability_status: str = "not-checked"
+    model_availability_reason: str = (
+        "model availability is verified only by an explicit Codex CLI execution"
+    )
 
 
 @dataclass(frozen=True)
@@ -194,7 +198,10 @@ def check_codex_cli_preflight(
     return CodexCliPreflight(
         ok=True,
         status="ready",
-        reason="codex CLI binary and prompt artifact are available",
+        reason=(
+            "codex CLI binary and prompt artifact are available; "
+            "model availability is not verified without execution"
+        ),
         command_path=command_path,
     )
 
@@ -339,6 +346,9 @@ def _format_codex_cli_summary(
     output = "\n".join(part for part in (stdout, stderr) if part)
     excerpt = _bounded_excerpt(output)
     complete = exit_code == 0 and status == "success"
+    model_availability_status, model_availability_reason = (
+        _normalize_model_availability(status)
+    )
     token_usage = summarize_token_usage(
         role=invocation.agent,
         model=invocation.model,
@@ -352,6 +362,7 @@ def _format_codex_cli_summary(
         "**Backend:** codex-cli",
         f"**Agent:** {invocation.agent}",
         f"**Model:** {invocation.model}",
+        f"**Model Availability:** {model_availability_status}",
         f"**Reasoning:** {invocation.reasoning_effort}",
         f"**Token Usage Status:** {token_usage.status}",
         f"**Exit Code:** {exit_code}",
@@ -364,8 +375,11 @@ def _format_codex_cli_summary(
         "Backend: codex-cli",
         f"Agent: {invocation.agent}",
         f"Model: {invocation.model}",
+        f"Model Availability: {model_availability_status}",
+        f"Model Availability Reason: {model_availability_reason}",
         f"Reasoning: {invocation.reasoning_effort}",
         "Reasoning Transport: Signposter metadata only",
+        "Local Preflight Scope: codex binary and prompt artifact only",
         f"Session Key: {invocation.session_key}",
         f"Prompt Artifact: {invocation.prompt_path}",
         "Prompt Transport: stdin",
@@ -417,6 +431,26 @@ def _format_codex_cli_summary(
         ]
     )
     return "\n".join(lines)
+
+
+def _normalize_model_availability(status: str) -> tuple[str, str]:
+    """Normalize model availability separately from local binary/prompt preflight."""
+    if status == "success":
+        return "verified", "Codex CLI accepted the selected model for this execution."
+    if status == "unsupported-model":
+        return (
+            "unsupported",
+            "Codex CLI rejected the selected model for this account or provider.",
+        )
+    if status in {"missing-binary", "missing-prompt"}:
+        return (
+            "not-checked",
+            "Codex CLI did not execute, so selected model availability was not checked.",
+        )
+    return (
+        "unknown",
+        "Codex CLI execution did not prove whether the selected model is available.",
+    )
 
 
 def _bounded_excerpt(text: str, *, max_lines: int = 30, max_chars: int = 1800) -> str:
