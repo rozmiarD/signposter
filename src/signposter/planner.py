@@ -1845,6 +1845,13 @@ def build_planner_status_artifact(
         mapping_reason = task.get("mapping_reason")
         if mapping_reason:
             item["mapping_reason"] = mapping_reason
+        if mapping_status:
+            expected_title = task.get("expected_title")
+            if expected_title:
+                item["expected_title"] = expected_title
+            github_title = task.get("github_title")
+            if github_title:
+                item["github_title"] = github_title
         tasks.append(item)
 
     return {
@@ -3141,6 +3148,8 @@ def build_planner_next_from_status(status: dict[str, Any]) -> dict[str, Any]:
                     "key": task["key"],
                     "reason": reason,
                     "github_issue": task.get("github_issue"),
+                    "expected_title": task.get("expected_title"),
+                    "github_title": task.get("github_title"),
                 }
             )
             continue
@@ -3347,6 +3356,12 @@ def format_planner_next_from_status(result: dict[str, Any]) -> str:
             if github_issue is not None:
                 line += f" (issue #{github_issue})"
             lines.append(line)
+            expected_title = item.get("expected_title")
+            if expected_title:
+                lines.append(f"    expected title: {expected_title}")
+            github_title = item.get("github_title")
+            if github_title:
+                lines.append(f"    GitHub title: {github_title}")
             reconcile_issues = item.get("reconcile_issues", [])
             if reconcile_issues:
                 issues = ", ".join(f"#{issue}" for issue in reconcile_issues)
@@ -3527,6 +3542,10 @@ def format_planner_step(result: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _planner_status_expected_github_title(issue: dict[str, Any]) -> str:
+    return str(issue.get("github_title") or issue.get("title") or "").strip()
+
+
 def build_planner_status(
     manifest: dict[str, Any],
     issue_states: dict[int, object] | None = None,
@@ -3544,6 +3563,7 @@ def build_planner_status(
         mapping_status: str | None = None
         mapping_reason: str | None = None
         github_title: str | None = None
+        expected_title: str | None = _planner_status_expected_github_title(issue)
         manifest_workflow_state = _workflow_state_from_manifest_labels(
             issue.get("labels", [])
         )
@@ -3556,6 +3576,7 @@ def build_planner_status(
                 raw_mapping_status = snapshot.get("mapping_status")
                 raw_mapping_reason = snapshot.get("mapping_reason")
                 raw_github_title = snapshot.get("github_title")
+                raw_expected_title = snapshot.get("expected_title")
                 github_state = (
                     str(raw_github_state).strip().lower()
                     if raw_github_state
@@ -3576,6 +3597,11 @@ def build_planner_status(
                     str(raw_mapping_reason).strip() if raw_mapping_reason else None
                 )
                 github_title = str(raw_github_title).strip() if raw_github_title else None
+                expected_title = (
+                    str(raw_expected_title).strip()
+                    if raw_expected_title
+                    else expected_title
+                )
             else:
                 state = str(snapshot).lower()
                 if state == "open":
@@ -3600,6 +3626,7 @@ def build_planner_status(
                 "mapping_status": mapping_status,
                 "mapping_reason": mapping_reason,
                 "github_title": github_title,
+                "expected_title": expected_title,
                 "labels": issue.get("labels", []),
                 "depends_on": issue.get("depends_on", []),
                 "github_depends_on": issue.get("github_depends_on", []),
@@ -3779,6 +3806,9 @@ def format_planner_status(status: dict[str, Any]) -> str:
                 github_title = str(task.get("github_title", "") or "").strip()
                 if github_title:
                     lines.append(f"    GitHub title: {github_title}")
+                expected_title = str(task.get("expected_title", "") or "").strip()
+                if expected_title:
+                    lines.append(f"    expected title: {expected_title}")
             dependency_metadata = task.get("dependency_metadata", [])
             if dependency_metadata:
                 deps = ", ".join(
