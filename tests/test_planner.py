@@ -2428,10 +2428,13 @@ def test_build_planner_status_surfaces_stale_and_mismatched_issue_mappings(
     counts = build_planner_status_counts(status["tasks"])
     next_result = build_planner_next_from_status(status)
     output = format_planner_status(status)
+    next_output = format_planner_next_from_status(next_result)
 
     assert counts["blocked"] == 2
     assert status["tasks"][0]["mapping_status"] == "stale"
     assert status["tasks"][1]["mapping_status"] == "mismatched"
+    assert status["tasks"][1]["expected_title"] == status["tasks"][1]["title"]
+    assert status["tasks"][1]["github_title"] == "Unexpected title"
     assert next_result["status"] == "blocked"
     assert next_result["blocked"][0]["reason"] == (
         "GitHub issue mapping is stale: issue not found"
@@ -2440,12 +2443,17 @@ def test_build_planner_status_surfaces_stale_and_mismatched_issue_mappings(
         "GitHub issue mapping is mismatched: "
         "GitHub issue title does not match planner manifest"
     )
+    assert next_result["blocked"][1]["expected_title"] == status["tasks"][1]["title"]
+    assert next_result["blocked"][1]["github_title"] == "Unexpected title"
     assert "mapping: stale — issue not found" in output
     assert (
         "mapping: mismatched — GitHub issue title does not match planner manifest"
         in output
     )
+    assert f"expected title: {status['tasks'][1]['title']}" in output
     assert "GitHub title: Unexpected title" in output
+    assert f"expected title: {status['tasks'][1]['title']}" in next_output
+    assert "GitHub title: Unexpected title" in next_output
 
 
 def test_build_planner_status_artifact_is_compact_and_recovery_oriented(
@@ -2477,6 +2485,7 @@ def test_build_planner_status_artifact_is_compact_and_recovery_oriented(
                 "workflow_state": None,
                 "mapping_status": "mismatched",
                 "mapping_reason": "GitHub issue title does not match planner manifest",
+                "github_title": "Unexpected title",
             },
         },
     )
@@ -2496,6 +2505,8 @@ def test_build_planner_status_artifact_is_compact_and_recovery_oriented(
         "depends_on": [],
     }
     assert artifact["tasks"][1]["mapping_status"] == "mismatched"
+    assert artifact["tasks"][1]["expected_title"] == status["tasks"][1]["title"]
+    assert artifact["tasks"][1]["github_title"] == "Unexpected title"
     assert "body_file" not in artifact["tasks"][0]
     assert "github_url" not in artifact["tasks"][0]
     assert "No GitHub mutation was performed." in artifact["notes"]
@@ -2810,6 +2821,7 @@ def test_cli_planner_status_sync_github_surfaces_stale_and_mismatched_mappings(
         "mapping: mismatched — GitHub issue title does not match planner manifest"
         in captured
     )
+    assert "expected title: " + manifest["issues"][1]["title"] in captured
     assert "GitHub title: Unexpected title" in captured
     assert "No GitHub mutation was performed." in captured
 

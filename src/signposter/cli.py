@@ -3958,6 +3958,7 @@ def _fetch_manifest_issue_states(repo: str, manifest: dict[str, object]) -> dict
                     "mapping_status": mapping_status,
                     "mapping_reason": mapping_reason or None,
                     "github_title": github_title or None,
+                    "expected_title": expected_title or None,
                 }
             else:
                 states[int(issue_number)] = state
