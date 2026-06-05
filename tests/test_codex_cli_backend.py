@@ -255,6 +255,21 @@ def test_classify_codex_cli_failure_detects_unsupported_model() -> None:
     assert status == "unsupported-model"
 
 
+def test_classify_codex_cli_failure_detects_chatgpt_account_model_rejection() -> None:
+    status = classify_codex_cli_failure(
+        exit_code=1,
+        stdout="",
+        stderr=(
+            'ERROR: {"type":"error","status":400,"error":{'
+            '"type":"invalid_request_error",'
+            '"message":"The \'openai/gpt-5.4\' model is not supported when using '
+            'Codex with a ChatGPT account."}}'
+        ),
+    )
+
+    assert status == "unsupported-model"
+
+
 def test_classify_codex_cli_failure_detects_runtime_stall() -> None:
     status = classify_codex_cli_failure(
         exit_code=1,

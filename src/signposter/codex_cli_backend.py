@@ -122,6 +122,7 @@ CODEX_CLI_FAILURE_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
         "unsupported-model",
         (
             "model is not supported",
+            "not supported when using codex with a chatgpt account",
             "unsupported model",
             "unknown model",
             "model not found",
