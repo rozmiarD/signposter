@@ -1009,6 +1009,64 @@ def test_orchestrator_run_next_uses_manifest_active_task_before_scheduler_ready(
     assert result.next.lifecycle.issue_number == 235
 
 
+def test_format_orchestrator_run_next_shows_manifest_active_task_hint(
+    tmp_path,
+) -> None:
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        """
+{
+  "version": "planner.seed-manifest.v0.1",
+  "repo": "example/repo",
+  "status": "applied",
+  "issues": [
+    {
+      "key": "H049-028",
+      "title": "H049-028",
+      "labels": ["phase:build"],
+      "depends_on": [],
+      "github_issue": 235,
+      "github_url": "https://github.com/example/repo/issues/235"
+    }
+  ]
+}
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    lifecycle_next = _next(
+        issue_number=235,
+        action="write-prompt",
+        command="signposter run --repo example/repo --issue 235 --write-prompt",
+    )
+
+    with patch("signposter.orchestrator.plan_lifecycle_next", return_value=lifecycle_next):
+        result = plan_orchestrator_run_next(
+            "example/repo",
+            manifest_path=manifest,
+            sync_github=True,
+            run_command=Mock(
+                return_value=type(
+                    "Proc",
+                    (),
+                    {
+                        "returncode": 0,
+                        "stdout": '{"state":"OPEN","labels":[{"name":"state:active"}]}',
+                        "stderr": "",
+                    },
+                )()
+            ),
+        )
+
+    output = format_orchestrator_run_next(result)
+
+    assert "Active task hint:" in output
+    assert "source: planner manifest active task" in output
+    assert "issue: #235" in output
+    assert "resume this active task before selecting another ready task" in output
+    assert "command: signposter run --repo example/repo --issue 235 --write-prompt" in output
+
+
 def test_orchestrator_run_next_loop_uses_manifest_active_task(
     tmp_path,
 ) -> None:
