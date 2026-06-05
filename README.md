@@ -1,204 +1,185 @@
 # signposter
 
-**Status (BOOTSTRAP-002):** Structural skeleton complete.  
-**Orchestration logic:** Not implemented.  
-**Implementation phase:** Not started.
+Signposter is a local, safety-first workflow control plane for moving GitHub
+issues through a bounded development lifecycle.
 
-Signposter is a local GitHub / OpenClaw workflow dispatcher designed to stay completely separate from the Neutral Agent Pack.
+It is not a free-running autonomous agent. The control plane stays
+deterministic: it reads GitHub and local repository state, plans safe next
+steps, writes local artifacts, enforces gates, and performs mutations only when
+the operator uses the guarded apply/execute paths.
 
-## MVP Status
+Signposter is separate from the Neutral Agent Pack.
 
-- GitHub issue workflow is supported.
-- Signposter can claim, generate prompts, run OpenClaw reviewer, capture artifacts, report results, and complete review tasks.
-- Worker agent is now configured for low-risk build/docs tasks.
-- This is still an experimental local orchestrator.
+## Current Status
 
-## Isolated Worker Execution
+Signposter is beyond the original bootstrap skeleton. The repository now has
+working surfaces for:
 
-Signposter now supports isolated worker execution via guarded worktrees:
+- GitHub issue scanning and label-based dispatch;
+- dependency-aware planner manifests and roadmap advancement;
+- guarded issue claiming and completion;
+- isolated worker worktree planning and creation;
+- worker prompt generation and execution planning;
+- Codex CLI execution backend support with legacy OpenClaw compatibility;
+- bounded local worker and reviewer artifacts;
+- CI, review, human, and no-op gate evaluation;
+- PR review prompt generation, review artifact parsing, and review submission;
+- merge planning/apply with risk and scope overrides;
+- post-merge integration that owns issue closure;
+- local cleanup for merged worktrees and branches;
+- lifecycle, scheduler, orchestrator, control-plane, backend, and bug-ledger
+  status surfaces.
 
-- worktree planning is available
-- guarded worktree creation is available
-- worker execution can explicitly run from an existing worktree
+The system is still supervised. Operators should expect to inspect plans,
+approve guarded mutations, watch CI, and recover backend/runtime failures with
+bounded manual artifacts when needed.
 
-## Current State
+## Safety Model
 
-Only the following exists:
+Default behavior is read-only or dry-run.
 
-- Package directory structure under `src/signposter/`
-- Configuration contracts and example files
-- High-level architecture documentation
-- Basic test skeleton
+Core invariants:
 
-No actual dispatch, scheduling, GitHub integration, or state machine logic has been written.
+- GitHub mutation requires an explicit `--apply`.
+- Backend execution requires an explicit `--execute`.
+- Raw backend output stays local under `artifacts/runs/`.
+- GitHub comments use bounded summaries.
+- `state:done` does not close a GitHub issue.
+- Post-merge integration owns issue closure and `state:merged`.
+- Merge requires green CI, review gate, required approval, and merge readiness.
+- Risk/scope overrides are explicit operator choices.
+- Cleanup removes local worktrees and branches only through guarded cleanup
+  apply paths.
 
-## Available Commands (Bootstrap Phase)
+If a critical mutation fails, stop and inspect state before continuing.
 
-### `signposter doctor`
+## Typical Lifecycle
 
-Run a read-only preflight check of the local environment:
+A normal Signposter-managed issue follows this shape:
+
+1. Planner marks a dependency-ready issue as `state:ready`.
+2. `worktree plan` previews the isolated branch/worktree.
+3. `worktree apply --apply` creates the local worktree.
+4. `run --claim --write-prompt` claims the issue and writes a prompt artifact.
+5. `run --execute --worktree` attempts the selected execution backend.
+6. Worker output is summarized into a bounded local artifact.
+7. `report --apply` posts a bounded GitHub issue comment.
+8. `gate --dry-run` validates evidence.
+9. `complete --apply` moves the issue to `state:done`.
+10. A PR is opened for the worker branch.
+11. PR CI is watched to completion.
+12. Reviewer prompt/artifact/gate/approval runs.
+13. `merge plan` verifies merge readiness.
+14. `merge apply --apply` merges without closing the issue.
+15. `integration apply --apply` moves the issue to `state:merged` and closes it.
+16. `cleanup apply --apply` removes local worker state.
+17. Planner advances downstream dependencies.
+
+The loop is resumable by inspecting planner, lifecycle, worktree, artifact, PR,
+CI, review, integration, and cleanup state.
+
+## Common Commands
+
+Read-only status and planning:
 
 ```bash
+signposter --help
 signposter doctor
+signposter backend status
+signposter roles status
+signposter planner run --manifest docs/roadmaps/h050-seed-manifest.json --sync-github --dry-run
+signposter lifecycle status --repo ExatronOmega/signposter --issue <issue>
+signposter control-plane status --repo ExatronOmega/signposter --manifest docs/roadmaps/h050-seed-manifest.json --sync-github
 ```
 
-The doctor command verifies:
-- Python version compatibility
-- Git repository and working tree status
-- Presence of `gh` (GitHub CLI) and authentication state
-- Presence of `openclaw`
-- Availability of `pytest` and `ruff`
-- Existence of example configuration files
-- Existence of core documentation
-
-It is safe to run at any time and makes no changes.
-
-### `signposter scan`
-
-Read-only scanner for GitHub repositories (bootstrap phase):
+Issue execution:
 
 ```bash
-signposter scan --repo ExatronOmega/signposter
+signposter run --repo ExatronOmega/signposter --issue <issue> --dry-run
+signposter worktree plan --repo ExatronOmega/signposter --issue <issue>
+signposter worktree apply --repo ExatronOmega/signposter --issue <issue> --apply
+signposter run --repo ExatronOmega/signposter --issue <issue> --claim --write-prompt
+signposter run --repo ExatronOmega/signposter --issue <issue> --execute --worktree
 ```
 
-The scanner reports:
-- Count of open issues and pull requests
-- Recent workflow runs
-- Items matching neutral workflow labels (`state:ready`, `phase:*`, `gate:*`, etc.)
-
-It uses the GitHub CLI in read-only mode and performs **no** mutations.
-
-### `signposter dispatch --dry-run`
-
-Classifies candidate items and produces a proposed routing plan (bootstrap phase):
+Evidence and completion:
 
 ```bash
-signposter dispatch --repo ExatronOmega/signposter --dry-run
+signposter artifact write-worker-summary --repo ExatronOmega/signposter --issue <issue> --agent human/operator --apply
+signposter report --repo ExatronOmega/signposter --issue <issue> --summary artifacts/runs/issue-<issue>-worker.summary.md --apply
+signposter gate --repo ExatronOmega/signposter --issue <issue> --dry-run
+signposter complete --repo ExatronOmega/signposter --issue <issue> --apply
 ```
 
-The dry-run command reuses the scanner and applies simple routing rules based on labels such as `phase:*`, `role:*`, `risk:*`, and `state:*`.
-
-**Important:** In the current bootstrap phase, `--dry-run` is mandatory. No actions are ever taken on GitHub.
-
-### `signposter claim --dry-run`
-
-Determines which `state:ready` items would be claimed for execution and what label transitions would occur (bootstrap phase):
+Review, merge, integration, and cleanup:
 
 ```bash
-signposter claim --repo ExatronOmega/signposter --dry-run
+signposter review write-prompt --repo ExatronOmega/signposter --pr <pr>
+signposter review execute --repo ExatronOmega/signposter --pr <pr>
+signposter review gate --repo ExatronOmega/signposter --pr <pr>
+signposter review submit --repo ExatronOmega/signposter --pr <pr> --apply
+signposter merge plan --repo ExatronOmega/signposter --pr <pr>
+signposter merge apply --repo ExatronOmega/signposter --pr <pr> --apply
+signposter integration plan --repo ExatronOmega/signposter --pr <pr>
+signposter integration apply --repo ExatronOmega/signposter --pr <pr> --apply
+signposter cleanup plan --repo ExatronOmega/signposter --pr <pr>
+signposter cleanup apply --repo ExatronOmega/signposter --pr <pr> --apply
 ```
 
-The claim planner only considers items currently labeled `state:ready`. It proposes:
-- Moving the item to `state:active`
-- Adding the appropriate `gate:*` label based on dispatch classification
-- A lease owner (in dry-run: `local-dry-run-worker`)
+Use explicit risk or scope override flags only when the corresponding dry-run
+plan explains the blocker and the operator accepts it.
 
-This is the last purely planning step before any real claiming logic would be implemented.
+## Execution Backends
 
-### `signposter release / complete / fail --dry-run`
+Codex CLI is the current default execution backend. OpenClaw surfaces remain as
+legacy compatibility where the code still supports them.
 
-Manage already-claimed (`state:active`) items (bootstrap phase):
+Backend availability is not the same as selected-model availability. If an
+execution attempt cannot produce usable output, preserve the raw and summary
+artifacts locally, write a bounded manual worker or reviewer summary, and
+continue through the normal Signposter gates.
 
-```bash
-signposter release  --repo <owner/repo> --issue N --dry-run
-signposter complete --repo <owner/repo> --issue N --dry-run
-signposter fail     --repo <owner/repo> --issue N --dry-run
-```
+## Project Layout
 
-- `release`: Returns an active item to `state:ready` (removes active + gate labels)
-- `complete`: Marks an active item as `state:done`
-- `fail`: Marks an active item as `state:failed`
+Important modules live under `src/signposter/`:
 
-These commands are currently **dry-run only** and validate that the target item is in `state:active`.
+- `planner.py`, `issue_manifest.py`, `issue_factory.py`, `dependencies.py`:
+  roadmap, manifest, issue seeding, dependency, and advancement logic;
+- `runner.py`, `execution_backend.py`, `codex_cli_backend.py`,
+  `codex_subagent.py`: worker prompt, execution backend, and subagent contracts;
+- `gate.py`, `artifact.py`, `artifact_safety.py`: worker evidence and gate
+  validation;
+- `review.py`, `merge.py`, `integration.py`, `cleanup.py`: PR review, merge,
+  issue closure, and local cleanup safety;
+- `lifecycle.py`, `orchestrator.py`, `control_status.py`, `scheduler/`:
+  status, resumability, orchestration, and operator-facing control-plane
+  views;
+- `role_policy.py`, `role_routing.py`: deterministic role/model/reasoning
+  selection metadata.
 
-### `signposter run --dry-run`
-
-Plans how a selected claimable item would be executed via OpenClaw (bootstrap phase):
-
-```bash
-signposter run --repo <owner/repo> --dry-run
-```
-
-The runner planner reuses the claim planner and proposes:
-- OpenClaw profile based on role + phase (e.g. `reviewer` for `role:reviewer + phase:review`)
-- Working directory and prompt artifact path
-- Command shape (not executed)
-
-## Project Structure
-
-```
-signposter/
-├── src/signposter/
-│   ├── domain/           # Core domain models (Task, Job, State, Gate, Risk, Phase, Role, Area)
-│   ├── github/           # GitHub integration surface (stub)
-│   ├── scheduler/        # Scheduling and timing layer (stub)
-│   ├── dispatcher/       # Central routing and dispatch (stub)
-│   ├── runners/          # Execution workers (stub)
-│   ├── gates/            # Gate and approval logic (stub)
-│   ├── state/            # State machine and persistence contracts (stub)
-│   └── config/           # Configuration loading layer (stub)
-│
-├── configs/
-│   ├── repos.example.yaml
-│   ├── routing.example.yaml
-│   ├── labels.example.yaml
-│   ├── agents.example.yaml
-│   └── scheduler.example.yaml
-│
-├── docs/
-│   ├── architecture.md
-│   ├── workflow.md
-│   ├── labels.md
-│   └── state-machine.md
-│
-├── tests/
-├── scripts/
-├── pyproject.toml
-└── README.md
-```
-
-## Configuration Contracts
-
-Example configuration files in `configs/` define the structural contracts for:
-- Repositories under management
-- Routing rules
-- Label semantics
-- Worker roles (planner, reviewer, executor, gatekeeper, ...)
-- Scheduler behavior
-
-These files use only comments and safe dummy values.
-
-## Documentation
-
-See `docs/` for current structural thinking:
-- `architecture.md`
-- `workflow.md`
-- `labels.md`
-- `state-machine.md`
+Tests live under `tests/` and should be updated with each behavior change.
 
 ## Development Setup
 
 ```bash
 cd ~/projects/signposter
-
-# Activate venv (created during skeleton setup)
 source .venv/bin/activate
-
-# Re-install in editable mode after changes
 pip install -e ".[dev]"
 ```
 
 ## Validation
 
+Use targeted validation for the changed surface, then run the full suite before
+pushing:
+
 ```bash
-ruff check .
-pytest -v
+.venv/bin/ruff check .
+.venv/bin/python -m pytest tests/ -q
 ```
 
-Signposter lifecycle smoke-test completed successfully.
+Inside an isolated worktree, prefer:
 
----
-
-**Important:** This project must remain clearly separated from the Neutral Agent Pack at all times.
-
-*Bootstrap phase initialized: 2026-05-27*
+```bash
+PYTHONPATH="$PWD/src" /home/probo/projects/signposter/.venv/bin/ruff check .
+PYTHONPATH="$PWD/src" /home/probo/projects/signposter/.venv/bin/python -m pytest tests/ -q
+```
