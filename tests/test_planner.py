@@ -1907,6 +1907,77 @@ def test_prepare_planner_seed_manifest_reuses_partial_manifest(tmp_path: Path) -
     assert result["manifest"]["issues"][0]["github_issue"] == 101
 
 
+def test_prepare_planner_seed_manifest_blocks_stale_issue_mapping(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=1):
+        issue["github_issue"] = 100 + index
+    manifest["issues"][0]["mapping_status"] = "stale"
+    manifest["issues"][0]["mapping_reason"] = "issue not found"
+    write_planner_seed_manifest(manifest, manifest_path)
+
+    result = prepare_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+        manifest_path=manifest_path,
+    )
+
+    assert result["status"] == "blocked"
+    assert result["errors"] == ["WATCH-001: GitHub issue mapping is stale: issue not found"]
+    assert result["reused_existing"] is True
+    assert result["manifest"]["status"] == "applied"
+
+
+def test_apply_planner_seed_manifest_blocks_mismatched_mapping_before_create(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    calls: list[list[str]] = []
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    write_planner_seed_issue_bodies(seed_plan, body_dir)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "partial"
+    manifest["issues"][0]["github_issue"] = 101
+    manifest["issues"][0]["mapping_status"] = "mismatched"
+    manifest["issues"][0]["mapping_reason"] = "title does not match manifest"
+    write_planner_seed_manifest(manifest, manifest_path)
+
+    def fake_runner(args: list[str]) -> _FakeGhIssueCreateResult:
+        calls.append(args)
+        return _FakeGhIssueCreateResult(0)
+
+    result = apply_planner_seed_manifest(manifest_path, fake_runner)
+
+    assert result["status"] == "blocked"
+    assert result["created"] == []
+    assert calls == []
+    assert result["errors"] == [
+        "WATCH-001: GitHub issue mapping is mismatched: title does not match manifest"
+    ]
+
+
 def test_prepare_planner_seed_manifest_blocks_incompatible_manifest(
     tmp_path: Path,
 ) -> None:
