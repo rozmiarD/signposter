@@ -939,6 +939,10 @@ def _format_takeover_plan_lines(category: str) -> list[str]:
             "inspect labels, worktree, prompt, artifacts, and issue comments first",
             "take over manually only after evidence shows resume is not safe",
         ),
+        "missing-worker-artifact": (
+            "inspect preserved runtime artifacts before replacing worker output",
+            "write a bounded manual worker summary or rerun execution after fixing the backend",
+        ),
     }
     selected = plans.get(category)
     if selected is None:
@@ -984,6 +988,14 @@ def _plan_takeover_recovery_commands(
         return (
             f"signposter worktree plan --repo {repo} --issue {issue}",
             f"signposter artifact write-worker-summary --repo {repo} --issue {issue} --apply",
+            f"signposter report --repo {repo} --issue {issue} --apply",
+            f"signposter gate --repo {repo} --issue {issue}",
+        )
+
+    if takeover_category == "missing-worker-artifact":
+        return (
+            f"signposter artifact write-worker-summary --repo {repo} --issue {issue} --apply",
+            f"signposter artifact validate-worker-summary --issue {issue}",
             f"signposter report --repo {repo} --issue {issue} --apply",
             f"signposter gate --repo {repo} --issue {issue}",
         )
@@ -1685,6 +1697,13 @@ def _plan_takeover(
     if lifecycle.worker_summary_exists:
         return None, None
 
+    if _has_runtime_attempt_without_worker_summary(lifecycle.issue_number):
+        return (
+            "missing-worker-artifact",
+            "active issue has preserved runtime evidence but no canonical worker summary; "
+            "inspect runtime artifacts and produce bounded worker evidence before gating",
+        )
+
     if issue_updated_at is None:
         issue_updated_at = _safe_issue_updated_at(repo, lifecycle.issue_number)
     if not _is_stale_active_work(lifecycle, issue_updated_at=issue_updated_at):
@@ -1713,6 +1732,16 @@ def _plan_takeover(
         "active issue is stale and lacks a safe resume path; inspect labels, "
         "worktree, prompt, artifacts, and blocker evidence before continuing",
     )
+
+
+def _has_runtime_attempt_without_worker_summary(issue_number: int) -> bool:
+    runs = Path("artifacts") / "runs"
+    candidates = [
+        runs / f"issue-{issue_number}-worker.codex-runtime.summary.md",
+        runs / f"issue-{issue_number}-worker.codex-runtime.raw.txt",
+        runs / f"issue-{issue_number}-worker.last-message.txt",
+    ]
+    return any(path.exists() for path in candidates)
 
 
 def _safe_issue_updated_at(repo: str, issue_number: int) -> str | None:
