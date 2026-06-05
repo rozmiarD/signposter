@@ -990,8 +990,10 @@ def test_noop_integration_plan_ready(monkeypatch, tmp_path):
         plan_noop_integration_for_issue,
     )
 
-    monkeypatch.chdir(tmp_path)
-    artifact_dir = tmp_path / "artifacts" / "runs"
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    monkeypatch.chdir(repo_path)
+    artifact_dir = repo_path / "artifacts" / "runs"
     artifact_dir.mkdir(parents=True)
     (artifact_dir / "issue-12-gate.summary.md").write_text(
         """
@@ -1066,9 +1068,11 @@ No unrelated files were changed.
 def test_noop_integration_plan_blocks_when_worktree_exists(monkeypatch, tmp_path):
     from signposter.integration import format_noop_integration_plan, plan_noop_integration_for_issue
 
-    monkeypatch.chdir(tmp_path)
-    (tmp_path.parent / "signposter-work" / "12").mkdir(parents=True)
-    artifact_dir = tmp_path / "artifacts" / "runs"
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    monkeypatch.chdir(repo_path)
+    (tmp_path / "signposter-work" / "12").mkdir(parents=True)
+    artifact_dir = repo_path / "artifacts" / "runs"
     artifact_dir.mkdir(parents=True)
     (artifact_dir / "issue-12-gate.summary.md").write_text(
         """
@@ -1123,6 +1127,50 @@ No unrelated files were changed.
     assert "worktree absent: no" in output
 
 
+def test_noop_integration_plan_completed_when_issue_already_merged(
+    monkeypatch,
+    tmp_path,
+):
+    from signposter.integration import format_noop_integration_plan, plan_noop_integration_for_issue
+
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    monkeypatch.chdir(repo_path)
+
+    class Proc:
+        def __init__(self, returncode=0, stdout="", stderr=""):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = stderr
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:3] == ["gh", "issue", "view"]:
+            return Proc(
+                stdout=(
+                    '{"number":12,"title":"WATCH-003","state":"CLOSED",'
+                    '"labels":[{"name":"state:merged"}]}'
+                )
+            )
+        if cmd[:3] == ["git", "branch", "--list"]:
+            return Proc(stdout="")
+        if cmd[:3] == ["gh", "pr", "list"]:
+            return Proc(stdout="[]")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    plan = plan_noop_integration_for_issue("test/repo", 12)
+
+    assert plan.status == "completed"
+    assert plan.issue_state == "CLOSED"
+    assert plan.current_workflow_state == "state:merged"
+    assert plan.gate_decision == "missing"
+    output = format_noop_integration_plan(plan)
+    assert "Status:" in output
+    assert "completed" in output
+    assert "workflow state is state:done: no" in output
+
+
 def test_noop_integration_apply_dry_run_does_not_mutate(monkeypatch):
     from signposter.integration import NoopIntegrationPlan, apply_noop_integration
 
@@ -1154,6 +1202,40 @@ def test_noop_integration_apply_dry_run_does_not_mutate(monkeypatch):
     mock_run.assert_not_called()
     assert result["mode"] == "dry_run"
     assert result["plan"].status == "ready"
+
+
+def test_noop_integration_apply_completed_does_not_mutate():
+    from signposter.integration import NoopIntegrationPlan, apply_noop_integration
+
+    plan = NoopIntegrationPlan(
+        issue_number=12,
+        issue_title="noop",
+        issue_state="CLOSED",
+        current_workflow_state="state:merged",
+        proposed_workflow_state="state:merged",
+        close_issue=True,
+        close_reason="completed",
+        summary_path="artifacts/runs/issue-12-gate.summary.md",
+        gate_decision="missing",
+        gate_reason="validated no-op gate summary artifact missing",
+        worktree_path="../signposter-work/12",
+        worktree_exists=False,
+        local_branch_exists=False,
+        associated_pr_detected=False,
+        status="completed",
+        notes=[],
+    )
+
+    with patch(
+        "signposter.integration.plan_noop_integration_for_issue",
+        return_value=plan,
+    ), patch("signposter.integration.subprocess.run") as mock_run:
+        result = apply_noop_integration("test/repo", 12, apply=True)
+
+    mock_run.assert_not_called()
+    assert result["mode"] == "apply_completed"
+    assert result["success"] is True
+    assert result["results"] == ["no-op integration already completed"]
 
 
 def test_noop_integration_apply_stops_after_label_transition_failure(monkeypatch):
