@@ -11,6 +11,7 @@ import subprocess
 from dataclasses import dataclass
 
 from signposter.comments import contains_auto_close_keyword, redact_github_comment_body
+from signposter.git_utils import BranchSyncStatus, get_branch_sync_status
 from signposter.handoff import HandoffPlan, plan_handoff_for_issue
 
 DEFAULT_GITHUB_COMMAND_TIMEOUT_SECONDS = 30
@@ -43,6 +44,7 @@ class PRPlan:
     worktree_path: str
     current_branch_in_worktree: str | None
 
+    base_sync_status: BranchSyncStatus
     changed_files: list[str]
     has_uncommitted_changes: bool
 
@@ -800,6 +802,7 @@ def plan_pr_for_issue(
 ) -> PRPlan:
     """Produce a PRPlan (read-only, no mutations)."""
     handoff = plan_handoff_for_issue(repo, issue_number)
+    base_sync = get_branch_sync_status(branch=base_branch)
 
     source_branch = handoff.branch
     has_uncommitted = handoff.has_changes
@@ -826,6 +829,7 @@ def plan_pr_for_issue(
         source_branch=source_branch,
         worktree_path=handoff.worktree_path,
         current_branch_in_worktree=handoff.current_branch_in_worktree,
+        base_sync_status=base_sync,
         changed_files=changed_files,
         has_uncommitted_changes=has_uncommitted,
         suggested_pr_title=pr_title,
@@ -856,6 +860,11 @@ def plan_pr_for_issue(
         status = "blocked — worktree is not on expected source branch"
     elif has_uncommitted:
         status = "blocked — worktree has uncommitted changes; run handoff commit/push first"
+    elif base_sync.status in {"ahead", "behind", "diverged"}:
+        status = (
+            f"blocked — base branch {base_branch} is not synchronized "
+            f"with {base_sync.upstream} ({base_sync.status})"
+        )
     elif not changed_files:
         status = f"blocked — no committed changes detected against {base_branch}"
     elif contains_auto_close_keyword(pr_title) or contains_auto_close_keyword(pr_body):
@@ -882,6 +891,7 @@ def plan_pr_for_issue(
         source_branch=source_branch,
         worktree_path=handoff.worktree_path,
         current_branch_in_worktree=handoff.current_branch_in_worktree,
+        base_sync_status=base_sync,
         changed_files=changed_files,
         has_uncommitted_changes=has_uncommitted,
         suggested_pr_title=pr_title,
@@ -904,6 +914,11 @@ def format_pr_plan(plan: PRPlan) -> str:
     lines.append("\nBranches:")
     lines.append(f"  base: {plan.base_branch}")
     lines.append(f"  head: {plan.source_branch}")
+
+    lines.append("\nBase sync:")
+    lines.append(f"  upstream: {plan.base_sync_status.upstream}")
+    lines.append(f"  status: {plan.base_sync_status.status}")
+    lines.append(f"  reason: {plan.base_sync_status.reason}")
 
     lines.append("\nWorktree:")
     lines.append(f"  path: {plan.worktree_path}")
