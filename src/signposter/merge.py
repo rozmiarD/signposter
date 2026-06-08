@@ -264,6 +264,13 @@ def plan_merge_for_pr(
         has_non_author = any(r != pr_author for r in approving_reviewers)
     else:
         has_non_author = len(approving_reviewers) > 0
+    review_decision_satisfied = review_decision == "APPROVED" or (
+        not review_decision and has_non_author
+    )
+    if not review_decision and has_non_author:
+        notes.append(
+            "GitHub reviewDecision was none; explicit non-author approval evidence was used."
+        )
 
     # Checks (reuse normalization if possible)
     try:
@@ -330,7 +337,7 @@ def plan_merge_for_pr(
         status = "pending — checks are still running"
     elif checks["status"] == "unknown":
         status = "blocked — checks status is unknown"
-    elif review_decision != "APPROVED":
+    elif not review_decision_satisfied:
         status = f"blocked — GitHub review decision is {review_decision or 'none'}"
     elif not has_non_author:
         status = "blocked — no non-author approval found"
@@ -365,7 +372,7 @@ def plan_merge_for_pr(
         successful_checks=checks["successful"],
         failing_checks=checks["failing"],
         pending_checks=checks["pending"],
-        github_approved=review_decision == "APPROVED",
+        github_approved=review_decision_satisfied,
         approving_reviewers=approving_reviewers,
         has_non_author_approval=has_non_author,
         pr_author=pr_author,

@@ -47,7 +47,7 @@ def test_integration_plan_ready_for_merged_pr():
         assert plan.proposed_workflow_state == "state:merged"
         assert plan.close_issue is True
         assert plan.close_reason == "completed"
-        mock_ci.assert_called_once_with("test/repo", "abc123def456")
+        mock_ci.assert_called_once_with("test/repo", "abc123def456", branch="main")
 
 
 def test_integration_plan_ready_with_pr_body_related_issue_fallback():
@@ -80,7 +80,43 @@ def test_integration_plan_ready_with_pr_body_related_issue_fallback():
         assert plan.associated_issue == 4
         assert plan.current_workflow_state == "state:done"
         assert plan.close_issue is True
-        mock_ci.assert_called_once_with("test/repo", "abc123def456")
+        mock_ci.assert_called_once_with("test/repo", "abc123def456", branch="main")
+
+
+def test_integration_plan_accepts_pr_ci_for_non_main_base_when_branch_ci_missing():
+    with patch("signposter.integration._fetch_pr_merge_details") as mock_pr, \
+         patch("signposter.integration.fetch_issue_by_number") as mock_issue, \
+         patch("signposter.integration._fetch_main_ci_status") as mock_branch_ci, \
+         patch("signposter.integration._fetch_pr_ci_status") as mock_pr_ci:
+
+        mock_pr.return_value = {
+            "number": 46,
+            "title": "docs: roadmap bootstrap",
+            "state": "MERGED",
+            "baseRefName": "work",
+            "headRefName": "issue-1-ge-001-refresh-govengine-repository-and-signposter",
+            "mergeCommit": {"oid": "b36e832"},
+            "body": "Related issue: #1",
+        }
+
+        class FakeIssue:
+            labels = ["state:done", "area:docs"]
+
+        mock_issue.return_value = FakeIssue()
+        mock_branch_ci.return_value = "unknown"
+        mock_pr_ci.return_value = "pass"
+
+        with patch("signposter.integration.fetch_issue_context") as mock_ctx:
+            mock_ctx.return_value = {"state": "OPEN"}
+
+            plan = plan_integration_for_pr("test/repo", 46)
+
+        assert plan.status == "ready"
+        assert plan.base_branch == "work"
+        assert plan.main_ci_status == "pass"
+        mock_branch_ci.assert_called_once_with("test/repo", "b36e832", branch="work")
+        mock_pr_ci.assert_called_once_with("test/repo", 46)
+        assert any("green PR check rollup" in note for note in plan.notes)
 
 
 def test_integration_plan_blocks_when_pr_not_merged():

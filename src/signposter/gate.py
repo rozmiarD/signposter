@@ -649,8 +649,14 @@ def _has_scoped_worker_code_completion_evidence(text: str) -> bool:
     if not all(signal in t for signal in validation_signals):
         return False
 
-    scoped_code_signals = ["src/signposter/", "tests/test_"]
-    if not all(signal in t for signal in scoped_code_signals):
+    code_path_signals = (
+        "src/",
+        "govengine/",
+        "sclite/",
+    )
+    has_code_path = any(signal in t for signal in code_path_signals)
+    has_test_path = "tests/test_" in t
+    if not (has_code_path and has_test_path):
         return False
 
     safety_signals = [

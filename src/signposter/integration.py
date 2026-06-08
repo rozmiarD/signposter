@@ -16,7 +16,7 @@ from signposter.comments import ensure_github_comment_body
 from signposter.gate import evaluate_ci_gate
 from signposter.labels import check_labels
 from signposter.pr_linkage import detect_pr_issue_linkage
-from signposter.review import _run_gh_pr_view
+from signposter.review import _normalize_check_rollup, _run_gh_pr_view
 from signposter.scan import fetch_issue_by_number, fetch_issue_context
 
 
@@ -147,22 +147,27 @@ def _build_ci_run_selection_command(
     return command
 
 
-def _fetch_main_ci_status(repo: str, commit_sha: str | None = None) -> str:
-    """Return main CI status using gh run list.
+def _fetch_main_ci_status(
+    repo: str,
+    commit_sha: str | None = None,
+    *,
+    branch: str = "main",
+) -> str:
+    """Return integration branch CI status using gh run list.
 
     When a merge commit is known, select the run by branch and commit SHA. This
-    avoids accepting an older green main run after a PR merge while the new push
+    avoids accepting an older green branch run after a PR merge while the new push
     run is still queued or missing from the Actions API.
 
     Conservative mapping:
-    - pass: selected main CI run is completed with success
-    - failing: latest main CI run completed with a non-success conclusion
-    - pending: latest main CI run is queued/in_progress/waiting/etc.
+    - pass: selected branch CI run is completed with success
+    - failing: latest branch CI run completed with a non-success conclusion
+    - pending: latest branch CI run is queued/in_progress/waiting/etc.
     - unknown: gh failed, no runs found, or payload shape is unexpected
     """
     command = _build_ci_run_selection_command(
         repo,
-        branch="main",
+        branch=branch,
         commit_sha=commit_sha,
     )
 
@@ -204,6 +209,45 @@ def _fetch_main_ci_status(repo: str, commit_sha: str | None = None) -> str:
     if status in {"queued", "in_progress", "waiting", "requested", "pending"}:
         return "pending"
 
+    return "unknown"
+
+
+def _fetch_pr_ci_status(repo: str, pr_number: int) -> str:
+    """Return PR check-rollup status for integration fallback decisions."""
+    try:
+        data = _run_gh_pr_view(repo, pr_number, ["statusCheckRollup"])
+    except Exception:
+        return "unknown"
+
+    checks = _normalize_check_rollup(data.get("statusCheckRollup", []))
+    if not checks:
+        return "unknown"
+
+    successful = failing = pending = 0
+    for check in checks:
+        status = (check.get("status") or "").upper()
+        conclusion = (check.get("conclusion") or "").upper()
+        state = (check.get("state") or "").upper()
+
+        if conclusion in ("SUCCESS", "NEUTRAL", "SKIPPED"):
+            successful += 1
+        elif conclusion in ("FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED"):
+            failing += 1
+        elif status in ("QUEUED", "IN_PROGRESS", "PENDING", "REQUESTED", "WAITING"):
+            pending += 1
+        elif state in ("PENDING", "QUEUED", "IN_PROGRESS"):
+            pending += 1
+        elif state in ("FAILURE", "ERROR", "CANCELLED"):
+            failing += 1
+        elif state == "SUCCESS":
+            successful += 1
+
+    if failing > 0:
+        return "failing"
+    if pending > 0:
+        return "pending"
+    if successful > 0:
+        return "pass"
     return "unknown"
 
 
@@ -268,8 +312,16 @@ def plan_integration_for_pr(repo: str, pr_number: int) -> IntegrationPlan:
         except Exception:
             pass
 
-    # Main CI status — required before integration apply can close the issue.
-    main_ci_status = _fetch_main_ci_status(repo, merge_commit)
+    # Integration branch CI status — required before integration apply can close the issue.
+    main_ci_status = _fetch_main_ci_status(repo, merge_commit, branch=base)
+    if base != "main" and main_ci_status == "unknown":
+        pr_ci_status = _fetch_pr_ci_status(repo, pr_number)
+        if pr_ci_status == "pass":
+            main_ci_status = "pass"
+            notes.append(
+                "Base branch is not main; green PR check rollup was accepted "
+                "because branch push CI was unavailable."
+            )
 
     # Eligibility
     status = "ready"
@@ -321,7 +373,7 @@ def _main_ci_inspection_command(
     repo_arg = repo or "<repo>"
     commit_arg = plan.merge_commit or "<merge-commit>"
     return (
-        f"gh run list -R {repo_arg} --branch main --commit {commit_arg} "
+        f"gh run list -R {repo_arg} --branch {plan.base_branch} --commit {commit_arg} "
         "--limit 1 --json status,conclusion,databaseId"
     )
 

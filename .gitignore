@@ -161,3 +161,8 @@ ehthumbs.db
 # Signposter runtime artifacts (generated prompts, evidence, and execution runs)
 artifacts/
 signposter-work/
+# Local-only files (never committed, never pushed)
+local/
+.local/
+TODO*
+*.local.md

@@ -254,6 +254,69 @@ No unrelated files were changed.
     assert "scoped test-only evidence" in decision.reason
 
 
+def test_evaluate_ci_gate_allows_host_neutral_code_paths():
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+# Signposter Execution Summary
+
+**Repository:** ExatronOmega/GovEngine
+**Issue:** #7
+**Agent:** codex-cli
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+## Scoped completion evidence
+
+PASS - scoped worker task completed with validation evidence.
+
+## Files changed
+
+- `govengine/admission.py`
+- `tests/test_admission_contracts.py`
+
+## Implemented behavior / verified behavior
+
+- Execution complete; task complete; worker completed scoped GovEngine code task.
+- Scope followed: 100%; additive runtime admission policy mapper and tests only.
+
+## Validation evidence
+
+Targeted validation passed:
+
+- `.venv/bin/python -m pytest tests/test_admission_contracts.py`
+- `tests/test_execution_gate.py -q -> 34 passed`
+
+Full validation passed:
+
+- `.venv/bin/python -m pytest tests/ -q -> pass (exit 0)`
+
+Manual CLI smoke passed:
+
+- `ruff check . -> not configured in this target repository; no pass claimed`
+- `git diff --check -> pass`
+
+## Safety
+
+No GitHub mutation was performed by the implemented code.
+No OpenClaw execution was performed by the implemented code.
+No issue was closed by the implemented code.
+No merge was performed by the implemented code.
+No unrelated files were changed.
+
+## Gate recommendation
+
+PASS - scoped worker task completed with validation evidence.
+"""
+
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "pass"
+    assert "scoped code change evidence" in decision.reason
+
+
 def test_gate_heuristic_audit_maps_gate_surfaces_and_risks():
     audit = build_gate_heuristic_audit()
     output = format_gate_heuristic_audit(audit)

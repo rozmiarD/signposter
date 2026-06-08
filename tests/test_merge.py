@@ -103,6 +103,129 @@ def test_merge_plan_ready_for_ideal_pr5():
         assert "No merge was performed" in plan.notes[0]
 
 
+def test_merge_plan_allows_null_review_decision_with_non_author_approval():
+    """Repos without required reviews can return null reviewDecision despite an approval."""
+    with patch("signposter.merge._run_gh_pr_view") as mock_view, \
+         patch("signposter.merge._fetch_pr_reviews_and_author") as mock_reviews, \
+         patch("signposter.merge.evaluate_review_gate") as mock_gate, \
+         patch("signposter.merge._fetch_pr_checks_for_merge") as mock_checks:
+
+        mock_view.return_value = {
+            "title": "docs: roadmap bootstrap",
+            "state": "OPEN",
+            "baseRefName": "work",
+            "headRefName": "issue-1-ge-001-refresh-govengine-repository-and-signposter",
+            "mergeable": "MERGEABLE",
+            "reviewDecision": None,
+            "body": "Related issue: #1",
+            "files": [{"path": "docs/roadmaps/ge-001-repository-signposter-audit.md"}],
+            "additions": 20,
+            "deletions": 0,
+        }
+        mock_reviews.return_value = {
+            "pr_author": "ExatronOmega",
+            "review_decision": None,
+            "approving_reviewers": ["AlphaExatron"],
+        }
+        mock_gate.return_value = type("G", (), {
+            "gate_pass": True,
+            "opinion": type("O", (), {
+                "verdict": "APPROVE",
+                "confidence": 0.95,
+                "risk": "low",
+            })()
+        })()
+        mock_checks.return_value = {"status": "pass", "successful": 4, "failing": 0, "pending": 0}
+
+        plan = plan_merge_for_pr("test/repo", 46)
+
+        assert plan.status == "ready"
+        assert plan.github_approved is True
+        assert plan.has_non_author_approval is True
+        assert any("reviewDecision was none" in note for note in plan.notes)
+
+
+def test_merge_plan_blocks_null_review_decision_without_non_author_approval():
+    with patch("signposter.merge._run_gh_pr_view") as mock_view, \
+         patch("signposter.merge._fetch_pr_reviews_and_author") as mock_reviews, \
+         patch("signposter.merge.evaluate_review_gate") as mock_gate, \
+         patch("signposter.merge._fetch_pr_checks_for_merge") as mock_checks:
+
+        mock_view.return_value = {
+            "title": "docs: roadmap bootstrap",
+            "state": "OPEN",
+            "baseRefName": "work",
+            "headRefName": "issue-1-ge-001-refresh-govengine-repository-and-signposter",
+            "mergeable": "MERGEABLE",
+            "reviewDecision": None,
+            "body": "Related issue: #1",
+            "files": [{"path": "docs/roadmaps/ge-001-repository-signposter-audit.md"}],
+            "additions": 20,
+            "deletions": 0,
+        }
+        mock_reviews.return_value = {
+            "pr_author": "ExatronOmega",
+            "review_decision": None,
+            "approving_reviewers": [],
+        }
+        mock_gate.return_value = type("G", (), {
+            "gate_pass": True,
+            "opinion": type("O", (), {
+                "verdict": "APPROVE",
+                "confidence": 0.95,
+                "risk": "low",
+            })()
+        })()
+        mock_checks.return_value = {"status": "pass", "successful": 4, "failing": 0, "pending": 0}
+
+        plan = plan_merge_for_pr("test/repo", 46)
+
+        assert plan.status == "blocked — GitHub review decision is none"
+        assert plan.github_approved is False
+        assert plan.has_non_author_approval is False
+
+
+def test_merge_plan_allows_empty_review_decision_with_non_author_approval():
+    """gh can normalize GitHub's null reviewDecision to an empty string."""
+    with patch("signposter.merge._run_gh_pr_view") as mock_view, \
+         patch("signposter.merge._fetch_pr_reviews_and_author") as mock_reviews, \
+         patch("signposter.merge.evaluate_review_gate") as mock_gate, \
+         patch("signposter.merge._fetch_pr_checks_for_merge") as mock_checks:
+
+        mock_view.return_value = {
+            "title": "docs: roadmap bootstrap",
+            "state": "OPEN",
+            "baseRefName": "work",
+            "headRefName": "issue-1-ge-001-refresh-govengine-repository-and-signposter",
+            "mergeable": "MERGEABLE",
+            "reviewDecision": "",
+            "body": "Related issue: #1",
+            "files": [{"path": "docs/roadmaps/ge-001-repository-signposter-audit.md"}],
+            "additions": 20,
+            "deletions": 0,
+        }
+        mock_reviews.return_value = {
+            "pr_author": "ExatronOmega",
+            "review_decision": "",
+            "approving_reviewers": ["AlphaExatron"],
+        }
+        mock_gate.return_value = type("G", (), {
+            "gate_pass": True,
+            "opinion": type("O", (), {
+                "verdict": "APPROVE",
+                "confidence": 0.95,
+                "risk": "low",
+            })()
+        })()
+        mock_checks.return_value = {"status": "pass", "successful": 4, "failing": 0, "pending": 0}
+
+        plan = plan_merge_for_pr("test/repo", 46)
+
+        assert plan.status == "ready"
+        assert plan.github_approved is True
+        assert plan.has_non_author_approval is True
+
+
 def test_merge_plan_ready_with_pr_body_related_issue_fallback():
     with patch("signposter.merge._run_gh_pr_view") as mock_view, \
          patch("signposter.merge._fetch_pr_reviews_and_author") as mock_reviews, \
