@@ -122,7 +122,6 @@ WORKER_SUMMARY_REQUIRED_FIELDS = {
     "validation evidence": "validation evidence",
     "targeted validation": "targeted validation passed",
     "full validation": "full validation passed",
-    "token usage accounting": "## token usage accounting",
     "safety section": "## safety",
     "no github mutation safety note": "no github mutation was performed",
     "no openclaw execution safety note": "no openclaw execution was performed",
@@ -186,6 +185,18 @@ def _requires_docs_only_worker_summary_fields(text: str) -> bool:
     return _is_docs_only_changed_files(_summary_changed_files(text))
 
 
+def _token_usage_is_reported(token_usage: dict[str, object]) -> bool:
+    status = str(token_usage.get("status") or "").strip().lower()
+    if status == "reported":
+        return True
+    if status in {"", "unknown", "unavailable", "not-reported", "not reported"}:
+        return False
+    return any(
+        token_usage.get(key) not in (None, "", "unknown")
+        for key in ("input_tokens", "output_tokens", "total_tokens", "estimated_cost_usd")
+    )
+
+
 def build_worker_summary(
     *,
     repo: str,
@@ -198,6 +209,8 @@ def build_worker_summary(
     manual_smoke: list[str] | None = None,
     token_usage: dict[str, object] | None = None,
     human_gate: bool = False,
+    include_validation_records: bool = False,
+    manual_takeover: bool = False,
 ) -> str:
     """Build a gate-friendly manual worker summary."""
     changed_files = changed_files or ["src/signposter/<file>.py", "tests/test_<file>.py"]
@@ -212,6 +225,13 @@ def build_worker_summary(
     manual_smoke = manual_smoke or ["Manual CLI smoke passed."]
     token_usage = token_usage or {}
     docs_only = _is_docs_only_changed_files(changed_files)
+    include_records = include_validation_records or human_gate
+    include_token_usage = _token_usage_is_reported(token_usage)
+    validation_provenance = (
+        "signposter.validation-result.v1 records above."
+        if include_records
+        else "validation evidence command lists above."
+    )
 
     lines = [
         "# Signposter Execution Summary",
@@ -287,50 +307,53 @@ def build_worker_summary(
     lines.extend(f"- `{cmd}`" for cmd in targeted_validation)
     lines.extend(["", "Full validation passed:", ""])
     lines.extend(f"- `{cmd}`" for cmd in full_validation)
-    lines.extend(
-        [
-            "",
-            "## Validation result records",
-            "",
-            "Schema: signposter.validation-result.v1",
-            "Fields: scope, status, command",
-            "",
-            "Records:",
-        ]
-    )
-    lines.extend(_validation_result_record_lines("targeted", targeted_validation))
-    lines.extend(_validation_result_record_lines("full", full_validation))
-    token_usage_source = _artifact_field(
-        token_usage.get("source"),
-        default="manual summary did not receive backend token usage",
-    )
-    lines.extend(
-        [
-            "",
-            "## Token usage accounting",
-            "",
-            f"Token usage status: {_artifact_field(token_usage.get('status'))}",
-            f"Input tokens: {_artifact_field(token_usage.get('input_tokens'))}",
-            f"Output tokens: {_artifact_field(token_usage.get('output_tokens'))}",
-            f"Total tokens: {_artifact_field(token_usage.get('total_tokens'))}",
-            f"Estimated cost USD: {_artifact_field(token_usage.get('estimated_cost_usd'))}",
-            f"Source: {token_usage_source}",
-        ]
-    )
+    if include_records:
+        lines.extend(
+            [
+                "",
+                "## Validation result records",
+                "",
+                "Schema: signposter.validation-result.v1",
+                "Fields: scope, status, command",
+                "",
+                "Records:",
+            ]
+        )
+        lines.extend(_validation_result_record_lines("targeted", targeted_validation))
+        lines.extend(_validation_result_record_lines("full", full_validation))
+    if include_token_usage:
+        token_usage_source = _artifact_field(
+            token_usage.get("source"),
+            default="manual summary did not receive backend token usage",
+        )
+        lines.extend(
+            [
+                "",
+                "## Token usage accounting",
+                "",
+                f"Token usage status: {_artifact_field(token_usage.get('status'))}",
+                f"Input tokens: {_artifact_field(token_usage.get('input_tokens'))}",
+                f"Output tokens: {_artifact_field(token_usage.get('output_tokens'))}",
+                f"Total tokens: {_artifact_field(token_usage.get('total_tokens'))}",
+                f"Estimated cost USD: {_artifact_field(token_usage.get('estimated_cost_usd'))}",
+                f"Source: {token_usage_source}",
+            ]
+        )
     lines.extend(["", "Manual CLI smoke passed:", ""])
     lines.extend(f"- `{cmd}`" for cmd in manual_smoke)
-    lines.extend(
-        [
-            "",
-            "## Manual takeover provenance",
-            "",
-            f"Takeover agent: {agent}",
-            "Takeover artifact: parser-compatible worker summary.",
-            "Runtime artifact handling: raw backend output remains local and is not embedded.",
-            "Validation provenance: signposter.validation-result.v1 records above.",
-            "GitHub comment provenance: bounded report excerpt only.",
-        ]
-    )
+    if manual_takeover:
+        lines.extend(
+            [
+                "",
+                "## Manual takeover provenance",
+                "",
+                f"Takeover agent: {agent}",
+                "Takeover artifact: parser-compatible worker summary.",
+                "Runtime artifact handling: raw backend output remains local and is not embedded.",
+                f"Validation provenance: {validation_provenance}",
+                "GitHub comment provenance: bounded report excerpt only.",
+            ]
+        )
     lines.extend(
         [
             "",
@@ -749,6 +772,8 @@ def plan_worker_summary(
     manual_smoke: list[str] | None = None,
     token_usage: dict[str, object] | None = None,
     human_gate: bool = False,
+    include_validation_records: bool = False,
+    manual_takeover: bool = True,
     runs_dir: str | Path = "artifacts/runs",
 ) -> ManualArtifactPlan:
     path = Path(runs_dir) / f"issue-{issue}-worker.summary.md"
@@ -763,6 +788,8 @@ def plan_worker_summary(
         manual_smoke=manual_smoke,
         token_usage=token_usage,
         human_gate=human_gate,
+        include_validation_records=include_validation_records,
+        manual_takeover=manual_takeover,
     )
     return ManualArtifactPlan(
         artifact_type="worker-summary",

@@ -224,7 +224,7 @@ def test_worker_summary_plan_includes_manual_takeover_provenance():
     assert "Takeover agent: human/operator" in plan.content
     assert "Takeover artifact: parser-compatible worker summary." in plan.content
     assert "Runtime artifact handling: raw backend output remains local" in plan.content
-    assert "Validation provenance: signposter.validation-result.v1 records above." in plan.content
+    assert "Validation provenance: validation evidence command lists above." in plan.content
     assert "GitHub comment provenance: bounded report excerpt only." in plan.content
 
 
@@ -242,6 +242,7 @@ def test_worker_summary_validation_records_cover_required_commands(tmp_path):
         issue=35,
         targeted_validation=targeted,
         full_validation=full,
+        include_validation_records=True,
         runs_dir=tmp_path,
     )
     write_manual_artifact(plan, apply=True)
@@ -261,6 +262,7 @@ def test_validate_worker_summary_blocks_incomplete_validation_result_records(tmp
             "ruff check src/signposter/artifact.py tests/test_artifact.py",
             "python -m pytest tests/test_artifact.py -q",
         ],
+        include_validation_records=True,
         runs_dir=tmp_path,
     )
     text = plan.content.replace(
@@ -275,18 +277,19 @@ def test_validate_worker_summary_blocks_incomplete_validation_result_records(tmp
     assert "validation result required-command coverage" in validation.missing
 
 
-def test_worker_summary_plan_includes_default_token_usage_accounting():
+def test_worker_summary_plan_omits_token_usage_when_not_reported():
     plan = plan_worker_summary(repo="test/repo", issue=32)
     decision = evaluate_ci_gate(0, plan.content)
 
     assert decision.decision == "pass"
-    assert "## Token usage accounting" in plan.content
-    assert "Token usage status: unknown" in plan.content
-    assert "Input tokens: unknown" in plan.content
-    assert "Output tokens: unknown" in plan.content
-    assert "Total tokens: unknown" in plan.content
-    assert "Estimated cost USD: unknown" in plan.content
-    assert "Source: manual summary did not receive backend token usage" in plan.content
+    assert "## Token usage accounting" not in plan.content
+    assert "## Validation result records" not in plan.content
+
+
+def test_worker_summary_default_shell_is_slimmer():
+    plan = plan_worker_summary(repo="test/repo", issue=32)
+
+    assert len(plan.content) < 1900
 
 
 def test_worker_summary_plan_preserves_reported_token_usage_fields():
@@ -312,8 +315,19 @@ def test_worker_summary_plan_preserves_reported_token_usage_fields():
 
 
 def test_validate_worker_summary_accepts_runtime_token_usage_status_field(tmp_path):
-    plan = plan_worker_summary(repo="test/repo", issue=32, runs_dir=tmp_path)
-    text = plan.content.replace("Token usage status: unknown", "Status: unknown")
+    plan = plan_worker_summary(
+        repo="test/repo",
+        issue=32,
+        token_usage={
+            "status": "reported",
+            "input_tokens": 12,
+            "output_tokens": 4,
+            "total_tokens": 16,
+            "source": "codex-cli metadata",
+        },
+        runs_dir=tmp_path,
+    )
+    text = plan.content.replace("Token usage status: reported", "Status: reported")
     (tmp_path / "issue-32-worker.summary.md").write_text(text, encoding="utf-8")
 
     validation = validate_worker_summary_artifact(32, runs_dir=tmp_path)

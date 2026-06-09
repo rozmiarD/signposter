@@ -68,6 +68,7 @@ def test_worker_summary_includes_validation_result_records(tmp_path):
         targeted_validation=["ruff check src/signposter/artifact.py tests/test_artifacts.py"],
         full_validation=["python -m pytest tests/ -q"],
         manual_smoke=["Artifact schema is represented in the worker summary."],
+        include_validation_records=True,
     )
 
     assert "## Validation result records" in summary
