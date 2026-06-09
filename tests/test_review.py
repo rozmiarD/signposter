@@ -511,7 +511,7 @@ def test_write_prompt_artifact_writes_file(tmp_path, monkeypatch):
 
     assert os.path.exists(path)
     content = open(path, encoding="utf-8").read()
-    assert "- PR: #5" in content
+    assert "PR #5:" in content
     assert "Verdict: APPROVE | NEEDS_CHANGES | BLOCK" in content
     assert "Confidence: 0.00-1.00" in content
     assert "Automerge eligible" in content
@@ -689,6 +689,46 @@ def test_build_review_prompt_budget_warning_preserves_review_contract_and_safety
     assert "Automerge eligible: yes | no" in prompt
     assert "High-risk findings or uncertainty" in prompt
     assert "You MUST NOT claim that you submitted a GitHub review" in prompt
+
+
+def test_build_review_prompt_static_shell_is_bounded():
+    from signposter.review import ReviewPlan, build_review_prompt
+
+    plan = ReviewPlan(
+        pr_number=5,
+        title="docs: test change",
+        state="OPEN",
+        base_branch="main",
+        head_branch="work/issue-4-xxx",
+        mergeable="MERGEABLE",
+        review_decision=None,
+        checks_status="pass",
+        successful_checks=1,
+        failing_checks=0,
+        pending_checks=0,
+        files_changed=1,
+        additions=8,
+        deletions=0,
+        risk_level="low",
+        size="small",
+        associated_issue=4,
+        branch_matches_convention=True,
+        status="ready",
+        notes=[],
+        reviewer_profile="reviewer",
+        prompt_artifact_path="artifacts/prompts/pr-5-review.md",
+    )
+    prompt = build_review_prompt(plan, "Related to issue #4", "diff --git a/README.md ...")
+    variable_sections = (
+        prompt.split("## PR Body (bounded)", 1)[1]
+        if "## PR Body (bounded)" in prompt
+        else ""
+    )
+    static_shell = prompt.replace(variable_sections, "")
+
+    assert len(static_shell) < 3400
+    assert "command shape:" not in static_shell
+    assert "## Strict Rules" not in static_shell
 
 
 def test_build_review_prompt_budget_section_stays_compact_when_context_is_large():

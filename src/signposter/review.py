@@ -695,33 +695,17 @@ def build_review_prompt(
 
     content = f"""You are an expert code reviewer acting as the Signposter reviewer agent.
 
-## PR Under Review
-- PR: #{plan.pr_number}
-- Title: {plan.title}
-- State: {plan.state}
-- Base branch: {plan.base_branch}
-- Head branch: {plan.head_branch}
-- Mergeable: {plan.mergeable}
-- Current review decision: {plan.review_decision or "none"}
-
-## Signposter Workflow Context
-- Associated issue: {issue_line}
-- Branch follows worker convention (work/issue-N-...): {plan.branch_matches_convention}
+## PR context
+- PR #{plan.pr_number}: {plan.title} ({plan.state})
+- Branches: {plan.head_branch} -> {plan.base_branch}; mergeable: {plan.mergeable}
+- Review decision: {plan.review_decision or "none"}
+- Associated issue: {issue_line}; worker branch convention: {plan.branch_matches_convention}
 - Plan notes:
 {plan_notes}
 
-## CI / Checks Status
-- Overall status: {plan.checks_status}
-- Successful checks: {plan.successful_checks}
-- Failing checks: {plan.failing_checks}
-- Pending checks: {plan.pending_checks}
-
-## Change Scope
-- Files changed: {plan.files_changed}
-- Additions: {plan.additions}
-- Deletions: {plan.deletions}
-- Risk classification: {plan.risk_level}
-- Size classification: {plan.size}
+## Scope and CI
+- Files changed: {plan.files_changed} (+{plan.additions}/-{plan.deletions}); risk: {plan.risk_level}; size: {plan.size}
+- CI: {plan.checks_status} (ok={plan.successful_checks}, fail={plan.failing_checks}, pending={plan.pending_checks})
 
 ## Prompt Budget
 - Changed files shown: first {changed_files_limit} paths
@@ -736,23 +720,23 @@ def build_review_prompt(
 - selected model: {plan.selected_model}
 - selected reasoning effort: {plan.selected_reasoning_effort}
 - Execution agent/profile: {plan.reviewer_profile}
-- role selection reason: {plan.role_selection_reason}
-- command shape: {plan.proposed_command_shape}
 
 ## Prompt Contract
 - expected output format: structured review opinion exactly matching the format below
-- artifact requirements: raw backend output stays local; GitHub comments and
-  reviews must use bounded summaries
-- validation provenance: verify command/source provenance from worker summary
-  evidence and PR checks; do not include raw validation logs in GitHub-facing output
+- artifact requirements: raw backend output stays local; GitHub comments/reviews use bounded summaries
+- validation provenance: verify command/source provenance from worker summary evidence and PR checks;
+  do not include raw validation logs in GitHub-facing output
 - uncertainty handling: prefer NEEDS_CHANGES or BLOCK when evidence is insufficient
+- confidence: 0.00-1.00; confidence >= 0.85 may enable automerge only with low risk, small scope,
+  green CI, and clear scope match; confidence < 0.85 blocks automerge consideration
+- High-risk findings or uncertainty about files/scope/CI/issue mapping blocks automerge
+- You MUST NOT claim that you submitted a GitHub review, merged the PR, or closed any issue
+- base the verdict only on the metadata, body, and diff provided above
 
 ## Changed Files Excerpt (from GitHub metadata, bounded)
 {_format_authoritative_changed_files(file_paths or [])}
 
-Treat the list above as a bounded excerpt of the GitHub changed-file metadata.
-If it includes an omitted marker, use the file count and diff excerpt as evidence that the
-true scope is broader than the displayed list.
+bounded excerpt of the GitHub changed-file metadata; broader true scope may be visible in counts and diff.
 
 ## PR Body (bounded)
 {pr_body_excerpt}
@@ -763,9 +747,7 @@ true scope is broader than the displayed list.
 ```
 
 ## Your Task
-Perform a careful, evidence-based review of this pull request.
-
-You **must** return a structured review opinion using exactly this format:
+Return a structured review opinion using exactly this format:
 
 Verdict: APPROVE | NEEDS_CHANGES | BLOCK
 Confidence: 0.00-1.00
@@ -779,18 +761,6 @@ Merge recommendation: yes | no
 Automerge eligible: yes | no
 Reasoning summary:
   <1-3 sentences of evidence-based reasoning>
-
-## Strict Rules (do not violate)
-- Confidence MUST be a number between 0.00 and 1.00 (two decimal places preferred).
-- Confidence >= 0.85 + low risk + small scope + green CI + clear scope match MAY be considered
-  for future low-risk automerge.
-- Confidence < 0.85 blocks any automerge consideration.
-- High-risk findings or uncertainty about files/scope/CI/issue mapping blocks automerge.
-- You MUST NOT claim that you submitted a GitHub review, merged the PR, or closed any issue.
-- Base your verdict only on the metadata, body, and diff provided above.
-- For docs-only low-risk small green-CI changes that match the issue,
-  APPROVE is usually appropriate.
-- When in doubt, prefer NEEDS_CHANGES or BLOCK and document the specific concern in Findings.
 
 Begin your structured review now.
 """
