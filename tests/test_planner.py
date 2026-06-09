@@ -381,20 +381,29 @@ def test_format_planner_issue_body_contains_agent_contract() -> None:
     body = format_planner_issue_body(plan, issue)
 
     assert body.startswith("Task: WATCH-001 — Define lifecycle watch CLI contract")
-    assert "Context:" in body
+    assert "Signposter policy:" in body
+    assert "GitHub mutation only with --apply." in body
+    assert "Backend execution only with --execute." in body
     assert "Problem:" in body
     assert "Goal:" in body
     assert "Target command:" in body
-    assert "Expected output:" in body
-    assert "Scope:" in body
-    assert "Rules:" in body
-    assert "Implementation guidance:" in body
-    assert "Tests:" in body
+    assert "signposter lifecycle watch" in body
     assert "Acceptance:" in body
     assert "Stop conditions:" in body
-    assert "Report back:" in body
-    assert "No GitHub mutation was performed." in body
-    assert "No OpenClaw execution was performed." in body
+    assert "Expected output:" not in body
+    assert "Report back:" not in body
+
+
+def test_format_planner_issue_body_compactness() -> None:
+    plan = build_planner_draft("build lifecycle watch")
+    issue = plan["issues"][0]
+
+    body = format_planner_issue_body(plan, issue)
+    size = evaluate_worker_issue_body_size(body)
+
+    assert size["status"] == "pass"
+    assert size["char_count"] < 1800
+    assert size["line_count"] < 70
 
 
 def test_format_planner_issue_body_contains_dependency_metadata() -> None:
@@ -418,7 +427,8 @@ def test_build_planner_seed_plan_includes_issue_body() -> None:
     body = seed_plan["issues"][0]["body"]
     assert seed_plan["status"] == "ready"
     assert "Task: WATCH-001" in body
-    assert "Do not mutate GitHub unless explicitly required and guarded by --apply." in body
+    assert "GitHub mutation only with --apply." in body
+    assert "Target command:" in body
 
 
 def test_evaluate_worker_issue_body_size_passes_preferred_range() -> None:
@@ -491,7 +501,7 @@ def test_format_planner_roadmap_uses_generic_roadmap_contract() -> None:
     assert "Follow-up policy:" in roadmap
     assert "Next-roadmap bootstrap contract:" in roadmap
     assert "Done definition:" in roadmap
-    assert "Preferred range: 60–120 lines." in roadmap
+    assert "Preferred range: 35–120 lines." in roadmap
     assert f"at least {NEXT_ROADMAP_MIN_DAG_NODES} small dependency-aware DAG nodes" in roadmap
     assert "Do not hard-code product-specific task names" in roadmap
     assert "WATCH-001" not in roadmap
