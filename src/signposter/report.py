@@ -31,13 +31,19 @@ _PREFERRED_EXCERPT_SECTIONS = (
     "## Gate recommendation",
 )
 REPORT_COMMENT_MAX_CHARS = DEFAULT_MAX_COMMENT_CHARS
-_REPORT_SUMMARY_FIELD_MAX_CHARS = 500
-_REPORT_ARTIFACT_PATH_MAX_CHARS = 500
+_REPORT_SUMMARY_FIELD_MAX_CHARS = 240
 _REPORT_EXCERPT_BUDGETS = (
-    (20, 1500),
     (12, 900),
-    (8, 600),
-    (4, 300),
+    (8, 650),
+    (4, 320),
+    (2, 180),
+)
+_REPORT_IMPLEMENTED_BUDGET = (3, 360)
+_LOCAL_ARTIFACT_MARKERS = (
+    "artifacts/",
+    ".signposter-local/",
+    "signposter-artifacts/",
+    ".local/signposter/",
 )
 
 
@@ -82,64 +88,29 @@ def format_comment(
 ) -> str:
     """Create a safe, concise GitHub comment from a runner summary.
 
-    Never posts full raw output. Uses bounded excerpt only.
+    Never posts full raw output or local artifact paths. Uses bounded excerpts only.
     """
     lines = [
-        "# Signposter Runner Report",
+        "# Signposter Report",
         "",
-        f"**Repository:** {repo}",
-        f"**Issue:** #{issue}",
-        "",
-        "## Execution Summary",
+        "## Findings",
         "",
     ]
-
-    # Extract key fields from the summary
-    for line in summary_content.splitlines():
-        if line.startswith("**Agent:**"):
-            lines.append(_bounded_inline(line, _REPORT_SUMMARY_FIELD_MAX_CHARS))
-        elif line.startswith("**Exit Code:**"):
-            lines.append(_bounded_inline(line, _REPORT_SUMMARY_FIELD_MAX_CHARS))
-        elif line.startswith("**Output Size:**"):
-            lines.append(_bounded_inline(line, _REPORT_SUMMARY_FIELD_MAX_CHARS))
-        elif line.startswith("**Started (UTC):**"):
-            lines.append(_bounded_inline(line, _REPORT_SUMMARY_FIELD_MAX_CHARS))
-
-    # Local artifact paths (explicit and clear)
+    lines.extend(_report_findings_lines(summary_content))
     lines.extend(
         [
             "",
-            "## Local Artifacts",
+            "## Implemented",
             "",
+            _implemented_summary_excerpt(summary_content),
+            "",
+            "## Impact",
+            "",
+            f"- Repository: `{_bounded_inline(repo, _REPORT_SUMMARY_FIELD_MAX_CHARS)}`",
+            f"- Issue: `#{issue}`",
+            "- Local artifacts remain local-only; no lifecycle transition is implied.",
         ]
     )
-
-    if summary_path:
-        summary_path_text = _bounded_inline(
-            str(summary_path),
-            _REPORT_ARTIFACT_PATH_MAX_CHARS,
-        )
-        lines.append(
-            f"- **Summary:** `{summary_path_text}`"
-        )
-    else:
-        lines.append("- **Summary:** missing")
-
-    if raw_path:
-        lines.append(
-            "- **Raw output:** "
-            f"`{_bounded_inline(str(raw_path), _REPORT_ARTIFACT_PATH_MAX_CHARS)}` "
-            "(full log, stored locally)"
-        )
-    else:
-        lines.append("- **Raw output:** missing")
-
-    if prompt_path:
-        lines.append(
-            f"- **Prompt used:** `{_bounded_inline(prompt_path, _REPORT_ARTIFACT_PATH_MAX_CHARS)}`"
-        )
-    else:
-        lines.append("- **Prompt used:** missing")
 
     excerpt_source = _select_evidence_excerpt_source(summary_content, raw_content)
     return _fit_report_comment(lines, excerpt_source)
@@ -154,9 +125,45 @@ def _bounded_inline(text: str, max_chars: int) -> str:
     return text[: max(0, max_chars - len(marker))].rstrip() + marker
 
 
+def _report_findings_lines(summary_content: str) -> list[str]:
+    """Return short status bullets from the local summary without artifact paths."""
+    fields = (
+        "**Agent:**",
+        "**Exit Code:**",
+        "**Execution Status:**",
+        "**Execution Reason:**",
+        "**Output Size:**",
+        "**Started (UTC):**",
+    )
+    findings: list[str] = []
+    for line in (summary_content or "").splitlines():
+        stripped = line.strip()
+        if any(stripped.startswith(field) for field in fields):
+            findings.append(f"- {_bounded_inline(stripped, _REPORT_SUMMARY_FIELD_MAX_CHARS)}")
+        if len(findings) >= 5:
+            break
+
+    if findings:
+        return findings
+    return ["- Local runner summary was parsed; detailed evidence remains local."]
+
+
+def _implemented_summary_excerpt(summary_content: str) -> str:
+    """Return a compact implemented-behavior excerpt for the GitHub-facing comment."""
+    section = _extract_summary_section(
+        summary_content,
+        ("## Implemented behavior / verified behavior", "## Scoped completion evidence"),
+    )
+    if not section:
+        return "- See bounded evidence below; no implementation summary section was found."
+    max_lines, max_chars = _REPORT_IMPLEMENTED_BUDGET
+    sanitized = _strip_local_artifact_reference_lines(section)
+    return _make_bounded_excerpt(sanitized, max_lines=max_lines, max_chars=max_chars)
+
+
 def _build_report_comment(lines: list[str], excerpt: str, *, fenced: bool = True) -> str:
     """Build the final report comment body from bounded sections."""
-    body_lines = [*lines, "", "## Key Evidence Excerpt (bounded)", ""]
+    body_lines = [*lines, "", "## Evidence (bounded)", ""]
     if fenced:
         body_lines.extend(["```", excerpt, "```", ""])
     else:
@@ -196,13 +203,13 @@ def _fit_report_comment(lines: list[str], excerpt_source: str) -> str:
     # auditable fallback instead of failing before the GitHub comment boundary.
     fallback = "\n".join(
         [
-            "# Signposter Runner Report",
+            "# Signposter Report",
             "",
             "## Report Summary",
             "",
             "Signposter report body exceeded the size budget after local truncation.",
             "",
-            "## Key Evidence Excerpt (bounded)",
+            "## Evidence (bounded)",
             "",
             omitted,
             "",
@@ -234,10 +241,22 @@ def format_report_comment_audit(body: str) -> str:
 
 def _extract_preferred_summary_sections(summary_content: str) -> str | None:
     """Return preferred evidence sections from a worker/reviewer summary."""
+    selected = _extract_summary_sections(summary_content, _PREFERRED_EXCERPT_SECTIONS)
+    if not selected:
+        return None
+    return "\n\n".join(selected)
+
+
+def _extract_summary_section(summary_content: str, headings: tuple[str, ...]) -> str | None:
+    selected = _extract_summary_sections(summary_content, headings)
+    return selected[0] if selected else None
+
+
+def _extract_summary_sections(summary_content: str, headings: tuple[str, ...]) -> list[str]:
     lines = (summary_content or "").splitlines()
     selected_sections: list[str] = []
 
-    for heading in _PREFERRED_EXCERPT_SECTIONS:
+    for heading in headings:
         try:
             start = next(
                 idx for idx, line in enumerate(lines) if line.strip() == heading
@@ -257,8 +276,8 @@ def _extract_preferred_summary_sections(summary_content: str) -> str | None:
             selected_sections.append(section)
 
     if not selected_sections:
-        return None
-    return "\n\n".join(selected_sections)
+        return []
+    return selected_sections
 
 
 def _select_evidence_excerpt_source(
@@ -268,8 +287,21 @@ def _select_evidence_excerpt_source(
     """Prefer structured evidence summary sections, then raw output, then summary."""
     preferred = _extract_preferred_summary_sections(summary_content)
     if preferred:
-        return preferred
-    return raw_content or summary_content
+        return _strip_local_artifact_reference_lines(preferred)
+    return _strip_local_artifact_reference_lines(raw_content or summary_content)
+
+
+def _strip_local_artifact_reference_lines(text: str) -> str:
+    """Remove local artifact path lines before building GitHub-facing excerpts."""
+    lines = (text or "").splitlines()
+    kept = [
+        line
+        for line in lines
+        if not any(marker in line for marker in _LOCAL_ARTIFACT_MARKERS)
+    ]
+    if kept:
+        return "\n".join(kept)
+    return "(local artifact references omitted; detailed evidence remains local)"
 
 
 def _make_bounded_excerpt(text: str, max_lines: int = 20, max_chars: int = 1500) -> str:

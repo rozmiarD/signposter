@@ -33,7 +33,7 @@ def test_derive_raw_path():
     assert str(raw) == "artifacts/runs/issue-2-reviewer.raw.txt"
 
 
-def test_format_comment_has_clear_artifact_paths():
+def test_format_comment_keeps_local_artifact_paths_out_of_github_body():
     summary = """# Signposter Execution Summary
 **Agent:** reviewer
 **Exit Code:** 0
@@ -49,10 +49,15 @@ def test_format_comment_has_clear_artifact_paths():
         prompt_path="artifacts/prompts/issue-2.md",
     )
 
-    assert "- **Summary:** `artifacts/runs/issue-2-reviewer.summary.md`" in body
-    assert "- **Raw output:** `artifacts/runs/issue-2-reviewer.raw.txt`" in body
-    assert "- **Prompt used:** `artifacts/prompts/issue-2.md`" in body
-    assert "Key Evidence Excerpt (bounded)" in body
+    assert "# Signposter Report" in body
+    assert "## Findings" in body
+    assert "## Implemented" in body
+    assert "## Impact" in body
+    assert "## Evidence (bounded)" in body
+    assert "artifacts/runs/issue-2-reviewer.summary.md" not in body
+    assert "artifacts/runs/issue-2-reviewer.raw.txt" not in body
+    assert "artifacts/prompts/issue-2.md" not in body
+    assert "Local artifacts remain local-only; no lifecycle transition is implied." in body
 
 
 def test_format_comment_uses_raw_content_for_excerpt():
@@ -76,7 +81,7 @@ def test_format_comment_uses_raw_content_for_excerpt():
 
     assert "**Review Findings — Issue #2**" in body
     assert "No changes to scan output" in body
-    assert "Key Evidence Excerpt (bounded)" in body
+    assert "Evidence (bounded)" in body
     assert "omitted; excerpt limited" not in body  # short content
 
 
@@ -187,14 +192,14 @@ PASS — report body guard implemented.
     )
 
     assert len(body) <= REPORT_COMMENT_MAX_CHARS
-    assert "Signposter Runner Report" in body
-    assert "Key Evidence Excerpt (bounded)" in body
+    assert "Signposter Report" in body
+    assert "Evidence (bounded)" in body
     assert "omitted; excerpt limited" in body
     assert "raw execution line 1999" not in body
 
 
 def test_format_report_comment_audit_shows_bounded_status():
-    body = "# Signposter Runner Report\n\nbounded evidence"
+    body = "# Signposter Report\n\nbounded evidence"
 
     audit = format_report_comment_audit(body)
 
@@ -244,8 +249,8 @@ def test_format_comment_keeps_raw_artifact_local_with_bounded_raw_excerpt():
         raw_content=raw,
     )
 
-    assert "- **Raw output:** `artifacts/runs/issue-245-worker.raw.txt`" in body
-    assert "(full log, stored locally)" in body
+    assert "artifacts/runs/issue-245-worker.raw.txt" not in body
+    assert "Local artifacts remain local-only; no lifecycle transition is implied." in body
     assert "Full execution logs remain local only" in body
     assert "raw execution line 0" in body
     assert raw_tail not in body
@@ -270,7 +275,7 @@ def test_format_comment_bounds_oversized_metadata():
     )
 
     assert len(body) <= REPORT_COMMENT_MAX_CHARS
-    assert "Signposter Runner Report" in body
+    assert "Signposter Report" in body
     assert "... (truncated)" in body
     assert huge_value not in body
 
@@ -287,8 +292,10 @@ def test_format_comment_shows_missing_artifacts():
         prompt_path=None,
     )
 
-    assert "- **Raw output:** missing" in body
-    assert "- **Prompt used:** missing" in body
+    assert "## Impact" in body
+    assert "Local artifacts remain local-only; no lifecycle transition is implied." in body
+    assert "Raw output:" not in body
+    assert "Prompt used:" not in body
 
 
 @patch("signposter.report.subprocess.run")
@@ -429,8 +436,8 @@ def test_report_main_posts_summary_evidence_not_raw_artifact(
     assert exit_code == 0
     assert "=== Applied ===" in out
     assert captured["dry_run"] is False
-    assert "- **Raw output:** `" in body
-    assert "(full log, stored locally)" in body
+    assert "artifacts/runs" not in body
+    assert "Local artifacts remain local-only; no lifecycle transition is implied." in body
     assert "Full execution logs remain local only" in body
     assert "python -m pytest tests/test_report.py -q" in body
     assert "raw execution line 0" not in body

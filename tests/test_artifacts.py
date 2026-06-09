@@ -5,7 +5,7 @@ from __future__ import annotations
 from signposter.report import format_comment
 
 
-def test_raw_artifact_path_is_reported_but_full_raw_output_stays_local():
+def test_raw_artifact_path_stays_local_with_bounded_raw_excerpt():
     raw_tail = "RAW_ARTIFACT_TAIL_SHOULD_STAY_LOCAL"
     raw = "\n".join(
         [
@@ -24,8 +24,8 @@ def test_raw_artifact_path_is_reported_but_full_raw_output_stays_local():
         raw_content=raw,
     )
 
-    assert "- **Raw output:** `artifacts/runs/issue-404-worker.raw.txt`" in body
-    assert "(full log, stored locally)" in body
+    assert "artifacts/runs/issue-404-worker.raw.txt" not in body
+    assert "Local artifacts remain local-only; no lifecycle transition is implied." in body
     assert "Full execution logs remain local only" in body
     assert "raw execution line 0" in body
     assert raw_tail not in body
@@ -53,8 +53,8 @@ def test_runtime_raw_secret_is_redacted_from_report_comment():
 
     assert token not in body
     assert "[REDACTED:github-token]" in body
-    assert "- **Raw output:** `artifacts/runs/issue-405-worker.raw.txt`" in body
-    assert "(full log, stored locally)" in body
+    assert "artifacts/runs/issue-405-worker.raw.txt" not in body
+    assert "Local artifacts remain local-only; no lifecycle transition is implied." in body
 
 
 def test_worker_summary_includes_validation_result_records(tmp_path):
