@@ -253,28 +253,24 @@ def test_render_prompt_contains_key_sections():
     )
     content = render_prompt(plan, "ExatronOmega/signposter")
 
-    assert "**Repository:** ExatronOmega/signposter" in content
-    assert "**Issue:** #2" in content
-    assert "role:   reviewer" in content
-    assert "phase:  review" in content
-    assert "gate:   review" in content
-    assert "profile: reviewer" in content
+    assert "- Repository: ExatronOmega/signposter" in content
+    assert "Issue: #2" in content
+    assert "Route/phase/role/risk/area/gate: reviewer/review/reviewer" in content
     assert "Do not broaden scope" in content
-    assert "Do not mutate GitHub unless explicitly instructed" in content
-    # New structure assertions
-    assert "## Role Profile" in content
+    assert "Do not mutate GitHub unless a later command explicitly asks." in content
+    assert "# Signposter Reviewer Prompt" in content
     assert "## Selected Role Policy" in content
     assert "selected model:" in content
     assert "selected reasoning effort:" in content
     assert "backend: codex-cli" in content
-    assert "backend reason: default Codex CLI execution backend" in content
     assert "fallback/takeover transparency:" in content
     assert "silent_fallback: forbidden" in content
     assert "expected output format:" in content
     assert "artifact requirements:" in content
     assert "uncertainty handling:" in content
-    assert "## Private Repository Rule" in content
+    assert "## Rules" in content
     assert "Do not fetch the GitHub URL" in content
+    assert "## Prompt Budget Report" not in content
 
 
 def test_format_runner_plan_includes_role_policy_details():
@@ -294,8 +290,9 @@ def test_render_prompt_role_specific_instruction():
     plan = make_runner_plan_for_test("reviewer", "review")
     content = render_prompt(plan, "test/repo")
 
-    assert "# Reviewer Profile" in content
-    assert "Do not fetch private GitHub URLs" in content
+    assert "# Signposter Reviewer Prompt" in content
+    assert "Do not fetch the GitHub URL" in content
+    assert "Review the embedded issue context" in content
 
 
 def test_render_prompt_worker_uses_compact_format():
@@ -307,11 +304,7 @@ def test_render_prompt_worker_uses_compact_format():
     assert "# Signposter Worker Prompt" in content
     assert "## Context" in content
     assert "## Selected Role Policy" in content
-    assert "## Prompt Budget Report" in content
-    assert "prompt mode: compact-worker" in content
-    assert "Issue body: full" in content
-    assert "Recent comments: full" in content
-    assert "escalation reason: none" in content
+    assert "## Prompt Budget Report" not in content
     assert "backend: codex-cli" in content
     assert "expected output format:" in content
     assert "artifact requirements:" in content
@@ -334,14 +327,19 @@ def test_render_prompt_worker_uses_compact_format():
     assert "targeted validation" in content
 
 
-def test_render_prompt_worker_compact_is_shorter_than_reviewer_prompt():
+def test_render_prompt_reviewer_static_shell_is_bounded():
     from signposter.runner import render_prompt
 
-    worker = render_prompt(make_runner_plan_for_test("worker", "build", number=42), "test/repo")
-    reviewer_plan = make_runner_plan_for_test("reviewer", "review", number=43)
-    reviewer = render_prompt(reviewer_plan, "test/repo")
+    plan = make_runner_plan_for_test("reviewer", "review", number=43)
+    content = render_prompt(plan, "test/repo")
+    issue_body = content.split("## Issue Body", 1)[1].split("## Recent Comments", 1)[0]
+    static_shell = content.replace(issue_body, "")
 
-    assert len(worker) < len(reviewer)
+    assert len(static_shell) < 2200
+    assert "backend reason:" not in static_shell
+    assert "role selection reason:" not in static_shell
+    assert "command shape:" not in static_shell
+    assert "## Prompt Budget Report" not in static_shell
 
 
 def test_render_prompt_worker_static_shell_is_bounded():
@@ -351,7 +349,8 @@ def test_render_prompt_worker_static_shell_is_bounded():
     issue_body = content.split("## Issue Body", 1)[1].split("## Recent Comments", 1)[0]
     static_shell = content.replace(issue_body, "")
 
-    assert len(static_shell) < 3600
+    assert len(static_shell) < 3200
+    assert "## Prompt Budget Report" not in static_shell
     assert "command shape:" not in static_shell
 
 
@@ -363,11 +362,61 @@ def test_render_prompt_planner_uses_compact_format():
 
     assert "# Signposter Planner Prompt" in content
     assert "## Context" in content
-    assert "## Prompt Budget Report" in content
-    assert "prompt mode: compact-planner" in content
-    assert "## Output Contract" in content
+    assert "## Prompt Budget Report" not in content
+    assert "## Prompt Contract" in content
+    assert "compact phased plan" in content
     assert "## Role Profile" not in content
+    assert "role selection reason:" not in content
+    assert "backend:" in content
     assert "Keep the plan scoped to this issue." in content
+
+
+def test_render_prompt_planner_static_shell_is_bounded():
+    from signposter.runner import render_prompt
+
+    content = render_prompt(make_runner_plan_for_test("planner", "plan", number=52), "test/repo")
+    issue_body = content.split("## Issue Body", 1)[1].split("## Recent Comments", 1)[0]
+    static_shell = content.replace(issue_body, "")
+
+    assert len(static_shell) < 1800
+    assert "role selection reason:" not in static_shell
+    assert "Prompt artifact:" not in static_shell
+    assert "## Prompt Budget Report" not in static_shell
+
+
+def test_render_prompt_omits_budget_report_when_sections_fit():
+    from signposter.runner import (
+        _format_compact_prompt_budget_report,
+        _format_planner_prompt_budget_report,
+        _format_worker_prompt_budget_report,
+        _prompt_budget_section,
+    )
+
+    full_sections = (
+        _prompt_budget_section(
+            name="Issue body",
+            source_text="short body",
+            rendered_text="short body",
+            max_lines=10,
+            max_chars=100,
+        ),
+        _prompt_budget_section(
+            name="Recent comments",
+            source_text="",
+            rendered_text="(no comments)",
+            max_lines=10,
+            max_chars=100,
+        ),
+    )
+    assert _format_worker_prompt_budget_report(sections=full_sections) == ""
+    assert _format_planner_prompt_budget_report(sections=full_sections) == ""
+    assert (
+        _format_compact_prompt_budget_report(
+            prompt_mode="compact-reviewer",
+            sections=full_sections,
+        )
+        == ""
+    )
 
 
 def test_render_prompt_worker_marks_omitted_sections_for_large_context():
@@ -525,8 +574,8 @@ def test_render_prompt_reflects_post_claim_labels():
     assert "state:active" in content
     assert "gate:review" in content
     assert "state:ready" not in content
-    assert "**Labels:** phase:review, state:active" in content  # new format
-    assert "## Private Repository Rule" in content
+    assert "Labels: phase:review, state:active" in content
+    assert "## Rules" in content
 
 
 # --- BOOTSTRAP-019A rich prompt tests ---
@@ -547,9 +596,9 @@ def test_render_prompt_includes_reviewer_profile():
     plan = make_runner_plan_for_test("reviewer", "review")
     content = render_prompt(plan, "test/repo")
 
-    assert "# Reviewer Profile" in content
-    assert "You are the Signposter reviewer." in content
-    assert "Do not fetch private GitHub URLs." in content
+    assert "# Signposter Reviewer Prompt" in content
+    assert "Review only embedded context and evidence." in content
+    assert "Do not fetch the GitHub URL" in content
 
 
 def test_render_prompt_embeds_issue_body_or_empty():
@@ -570,13 +619,13 @@ def test_render_prompt_no_longer_relies_on_url_as_primary_context():
     # The prompt should tell the agent not to rely on fetching the URL
     assert "Do not fetch the GitHub URL" in content
     # URL is present only as reference
-    assert "URL (reference only)" in content
+    assert "URL reference only:" in content
 
 
 # --- BOOTSTRAP-019B Evidence Bundle tests ---
 
 def test_render_prompt_includes_evidence_bundle_for_reviewer():
-    """For reviewer role, the prompt must contain an Evidence Bundle section."""
+    """For reviewer role, the prompt must contain a compact Evidence section."""
     from signposter.runner import render_prompt
 
     plan = make_runner_plan_for_test("reviewer", "review", number=2)
@@ -587,8 +636,9 @@ def test_render_prompt_includes_evidence_bundle_for_reviewer():
     }
     content = render_prompt(plan, "ExatronOmega/signposter", evidence_bundle=evidence)
 
-    assert "## Evidence Bundle" in content
-    assert "Use the embedded evidence below. Do not fetch GitHub URLs." in content
+    assert "## Evidence" in content
+    assert "### Scan" in content
+    assert "Claim Dry-Run" not in content
     assert "[MOCK SCAN]" in content
 
 
@@ -600,7 +650,7 @@ def test_render_prompt_embeds_scan_output():
     evidence = {"scan": "Signposter Scan Report\nCandidate Items (1): #2 state:active"}
     content = render_prompt(plan, "test/repo", evidence_bundle=evidence)
 
-    assert "Evidence Bundle" in content
+    assert "## Evidence" in content
     assert "Signposter Scan Report" in content
 
 
@@ -613,7 +663,7 @@ def test_render_prompt_private_rule_still_present_with_evidence():
     content = render_prompt(plan, "ExatronOmega/signposter", evidence_bundle=evidence)
 
     assert "Do not fetch the GitHub URL. This is a private repository." in content
-    assert "## Evidence Bundle" in content
+    assert "## Evidence" in content
 
 
 def test_render_prompt_evidence_includes_prompt_preview():
@@ -632,9 +682,8 @@ def test_render_prompt_evidence_includes_prompt_preview():
     }
     content = render_prompt(plan, "ExatronOmega/signposter", evidence_bundle=evidence)
 
-    assert "Prompt Artifact:" in content
-    assert "**Exists:** True" in content
-    assert "Prompt Preview (first ~80 lines or bounded):" in content
+    assert "prompt_artifact: artifacts/prompts/issue-2.md (exists: True)" in content
+    assert "### Prompt preview" in content
     assert "not prepared yet" in content
 
 
@@ -657,8 +706,29 @@ def test_render_prompt_evidence_has_working_dir_note():
     }
     content = render_prompt(plan, "test/repo", evidence_bundle=evidence)
 
-    assert "A missing working_dir is not a failure before execution" in content
-    assert "pending preparation" in content
+    assert "A missing working_dir before execution is pending preparation" in content
+    assert "not prepared yet" in content
+
+
+def test_render_prompt_reviewer_compact_evidence_excludes_claim_dry_run():
+    from signposter.runner import render_prompt
+
+    plan = make_runner_plan_for_test("reviewer", "review", number=2)
+    evidence = {
+        "scan": "mock scan",
+        "claim_dry_run": "Signposter Claim Dry-Run\nWould claim issue #2",
+        "recent_runs": "[]",
+        "working_dir": "~/work/2",
+        "working_dir_status": "prepared",
+        "prompt_path": "artifacts/prompts/issue-2.md",
+        "prompt_exists": False,
+        "command_shape": "codex exec ...",
+    }
+    content = render_prompt(plan, "test/repo", evidence_bundle=evidence)
+
+    assert "Claim Dry-Run" not in content
+    assert "Would claim issue #2" not in content
+    assert "mock scan" in content
 
 
 # --- HARDENING-004: explicit --issue targeting tests ---

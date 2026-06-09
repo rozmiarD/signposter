@@ -67,6 +67,12 @@ PROMPT_COMPACTION_LIMITS = {
     "planner_body_chars": 2400,
     "planner_comments_lines": 10,
     "planner_comments_chars": 800,
+    "reviewer_scan_lines": 24,
+    "reviewer_scan_chars": 1200,
+    "reviewer_runs_lines": 12,
+    "reviewer_runs_chars": 800,
+    "reviewer_prompt_preview_lines": 20,
+    "reviewer_prompt_preview_chars": 1200,
 }
 
 
@@ -845,11 +851,9 @@ def _format_prompt_budget_report(
     *, prompt_mode: str, sections: tuple[PromptBudgetSection, ...]
 ) -> str:
     bounded = [section for section in sections if section.status == "bounded"]
-    escalation_reason = (
-        "bounded sections present to preserve token budget"
-        if bounded
-        else "none"
-    )
+    if not bounded:
+        return ""
+    escalation_reason = "bounded sections present to preserve token budget"
     lines = [
         "## Prompt Budget Report",
         f"- prompt mode: {prompt_mode}",
@@ -870,15 +874,42 @@ def _format_worker_prompt_budget_report(
     *, sections: tuple[PromptBudgetSection, ...]
 ) -> str:
     """Render a compact operator budget summary for worker prompts."""
-    bounded = [section for section in sections if section.status == "bounded"]
-    escalation_reason = (
-        "bounded sections present to preserve token budget"
-        if bounded
-        else "none"
+    return _format_compact_prompt_budget_report(
+        prompt_mode="compact-worker",
+        sections=sections,
     )
+
+
+def _format_reviewer_prompt_budget_report(
+    *, sections: tuple[PromptBudgetSection, ...]
+) -> str:
+    """Render a compact operator budget summary for reviewer/gatekeeper prompts."""
+    return _format_compact_prompt_budget_report(
+        prompt_mode="compact-reviewer",
+        sections=sections,
+    )
+
+
+def _format_planner_prompt_budget_report(
+    *, sections: tuple[PromptBudgetSection, ...]
+) -> str:
+    """Render a compact operator budget summary for planner prompts."""
+    return _format_compact_prompt_budget_report(
+        prompt_mode="compact-planner",
+        sections=sections,
+    )
+
+
+def _format_compact_prompt_budget_report(
+    *, prompt_mode: str, sections: tuple[PromptBudgetSection, ...]
+) -> str:
+    bounded = [section for section in sections if section.status == "bounded"]
+    if not bounded:
+        return ""
+    escalation_reason = "bounded sections present to preserve token budget"
     lines = [
         "## Prompt Budget Report",
-        "- prompt mode: compact-worker",
+        f"- prompt mode: {prompt_mode}",
         f"- escalation reason: {escalation_reason}",
     ]
     for section in sections:
@@ -1087,6 +1118,25 @@ def render_prompt(
                 ),
             ),
         )
+    elif d.role in ("reviewer", "gatekeeper"):
+        prompt_budget_report = _format_reviewer_prompt_budget_report(
+            sections=(
+                _prompt_budget_section(
+                    name="Issue body",
+                    source_text=body_source,
+                    rendered_text=body_text,
+                    max_lines=PROMPT_COMPACTION_LIMITS["issue_body_lines"],
+                    max_chars=PROMPT_COMPACTION_LIMITS["issue_body_chars"],
+                ),
+                _prompt_budget_section(
+                    name="Recent comments",
+                    source_text=comments_source,
+                    rendered_text=comments_text,
+                    max_lines=PROMPT_COMPACTION_LIMITS["comments_lines"],
+                    max_chars=PROMPT_COMPACTION_LIMITS["comments_chars"],
+                ),
+            ),
+        )
     else:
         prompt_budget_report = _format_prompt_budget_report(
             prompt_mode="standard",
@@ -1155,8 +1205,7 @@ def render_prompt(
             max_chars=PROMPT_COMPACTION_LIMITS["planner_comments_chars"],
             empty_fallback="(no comments)",
         )
-        planner_budget_report = _format_prompt_budget_report(
-            prompt_mode="compact-planner",
+        planner_budget_report = _format_planner_prompt_budget_report(
             sections=(
                 _prompt_budget_section(
                     name="Issue body",
@@ -1188,64 +1237,26 @@ def render_prompt(
             private_rule=private_rule,
         )
 
-    # Evidence Bundle (only for reviewer/gatekeeper)
-    evidence_section = ""
-    if evidence_bundle and d.role in ("reviewer", "gatekeeper"):
-        scan = _compact_evidence_text(
-            evidence_bundle.get("scan"),
-            max_lines=PROMPT_COMPACTION_LIMITS["scan_lines"],
-            max_chars=PROMPT_COMPACTION_LIMITS["scan_chars"],
-            empty_fallback="(no scan output)",
+    if d.role in ("reviewer", "gatekeeper"):
+        evidence_section = ""
+        if evidence_bundle:
+            evidence_section = _render_compact_evidence_section(evidence_bundle, plan)
+        role_label = "Gatekeeper" if d.role == "gatekeeper" else "Reviewer"
+        return _render_compact_reviewer_prompt(
+            repo=repo,
+            item=item,
+            dispatch=d,
+            plan=plan,
+            labels_str=labels_str,
+            body_text=body_text,
+            comments_text=comments_text,
+            prompt_budget_report=prompt_budget_report,
+            issue_state=issue_state,
+            task_instruction=task_instruction,
+            private_rule=private_rule,
+            evidence_section=evidence_section,
+            role_label=role_label,
         )
-        claim_dry = _compact_evidence_text(
-            evidence_bundle.get("claim_dry_run"),
-            max_lines=PROMPT_COMPACTION_LIMITS["claim_lines"],
-            max_chars=PROMPT_COMPACTION_LIMITS["claim_chars"],
-            empty_fallback="(no claim dry-run)",
-        )
-        runs = _compact_evidence_text(
-            evidence_bundle.get("recent_runs"),
-            max_lines=PROMPT_COMPACTION_LIMITS["runs_lines"],
-            max_chars=PROMPT_COMPACTION_LIMITS["runs_chars"],
-            empty_fallback="(no runs)",
-        )
-        wd = evidence_bundle.get("working_dir", "unknown")
-        wd_status = evidence_bundle.get("working_dir_status", "unknown")
-        prompt_path = evidence_bundle.get("prompt_path", plan.proposed_prompt_path)
-        prompt_exists = evidence_bundle.get("prompt_exists", False)
-        prompt_preview = _compact_evidence_text(
-            evidence_bundle.get("prompt_preview"),
-            max_lines=PROMPT_COMPACTION_LIMITS["prompt_preview_lines"],
-            max_chars=PROMPT_COMPACTION_LIMITS["prompt_preview_chars"],
-            empty_fallback="(no preview)",
-        )
-        cmd_shape = evidence_bundle.get("command_shape", plan.proposed_command_shape)
-
-        evidence_section = f"""
-
-## Evidence Bundle
-{evidence_bundle.get("note", "Use the embedded evidence below. Do not fetch GitHub URLs.")}
-
-**Current Scan Output:**
-{scan}
-
-**Claim Dry-Run:**
-{claim_dry}
-
-**Recent CI Runs (last 5):**
-{runs}
-
-**Working Directory:** {wd}
-**Status:** {wd_status}
-
-**Prompt Artifact:** {prompt_path}
-**Exists:** {prompt_exists}
-
-**Prompt Preview (first ~80 lines or bounded):**
-{prompt_preview}
-
-**Command Shape:** {cmd_shape}
-"""
 
     content = f"""# Signposter Task Prompt
 
@@ -1323,6 +1334,120 @@ def render_prompt(
 Begin execution following the constraints and role profile above.
 """
     return content
+
+
+def _render_compact_evidence_section(evidence_bundle: dict, plan: RunnerPlan) -> str:
+    """Render a compact evidence block for reviewer/gatekeeper prompts."""
+    scan = _compact_evidence_text(
+        evidence_bundle.get("scan"),
+        max_lines=PROMPT_COMPACTION_LIMITS["reviewer_scan_lines"],
+        max_chars=PROMPT_COMPACTION_LIMITS["reviewer_scan_chars"],
+        empty_fallback="(no scan output)",
+    )
+    runs = _compact_evidence_text(
+        evidence_bundle.get("recent_runs"),
+        max_lines=PROMPT_COMPACTION_LIMITS["reviewer_runs_lines"],
+        max_chars=PROMPT_COMPACTION_LIMITS["reviewer_runs_chars"],
+        empty_fallback="(no runs)",
+    )
+    wd = evidence_bundle.get("working_dir", "unknown")
+    wd_status = evidence_bundle.get("working_dir_status", "unknown")
+    prompt_path = evidence_bundle.get("prompt_path", plan.proposed_prompt_path)
+    prompt_exists = evidence_bundle.get("prompt_exists", False)
+    cmd_shape = evidence_bundle.get("command_shape", plan.proposed_command_shape)
+
+    lines = [
+        "## Evidence",
+        f"- working_dir: {wd} ({wd_status})",
+        f"- prompt_artifact: {prompt_path} (exists: {prompt_exists})",
+        f"- command_shape: {cmd_shape}",
+        "",
+        "### Scan",
+        scan,
+        "",
+        "### Recent CI",
+        runs,
+    ]
+
+    if prompt_exists and evidence_bundle.get("prompt_preview"):
+        prompt_preview = _compact_evidence_text(
+            evidence_bundle.get("prompt_preview"),
+            max_lines=PROMPT_COMPACTION_LIMITS["reviewer_prompt_preview_lines"],
+            max_chars=PROMPT_COMPACTION_LIMITS["reviewer_prompt_preview_chars"],
+            empty_fallback="(no preview)",
+        )
+        if prompt_preview != "(no preview)":
+            lines.extend(["", "### Prompt preview", prompt_preview])
+
+    return "\n".join(lines)
+
+
+def _render_compact_reviewer_prompt(
+    *,
+    repo: str,
+    item: LabeledItem,
+    dispatch: DispatchDecision,
+    plan: RunnerPlan,
+    labels_str: str,
+    body_text: str,
+    comments_text: str,
+    prompt_budget_report: str,
+    issue_state: str,
+    task_instruction: str,
+    private_rule: str,
+    evidence_section: str,
+    role_label: str,
+) -> str:
+    """Render a compact self-contained prompt for reviewer/gatekeeper tasks."""
+    workflow = (
+        f"{dispatch.proposed_route}/{dispatch.phase}/{dispatch.role}/"
+        f"{dispatch.risk}/{dispatch.area}/{dispatch.proposed_gate}"
+    )
+    evidence_block = f"\n{evidence_section}\n" if evidence_section else ""
+    return f"""# Signposter {role_label} Prompt
+
+## Context
+- Repository: {repo}
+- Issue: #{item.number} — {item.title}
+- URL reference only: {item.html_url}
+- State: {issue_state}
+- Labels: {labels_str}
+- Route/phase/role/risk/area/gate: {workflow}
+- Working directory: {plan.proposed_working_dir}
+
+## Selected Role Policy
+- backend: {plan.proposed_runner}
+- role identity: {plan.selected_role_name}
+- selected model: {plan.selected_model}
+- selected reasoning effort: {plan.selected_reasoning_effort}
+- Execution agent/profile: {plan.selected_openclaw_agent}
+- fallback/takeover transparency:
+{chr(10).join(f"  - {line}" for line in _fallback_transparency_lines(plan))}
+
+## Prompt Contract
+- expected output format: concise review findings with evidence status, observations,
+  and next steps
+- artifact requirements: keep raw output local under artifacts/runs/; bounded summaries only
+- do not mutate GitHub, edit files, or commit
+- uncertainty handling: state exactly what is missing instead of guessing
+
+{prompt_budget_report}
+
+## Issue Body
+{body_text}
+
+## Recent Comments
+{comments_text}
+{evidence_block}
+## Rules
+- {private_rule}
+- Review only embedded context and evidence. Do not broaden scope.
+- Do not mutate GitHub unless a later command explicitly asks.
+- A missing working_dir before execution is pending preparation, not a failure.
+
+## Task
+{task_instruction}
+"""
 
 
 def _render_compact_worker_prompt(
@@ -1433,14 +1558,19 @@ def _render_compact_planner_prompt(
 - Labels: {labels_str}
 - Route/phase/role/risk/area/gate: {workflow}
 - Working directory: {plan.proposed_working_dir}
-- Prompt artifact: {plan.proposed_prompt_path}
 
 ## Selected Role Policy
+- backend: {plan.proposed_runner}
 - role identity: {plan.selected_role_name}
 - selected model: {plan.selected_model}
 - selected reasoning effort: {plan.selected_reasoning_effort}
 - Execution agent/profile: {plan.selected_openclaw_agent}
-- role selection reason: {plan.role_selection_reason}
+
+## Prompt Contract
+- return a compact phased plan; separate deterministic work from LLM-required work
+- keep acceptance criteria specific and bounded
+- do not mutate GitHub unless a later command explicitly asks
+- uncertainty handling: state exactly what is missing instead of guessing
 
 {prompt_budget_report}
 
@@ -1455,16 +1585,9 @@ def _render_compact_planner_prompt(
 - Keep the plan scoped to this issue.
 - Prefer small deterministic steps over broad proposals.
 - Call out dependencies, blockers, and omitted context explicitly.
-- Do not mutate GitHub unless a later command explicitly asks.
-- If uncertain, state the uncertainty explicitly instead of guessing.
 
 ## Task
 {task_instruction}
-
-## Output Contract
-- Return a compact phased plan.
-- Separate deterministic work from LLM-required work.
-- Keep acceptance criteria specific and bounded.
 """
 
 

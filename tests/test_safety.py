@@ -109,8 +109,8 @@ class TestPromptSafety:
                           proposed_working_dir="w", proposed_prompt_path="p",
                           proposed_command_shape="c", reason="t")
         content = render_prompt(plan, "r")
-        assert "# Reviewer Profile" in content
-        assert "Do not fetch private GitHub URLs" in content
+        assert "# Signposter Reviewer Prompt" in content
+        assert "Do not fetch the GitHub URL" in content
 
     def test_evidence_bundle_for_reviewer(self):
         from signposter.runner import render_prompt
@@ -122,7 +122,8 @@ class TestPromptSafety:
                           proposed_command_shape="c", reason="t")
         evidence = {"scan": "mock scan", "note": "Use embedded evidence"}
         content = render_prompt(plan, "r", evidence_bundle=evidence)
-        assert "## Evidence Bundle" in content
+        assert "## Evidence" in content
+        assert "Claim Dry-Run" not in content
 
 
 class TestScanTerminologySafety:
