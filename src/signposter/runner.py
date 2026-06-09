@@ -866,6 +866,31 @@ def _format_prompt_budget_report(
     return "\n".join(lines)
 
 
+def _format_worker_prompt_budget_report(
+    *, sections: tuple[PromptBudgetSection, ...]
+) -> str:
+    """Render a compact operator budget summary for worker prompts."""
+    bounded = [section for section in sections if section.status == "bounded"]
+    escalation_reason = (
+        "bounded sections present to preserve token budget"
+        if bounded
+        else "none"
+    )
+    lines = [
+        "## Prompt Budget Report",
+        "- prompt mode: compact-worker",
+        f"- escalation reason: {escalation_reason}",
+    ]
+    for section in sections:
+        line = f"- {section.name}: {section.status}; budget={section.budget}"
+        if section.status == "bounded":
+            line += "; reason=source exceeded prompt budget"
+        if section.omitted_marker:
+            line += f"; omitted={section.omitted_marker}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def _ensure_evidence_dir(number: int) -> Path:
     """Ensure artifacts/evidence/issue-<number>/ exists."""
     path = Path(f"artifacts/evidence/issue-{number}")
@@ -1044,8 +1069,7 @@ def render_prompt(
         issue_state = d.state or "unknown"
 
     if d.role == "worker":
-        prompt_budget_report = _format_prompt_budget_report(
-            prompt_mode="compact-worker",
+        prompt_budget_report = _format_worker_prompt_budget_report(
             sections=(
                 _prompt_budget_section(
                     name="Issue body",
@@ -1330,30 +1354,25 @@ def _render_compact_worker_prompt(
 - Labels: {labels_str}
 - Route/phase/role/risk/area/gate: {workflow}
 - Working directory: {plan.proposed_working_dir}
-- Prompt artifact: {plan.proposed_prompt_path}
 
 ## Selected Role Policy
 - backend: {plan.proposed_runner}
-- backend reason: {plan.backend_reason}
 - role identity: {plan.selected_role_name}
 - selected model: {plan.selected_model}
 - selected reasoning effort: {plan.selected_reasoning_effort}
 - Execution agent/profile: {plan.selected_openclaw_agent}
-- role selection reason: {plan.role_selection_reason}
-- command shape: {plan.proposed_command_shape}
 - fallback/takeover transparency:
 {chr(10).join(f"  - {line}" for line in _fallback_transparency_lines(plan))}
 
 ## Prompt Contract
 - expected output format: concise execution summary with changed files, validation,
   safety notes, and completion status
-- artifact requirements: keep raw backend output local under artifacts/runs/
-  and provide bounded summaries only
+- artifact requirements: keep raw backend output local under artifacts/runs/;
+  bounded summaries only
 - validation provenance: signposter.validation-result.v1; comments bounded
-- docs-only artifact fields: include Docs-only scope: yes, Changed files are
-  documentation-only: yes, Code behavior unchanged: yes, Scope stayed inside
-  requested documentation task: yes, and Dirty guard: clean
-- uncertainty handling: if uncertain, state exactly what is missing instead of guessing
+- docs-only artifact fields: Docs-only scope: yes; Changed files are documentation-only: yes;
+  Code behavior unchanged: yes; Dirty guard: clean when docs-only
+- uncertainty handling: state exactly what is missing instead of guessing
 
 {prompt_budget_report}
 
@@ -1365,19 +1384,15 @@ def _render_compact_worker_prompt(
 
 ## Rules
 - {private_rule}
-- Implement only this scoped issue.
-- Do not mutate GitHub unless a later command explicitly asks.
+- Implement only this scoped issue. Do not mutate GitHub unless a later command explicitly asks.
 - Do not commit unless explicitly instructed.
-- Keep raw backend output local under artifacts/runs/.
-- Report changed files, validation, safety notes, and remaining risks.
-- Preserve validation command provenance; no raw logs in comments.
-- If uncertain, state the uncertainty explicitly instead of guessing.
+- Keep raw backend output local under artifacts/runs/. Preserve validation command provenance;
+  no raw logs in comments.
 
 ## Recovery Hints
-- Interrupted/unavailable backend: preserve existing raw and summary artifacts.
-- Existing branch/worktree: inspect and resume it; do not create duplicates.
-- Manual fallback: `signposter artifact write-worker-summary`, then
-  `signposter report` and `signposter gate`.
+- On backend interrupt: preserve existing raw and summary artifacts; resume existing worktree.
+- Manual fallback: `signposter artifact write-worker-summary`, then `signposter report` and
+  `signposter gate`.
 
 ## Task
 {task_instruction}
@@ -1385,7 +1400,7 @@ def _render_compact_worker_prompt(
 ## Validation
 - Run targeted validation for changed files.
 - Run full validation when risk or shared behavior warrants it.
-- If the selected backend/provider execution is unavailable, use the manual artifact fallback.
+- Use manual artifact fallback if backend execution is unavailable.
 """
 
 

@@ -344,6 +344,17 @@ def test_render_prompt_worker_compact_is_shorter_than_reviewer_prompt():
     assert len(worker) < len(reviewer)
 
 
+def test_render_prompt_worker_static_shell_is_bounded():
+    from signposter.runner import render_prompt
+
+    content = render_prompt(make_runner_plan_for_test("worker", "build", number=42), "test/repo")
+    issue_body = content.split("## Issue Body", 1)[1].split("## Recent Comments", 1)[0]
+    static_shell = content.replace(issue_body, "")
+
+    assert len(static_shell) < 3600
+    assert "command shape:" not in static_shell
+
+
 def test_render_prompt_planner_uses_compact_format():
     from signposter.runner import render_prompt
 
