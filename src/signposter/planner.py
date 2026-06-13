@@ -1327,7 +1327,9 @@ def format_planner_issue_body(plan: dict[str, Any], issue: dict[str, Any]) -> st
             "Lifecycle boundary:",
             (
                 "Local-first. GitHub mutation only with --apply. Backend execution only "
-                "with --execute. Keep public output bounded."
+                "with --execute. Mutating worker work must run from an isolated "
+                "task branch/worktree, never directly from a protected base branch. "
+                "Keep public output bounded."
             ),
             "",
             "Stop conditions:",

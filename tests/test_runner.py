@@ -2,9 +2,39 @@
 
 from __future__ import annotations
 
+import pytest
+
 from signposter.dispatch import DispatchDecision
+from signposter.git_utils import RepoMutationSafety
 from signposter.runner import _select_runner_and_profile
 from signposter.scan import LabeledItem
+
+
+def _mutation_safety(
+    *,
+    status: str = "allowed",
+    branch: str | None = "work/issue-42-test",
+    reason: str = "test branch is safe",
+) -> RepoMutationSafety:
+    return RepoMutationSafety(
+        cwd=".",
+        current_branch=branch,
+        protected_branches=("main", "master", "trunk"),
+        isolated_work_branch_prefixes=("work/", "refactor/"),
+        status=status,
+        reason=reason,
+        requires_isolated_worktree=status != "allowed",
+        recommended_action="create or resume an isolated worktree",
+    )
+
+
+@pytest.fixture(autouse=True)
+def _allow_repo_mutation_by_default(monkeypatch):
+    """Keep execution tests branch-independent unless they assert the guard."""
+    monkeypatch.setattr(
+        "signposter.runner.evaluate_repo_mutation_safety",
+        lambda cwd=".": _mutation_safety(),
+    )
 
 
 def make_item(number: int, labels: list[str]) -> LabeledItem:
@@ -988,6 +1018,37 @@ def test_cli_main_explicit_issue_claim_refreshes_before_execute(capsys):
 
 
 # --- HARDENING-006: worker isolation / dirty tree guard ---
+
+
+def test_execute_plan_refuses_worker_on_protected_branch_even_with_allow_dirty(capsys, monkeypatch):
+    """Worker execution must not mutate protected branches directly."""
+    from signposter.runner import execute_plan
+
+    plan = make_runner_plan_for_test("worker", "build", number=41)
+    monkeypatch.setattr(
+        "signposter.runner.evaluate_repo_mutation_safety",
+        lambda cwd=".": _mutation_safety(
+            status="blocked",
+            branch="main",
+            reason="current branch 'main' is protected from direct worker mutation",
+        ),
+    )
+
+    result = execute_plan(plan, "test/repo", allow_dirty=True)
+
+    assert result["exit_code"] == 1
+    assert result.get("error") == "unsafe mutation branch"
+    assert result.get("success") is False
+    assert result.get("diagnosis_status") == "unsafe-mutation-branch"
+    assert "mutation_cwd" not in result
+    assert result.get("mutation_location") == "current worktree"
+    assert result.get("mutation_branch") == "main"
+    assert result.get("requires_isolated_worktree") is True
+    out = capsys.readouterr().out
+    assert "Refusing worker execution: branch is not safe for repo mutation." in out
+    assert "cwd:" not in out
+    assert "branch: main" in out
+    assert "protected from direct worker mutation" in out
 
 
 def test_execute_plan_refuses_worker_on_dirty_tree(capsys):

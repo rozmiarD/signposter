@@ -98,6 +98,9 @@ Expected safe output:
 ## Worktree, Claim, Prompt
 
 Create the isolated worktree only after the worktree plan is ready.
+Protected base branches such as `main`, `master`, and `trunk` are valid bases
+for planning and sync, but worker changes must happen in the issue worktree on
+its task branch.
 
 ```bash
 signposter worktree apply --repo $REPO --issue $ISSUE --apply

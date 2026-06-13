@@ -27,7 +27,11 @@ from signposter.execution_backend import (
     build_backend_command_shape,
     resolve_execution_backend,
 )
-from signposter.git_utils import find_uncommitted_repo_changes
+from signposter.git_utils import (
+    RepoMutationSafety,
+    evaluate_repo_mutation_safety,
+    find_uncommitted_repo_changes,
+)
 from signposter.openclaw_diagnostics import gather_openclaw_runtime_diagnostics
 from signposter.openclaw_preflight import (
     check_openclaw_preflight,
@@ -159,6 +163,31 @@ def _dirty_tree_result(*, cwd: str, dirty_paths: list[str]) -> dict:
         "dirty_cwd": cwd,
         "dirty_paths": tuple(dirty_paths),
         "allow_dirty_hint": "--allow-dirty",
+    }
+
+
+def _format_repo_mutation_refusal(safety: RepoMutationSafety) -> list[str]:
+    branch = safety.current_branch or "unknown"
+    return [
+        "Refusing worker execution: branch is not safe for repo mutation.",
+        f"  branch: {branch}",
+        f"  reason: {safety.reason}",
+        f"  next: {safety.recommended_action}",
+    ]
+
+
+def _repo_mutation_refusal_result(safety: RepoMutationSafety) -> dict:
+    return {
+        "exit_code": 1,
+        "raw_path": None,
+        "summary_path": None,
+        "error": "unsafe mutation branch",
+        "success": False,
+        "diagnosis_status": "unsafe-mutation-branch",
+        "mutation_location": "current worktree",
+        "mutation_branch": safety.current_branch,
+        "requires_isolated_worktree": safety.requires_isolated_worktree,
+        "recommended_action": safety.recommended_action,
     }
 
 
@@ -1876,16 +1905,23 @@ def execute_plan(
     # HARDENING-006 + HARDENING-010: Worker isolation guard (respects worktree cwd)
     effective_cwd = worktree_cwd or "."
 
-    if profile == "worker" and not allow_dirty:
-        dirty_paths = find_uncommitted_repo_changes(cwd=effective_cwd)
-        if dirty_paths:
-            for line in _format_dirty_tree_refusal(
-                context="worker execution",
-                cwd=effective_cwd,
-                dirty_paths=dirty_paths,
-            ):
+    if profile == "worker":
+        mutation_safety = evaluate_repo_mutation_safety(cwd=effective_cwd)
+        if mutation_safety.status != "allowed":
+            for line in _format_repo_mutation_refusal(mutation_safety):
                 print(line)
-            return _dirty_tree_result(cwd=effective_cwd, dirty_paths=dirty_paths)
+            return _repo_mutation_refusal_result(mutation_safety)
+
+        if not allow_dirty:
+            dirty_paths = find_uncommitted_repo_changes(cwd=effective_cwd)
+            if dirty_paths:
+                for line in _format_dirty_tree_refusal(
+                    context="worker execution",
+                    cwd=effective_cwd,
+                    dirty_paths=dirty_paths,
+                ):
+                    print(line)
+                return _dirty_tree_result(cwd=effective_cwd, dirty_paths=dirty_paths)
 
     if plan.proposed_runner == "codex-cli":
         runs_dir = Path("artifacts/runs")

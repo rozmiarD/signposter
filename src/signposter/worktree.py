@@ -122,6 +122,10 @@ def plan_worktree_for_issue(repo: str, issue_number: int) -> WorktreePlan:
 
     # Determine status
     notes: list[str] = ["No branches or worktrees were created."]
+    notes.append(
+        "Protected base branches are read-only bases for worker work; "
+        "mutating worker execution must happen on the proposed branch/worktree."
+    )
     status = "ready"
     branch_collision_reason: str | None = None
 

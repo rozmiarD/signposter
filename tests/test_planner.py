@@ -396,6 +396,8 @@ def test_format_planner_issue_body_contains_agent_contract() -> None:
     assert "Lifecycle boundary:" in body
     assert "GitHub mutation only with --apply." in body
     assert "Backend execution only with --execute." in body
+    assert "isolated task branch/worktree" in body
+    assert "protected base branch" in body
     assert "Problem:" not in body
     assert "\nGoal:" not in body
     assert "Acceptance criteria:" in body

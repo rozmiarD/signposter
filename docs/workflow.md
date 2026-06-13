@@ -72,6 +72,9 @@ integration after merge.
 - Dry-run and status commands must not mutate GitHub or local workflow state.
 - GitHub mutation requires `--apply`.
 - Backend execution requires `--execute`.
+- Mutating worker execution must run from an isolated task branch/worktree.
+  Protected base branches such as `main`, `master`, and `trunk` may be used for
+  sync/status/base planning, but direct worker mutation there is refused.
 - Raw execution output remains local.
 - GitHub comments and reviews must use bounded summaries.
 - Merge must not rely on auto-close keywords.

@@ -19,6 +19,19 @@ ALLOWED_DIRTY_PREFIXES = (
     ".openclaw/",
 )
 
+PROTECTED_MUTATION_BRANCHES = ("main", "master", "trunk")
+ISOLATED_WORK_BRANCH_PREFIXES = (
+    "work/",
+    "feature/",
+    "fix/",
+    "bugfix/",
+    "hotfix/",
+    "refactor/",
+    "docs/",
+    "test/",
+    "chore/",
+)
+
 
 @dataclass(frozen=True)
 class BranchSyncStatus:
@@ -30,6 +43,20 @@ class BranchSyncStatus:
     behind: int | None
     status: str
     reason: str
+
+
+@dataclass(frozen=True)
+class RepoMutationSafety:
+    """Read-only branch safety decision for mutating repo work."""
+
+    cwd: str
+    current_branch: str | None
+    protected_branches: tuple[str, ...]
+    isolated_work_branch_prefixes: tuple[str, ...]
+    status: str
+    reason: str
+    requires_isolated_worktree: bool
+    recommended_action: str
 
 
 def get_git_status_short(cwd: str | Path = ".") -> list[str]:
@@ -109,6 +136,93 @@ def get_current_branch(cwd: str | Path = ".") -> str | None:
         return None
     except Exception:
         return None
+
+
+def is_protected_mutation_branch(
+    branch: str | None,
+    protected_branches: Iterable[str] = PROTECTED_MUTATION_BRANCHES,
+) -> bool:
+    """Return true when `branch` is protected from direct worker mutation."""
+    if not branch:
+        return False
+    protected = {b.strip() for b in protected_branches if b.strip()}
+    return branch.strip() in protected
+
+
+def is_isolated_work_branch(
+    branch: str | None,
+    prefixes: Iterable[str] = ISOLATED_WORK_BRANCH_PREFIXES,
+) -> bool:
+    """Return true when `branch` looks like an isolated task branch."""
+    if not branch:
+        return False
+    value = branch.strip()
+    return any(value.startswith(prefix) for prefix in prefixes if prefix)
+
+
+def evaluate_repo_mutation_safety(
+    cwd: str | Path = ".",
+    *,
+    protected_branches: Iterable[str] = PROTECTED_MUTATION_BRANCHES,
+    isolated_work_branch_prefixes: Iterable[str] = ISOLATED_WORK_BRANCH_PREFIXES,
+) -> RepoMutationSafety:
+    """Evaluate whether mutating repo work may run in `cwd`.
+
+    This guard is intentionally branch-scoped. Syncing or inspecting the default
+    branch is still allowed elsewhere, but worker execution must happen from an
+    isolated branch/worktree.
+    """
+    protected_tuple = tuple(b.strip() for b in protected_branches if b.strip())
+    prefix_tuple = tuple(p for p in isolated_work_branch_prefixes if p)
+    cwd_text = str(cwd)
+    branch = get_current_branch(cwd)
+
+    if branch is None:
+        return RepoMutationSafety(
+            cwd=cwd_text,
+            current_branch=None,
+            protected_branches=protected_tuple,
+            isolated_work_branch_prefixes=prefix_tuple,
+            status="blocked",
+            reason="current git branch could not be determined",
+            requires_isolated_worktree=True,
+            recommended_action=(
+                "switch to a task branch/worktree before running mutating worker work"
+            ),
+        )
+
+    if is_protected_mutation_branch(branch, protected_tuple):
+        return RepoMutationSafety(
+            cwd=cwd_text,
+            current_branch=branch,
+            protected_branches=protected_tuple,
+            isolated_work_branch_prefixes=prefix_tuple,
+            status="blocked",
+            reason=(
+                f"current branch '{branch}' is protected from direct worker mutation"
+            ),
+            requires_isolated_worktree=True,
+            recommended_action=(
+                "create or resume an isolated worktree with "
+                "`signposter worktree apply --apply`, then run with `--worktree`"
+            ),
+        )
+
+    if is_isolated_work_branch(branch, prefix_tuple):
+        reason = f"current branch '{branch}' matches an isolated work branch prefix"
+    else:
+        reason = f"current branch '{branch}' is not protected"
+
+    return RepoMutationSafety(
+        cwd=cwd_text,
+        current_branch=branch,
+        protected_branches=protected_tuple,
+        isolated_work_branch_prefixes=prefix_tuple,
+        status="allowed",
+        reason=reason,
+        requires_isolated_worktree=False,
+        recommended_action="continue mutating work on this non-protected branch",
+    )
 
 
 def branch_exists(branch: str, cwd: str | Path = ".") -> bool:

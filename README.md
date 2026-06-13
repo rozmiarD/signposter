@@ -42,6 +42,9 @@ Core invariants:
 
 - GitHub mutation requires an explicit `--apply`.
 - Backend execution requires an explicit `--execute`.
+- Worker mutation runs from an isolated task branch/worktree; protected base
+  branches such as `main`, `master`, and `trunk` are refused for direct worker
+  execution.
 - Raw backend output stays local under `artifacts/runs/`.
 - GitHub comments use bounded summaries.
 - `state:done` does not close a GitHub issue.

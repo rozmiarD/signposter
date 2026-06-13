@@ -181,6 +181,7 @@ def test_worktree_plan_ready_for_active_worker(monkeypatch):
     assert plan.status == "ready"
     assert "work/issue-12-implement-feature-x" in plan.proposed_branch
     assert "signposter-work/12" in plan.proposed_worktree
+    assert any("Protected base branches" in note for note in plan.notes)
 
 
 @pytest.mark.parametrize("terminal_state", ["done", "failed", "merged"])
