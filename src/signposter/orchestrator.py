@@ -17,12 +17,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from signposter.artifact import validate_worker_summary_artifact
+from signposter.delegation import evaluate_delegation_policy
 from signposter.lifecycle import LifecycleNext, plan_lifecycle_next
 from signposter.planner import build_planner_next_from_status, build_planner_status
+from signposter.runner import plan_runner_for_issue
 from signposter.scan import LabeledItem, fetch_issue_by_number, fetch_open_issues
 from signposter.scheduler import SchedulerNext, select_next_issue
 
 EXECUTION_REQUIRED_ACTIONS = {"execute-worker"}
+WORKER_TAKEOVER_ACTIONS = {"write-prompt", "execute-worker", "check-gate"}
 MUTATION_REQUIRED_ACTIONS = {
     "labels-ensure",
     "sync-rebase",
@@ -1030,6 +1033,14 @@ def _plan_takeover_recovery_commands(
             f"signposter gate --repo {repo} --issue {issue}",
         )
 
+    if takeover_category == "delegation-circuit-open":
+        return (
+            f"signposter artifact write-worker-summary --repo {repo} --issue {issue} --apply",
+            f"signposter artifact validate-worker-summary --issue {issue}",
+            f"signposter report --repo {repo} --issue {issue} --apply",
+            f"signposter gate --repo {repo} --issue {issue}",
+        )
+
     return (f"signposter lifecycle status --repo {repo} --issue {issue}",)
 
 
@@ -1711,10 +1722,12 @@ def _extract_execute_diagnosis(
 
 _FALLBACK_ELIGIBLE_DIAGNOSES = {
     "timeout",
+    "auth-provider-failure",
     "auth-runtime-failure",
     "unsupported-model",
     "runtime-stall",
     "config-drift",
+    "config-error",
 }
 
 _CI_PENDING_SIGNAL = "pending — checks are still running"
@@ -1759,6 +1772,12 @@ def _plan_takeover(
 ) -> tuple[str | None, str | None]:
     if lifecycle.workflow_state != "state:active" or lifecycle.issue_number is None:
         return None, None
+    if lifecycle.action not in WORKER_TAKEOVER_ACTIONS:
+        return None, None
+    if lifecycle.action == "execute-worker":
+        delegation_takeover = _delegation_policy_takeover(repo, lifecycle.issue_number)
+        if delegation_takeover != (None, None):
+            return delegation_takeover
     if lifecycle.worker_summary_exists:
         malformed_reason = _malformed_worker_artifact_reason(lifecycle.issue_number)
         if malformed_reason:
@@ -1800,6 +1819,28 @@ def _plan_takeover(
         "active issue is stale and lacks a safe resume path; inspect labels, "
         "worktree, prompt, artifacts, and blocker evidence before continuing",
     )
+
+
+def _delegation_policy_takeover(
+    repo: str,
+    issue_number: int,
+) -> tuple[str | None, str | None]:
+    try:
+        runner_plan = plan_runner_for_issue(repo, issue_number)
+    except Exception:
+        return None, None
+    if runner_plan is None:
+        return None, None
+    decision = evaluate_delegation_policy(
+        target_kind="issue",
+        target_number=issue_number,
+        role=runner_plan.selected_role_name,
+        backend=runner_plan.proposed_runner,
+        model=runner_plan.selected_model,
+    )
+    if decision.status != "takeover-required":
+        return None, None
+    return "delegation-circuit-open", decision.reason
 
 
 def _has_runtime_attempt_without_worker_summary(issue_number: int) -> bool:

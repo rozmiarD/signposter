@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shlex
 import subprocess
 import sys
@@ -115,8 +116,14 @@ from signposter.orchestrator import (
 )
 from signposter.planner import (
     apply_planner_advance_plan,
+    apply_planner_body_sync_plan,
+    apply_planner_clear_manifest,
+    apply_planner_clear_recovery_plan,
     apply_planner_seed_manifest,
     build_planner_advance_plan_from_status,
+    build_planner_body_sync_plan,
+    build_planner_clear_plan,
+    build_planner_clear_recovery_plan,
     build_planner_impact_from_status,
     build_planner_next,
     build_planner_next_from_status,
@@ -130,6 +137,12 @@ from signposter.planner import (
     build_planner_step_from_next,
     format_planner_advance_apply_result,
     format_planner_advance_plan,
+    format_planner_body_sync_apply_result,
+    format_planner_body_sync_plan,
+    format_planner_clear_apply_result,
+    format_planner_clear_plan,
+    format_planner_clear_recovery_apply_result,
+    format_planner_clear_recovery_plan,
     format_planner_draft,
     format_planner_impact,
     format_planner_mark_result,
@@ -884,6 +897,94 @@ def main() -> None:
         help="Optional output path for compact roadmap status JSON artifact",
     )
     planner_status_parser.set_defaults(func=run_planner_status)
+
+    planner_sync_bodies_parser = planner_subparsers.add_parser(
+        "sync-bodies",
+        help="Sync seeded GitHub issue bodies from local planner body files",
+    )
+    planner_sync_bodies_parser.add_argument(
+        "--manifest",
+        required=True,
+        type=Path,
+        help="Path to the local planner seed manifest JSON file",
+    )
+    planner_sync_bodies_parser.add_argument(
+        "--task",
+        action="append",
+        default=None,
+        help="Optional task key to sync; repeat to sync multiple selected tasks",
+    )
+    planner_sync_bodies_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show planned issue body updates only",
+    )
+    planner_sync_bodies_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually update mapped GitHub issue bodies",
+    )
+    planner_sync_bodies_parser.set_defaults(func=run_planner_sync_bodies)
+
+    planner_clear_parser = planner_subparsers.add_parser(
+        "clear",
+        help="Retire a seeded roadmap by closing mapped issues and clearing the manifest",
+    )
+    planner_clear_parser.add_argument(
+        "--manifest",
+        required=True,
+        type=Path,
+        help="Path to the local planner seed manifest JSON file",
+    )
+    planner_clear_parser.add_argument(
+        "--archive-manifest",
+        required=False,
+        type=Path,
+        help="Optional archive copy path for the retired manifest",
+    )
+    planner_clear_parser.add_argument(
+        "--sync-github",
+        action="store_true",
+        help="Fetch current GitHub issue states before planning or applying clear",
+    )
+    planner_clear_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show planned issue closure and manifest rewrite only",
+    )
+    planner_clear_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually close mapped issues and clear the manifest",
+    )
+    planner_clear_parser.set_defaults(func=run_planner_clear)
+
+    planner_recover_clear_parser = planner_subparsers.add_parser(
+        "recover-clear",
+        help="Recover implemented issues after an overly broad roadmap clear",
+    )
+    planner_recover_clear_parser.add_argument(
+        "--manifest",
+        required=True,
+        type=Path,
+        help="Path to the retired planner seed manifest JSON file",
+    )
+    planner_recover_clear_parser.add_argument(
+        "--sync-github",
+        action="store_true",
+        help="Fetch current GitHub issue states before planning or applying recovery",
+    )
+    planner_recover_clear_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show planned issue recovery only",
+    )
+    planner_recover_clear_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually recover implemented issues",
+    )
+    planner_recover_clear_parser.set_defaults(func=run_planner_recover_clear)
 
     # worktree subcommand group (planning only — HARDENING-007)
     worktree_parser = subparsers.add_parser(
@@ -3892,6 +3993,52 @@ def _bounded_planner_gh_timeout_error(issue_number: int, timeout_seconds: int) -
     return f"gh issue view for issue #{issue_number} timed out after {timeout_seconds}s"
 
 
+def _fetch_merged_prs_by_issue(repo: str) -> dict[int, dict[str, object]]:
+    """Fetch merged PR evidence keyed by associated Signposter issue number."""
+    result = subprocess.run(
+        [
+            "gh",
+            "pr",
+            "list",
+            "-R",
+            repo,
+            "--state",
+            "merged",
+            "--limit",
+            "400",
+            "--json",
+            "number,headRefName,title,mergedAt",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(_bounded_planner_gh_error(result))
+
+    payload = json.loads(result.stdout or "[]")
+    merged_by_issue: dict[int, dict[str, object]] = {}
+    if not isinstance(payload, list):
+        return merged_by_issue
+
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        head_ref = str(item.get("headRefName") or "")
+        match = re.search(r"work/issue-(\d+)-", head_ref)
+        if not match:
+            continue
+        issue_number = int(match.group(1))
+        merged_by_issue[issue_number] = {
+            "number": int(item.get("number")),
+            "headRefName": head_ref,
+            "title": str(item.get("title") or ""),
+            "mergedAt": str(item.get("mergedAt") or ""),
+        }
+    return merged_by_issue
+
+
 def _fetch_manifest_issue_states(repo: str, manifest: dict[str, object]) -> dict[int, object]:
     """Fetch GitHub issue states for issues listed in a planner manifest."""
     states: dict[int, object] = {}
@@ -4074,6 +4221,280 @@ def run_planner_status(args: argparse.Namespace) -> int:
         print("  No GitHub mutation was performed.")
         print("  No manifest mutation was performed.")
     return 0
+
+
+def _default_archive_manifest_path(manifest_path: Path) -> Path:
+    return manifest_path.with_name(f"{manifest_path.stem}.retired.json")
+
+
+def run_planner_sync_bodies(args: argparse.Namespace) -> int:
+    """Sync seeded GitHub issue bodies from local planner body files."""
+    if args.dry_run and args.apply:
+        print("Signposter Planner Body Sync")
+        print()
+        print("Status:")
+        print("  blocked")
+        print()
+        print("Reason:")
+        print("  choose either --dry-run or --apply")
+        print()
+        print("Notes:")
+        print("  No GitHub mutation was performed.")
+        print("  No manifest mutation was performed.")
+        print("  No OpenClaw execution was performed.")
+        return 1
+
+    if not args.dry_run and not args.apply:
+        print("Signposter Planner Body Sync")
+        print()
+        print("Status:")
+        print("  blocked")
+        print()
+        print("Reason:")
+        print("  --dry-run or --apply is required")
+        print()
+        print("Notes:")
+        print("  No GitHub mutation was performed.")
+        print("  No manifest mutation was performed.")
+        print("  No OpenClaw execution was performed.")
+        return 1
+
+    if not args.manifest.exists():
+        plan = {
+            "status": "blocked",
+            "repo": "",
+            "manifest_path": str(args.manifest),
+            "sync_targets": [],
+            "skipped": [],
+            "errors": [f"manifest file not found: {args.manifest}"],
+            "requires_llm_analysis": False,
+        }
+        print(format_planner_body_sync_plan(plan))
+        return 1
+
+    manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+    task_keys = list(args.task or [])
+    plan = build_planner_body_sync_plan(
+        manifest=manifest,
+        manifest_path=args.manifest,
+        task_keys=task_keys,
+    )
+    print(format_planner_body_sync_plan(plan))
+
+    if args.dry_run:
+        return 0 if plan["status"] in {"ready", "completed"} else 1
+
+    result = apply_planner_body_sync_plan(
+        manifest_path=args.manifest,
+        task_keys=task_keys,
+        runner=lambda command: subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+        ),
+    )
+    print()
+    print(format_planner_body_sync_apply_result(result))
+    return 0 if result["status"] in {"synced", "completed"} else 1
+
+
+def run_planner_clear(args: argparse.Namespace) -> int:
+    """Retire a seeded roadmap by closing mapped issues and clearing the manifest."""
+    if args.dry_run and args.apply:
+        print("Signposter Planner Clear")
+        print()
+        print("Status:")
+        print("  blocked")
+        print()
+        print("Reason:")
+        print("  choose either --dry-run or --apply")
+        print()
+        print("Notes:")
+        print("  No GitHub mutation was performed.")
+        print("  No manifest mutation was performed.")
+        print("  No OpenClaw execution was performed.")
+        return 1
+
+    if not args.dry_run and not args.apply:
+        print("Signposter Planner Clear")
+        print()
+        print("Status:")
+        print("  blocked")
+        print()
+        print("Reason:")
+        print("  --dry-run or --apply is required")
+        print()
+        print("Notes:")
+        print("  No GitHub mutation was performed.")
+        print("  No manifest mutation was performed.")
+        print("  No OpenClaw execution was performed.")
+        return 1
+
+    if not args.manifest.exists():
+        plan = {
+            "status": "blocked",
+            "repo": "",
+            "manifest_path": str(args.manifest),
+            "archive_manifest_path": str(
+                args.archive_manifest or _default_archive_manifest_path(args.manifest)
+            ),
+            "close_targets": [],
+            "already_closed": [],
+            "unseeded": [],
+            "errors": [f"manifest file not found: {args.manifest}"],
+            "requires_llm_analysis": False,
+        }
+        print(format_planner_clear_plan(plan))
+        return 1
+
+    manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+    repo = str(manifest.get("repo", "") or "")
+    archive_manifest = args.archive_manifest or _default_archive_manifest_path(args.manifest)
+    try:
+        merged_prs_by_issue = _fetch_merged_prs_by_issue(repo)
+    except RuntimeError as exc:
+        plan = {
+            "status": "blocked",
+            "repo": repo,
+            "manifest_path": str(args.manifest),
+            "archive_manifest_path": str(archive_manifest),
+            "close_targets": [],
+            "already_closed": [],
+            "unseeded": [],
+            "errors": [f"failed to fetch merged PR evidence: {exc}"],
+            "requires_llm_analysis": False,
+        }
+        print(format_planner_clear_plan(plan))
+        return 1
+    issue_states = (
+        _fetch_manifest_issue_states(repo, manifest)
+        if args.sync_github
+        else {}
+    )
+    plan = build_planner_clear_plan(
+        manifest=manifest,
+        manifest_path=args.manifest,
+        archive_manifest_path=archive_manifest,
+        issue_states=issue_states,
+        implemented_issue_numbers=set(merged_prs_by_issue),
+    )
+    print(format_planner_clear_plan(plan))
+
+    if args.dry_run:
+        return 0 if plan["status"] in {"ready", "completed"} else 1
+
+    result = apply_planner_clear_manifest(
+        manifest_path=args.manifest,
+        archive_manifest_path=archive_manifest,
+        issue_states=issue_states,
+        implemented_issue_numbers=set(merged_prs_by_issue),
+        runner=lambda command: subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+        ),
+    )
+    print()
+    print(format_planner_clear_apply_result(result))
+    return 0 if result["status"] in {"cleared", "completed"} else 1
+
+
+def run_planner_recover_clear(args: argparse.Namespace) -> int:
+    """Recover implemented issues from an overly broad roadmap clear."""
+    if args.dry_run and args.apply:
+        print("Signposter Planner Clear Recovery")
+        print()
+        print("Status:")
+        print("  blocked")
+        print()
+        print("Reason:")
+        print("  choose either --dry-run or --apply")
+        print()
+        print("Notes:")
+        print("  No GitHub mutation was performed.")
+        print("  No manifest mutation was performed.")
+        print("  No OpenClaw execution was performed.")
+        return 1
+
+    if not args.dry_run and not args.apply:
+        print("Signposter Planner Clear Recovery")
+        print()
+        print("Status:")
+        print("  blocked")
+        print()
+        print("Reason:")
+        print("  --dry-run or --apply is required")
+        print()
+        print("Notes:")
+        print("  No GitHub mutation was performed.")
+        print("  No manifest mutation was performed.")
+        print("  No OpenClaw execution was performed.")
+        return 1
+
+    if not args.manifest.exists():
+        plan = {
+            "status": "blocked",
+            "repo": "",
+            "manifest_path": str(args.manifest),
+            "recover_targets": [],
+            "already_recovered": [],
+            "retained_not_planned": [],
+            "errors": [f"manifest file not found: {args.manifest}"],
+            "requires_llm_analysis": False,
+        }
+        print(format_planner_clear_recovery_plan(plan))
+        return 1
+
+    manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+    repo = str(manifest.get("repo", "") or "")
+    try:
+        merged_prs_by_issue = _fetch_merged_prs_by_issue(repo)
+    except RuntimeError as exc:
+        plan = {
+            "status": "blocked",
+            "repo": repo,
+            "manifest_path": str(args.manifest),
+            "recover_targets": [],
+            "already_recovered": [],
+            "retained_not_planned": [],
+            "errors": [f"failed to fetch merged PR evidence: {exc}"],
+            "requires_llm_analysis": False,
+        }
+        print(format_planner_clear_recovery_plan(plan))
+        return 1
+
+    issue_states = (
+        _fetch_manifest_issue_states(repo, manifest)
+        if args.sync_github
+        else {}
+    )
+    plan = build_planner_clear_recovery_plan(
+        manifest=manifest,
+        manifest_path=args.manifest,
+        issue_states=issue_states,
+        merged_prs_by_issue=merged_prs_by_issue,
+    )
+    print(format_planner_clear_recovery_plan(plan))
+
+    if args.dry_run:
+        return 0 if plan["status"] in {"ready", "completed"} else 1
+
+    result = apply_planner_clear_recovery_plan(
+        manifest_path=args.manifest,
+        issue_states=issue_states,
+        merged_prs_by_issue=merged_prs_by_issue,
+        runner=lambda command: subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+        ),
+    )
+    print()
+    print(format_planner_clear_recovery_apply_result(result))
+    return 0 if result["status"] in {"recovered", "completed"} else 1
 
 def run_planner_advance(args: argparse.Namespace) -> int:
     """Show or apply a guarded plan to promote downstream planner tasks."""

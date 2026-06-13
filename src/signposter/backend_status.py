@@ -86,7 +86,7 @@ def build_backend_status_report(
     return BackendStatusReport(
         default_backend=selected or DEFAULT_EXECUTION_BACKEND,
         backends=(openclaw, codex),
-        fallback_order=("codex-cli", "openclaw"),
+        fallback_order=(),
         runtime_diagnostics=runtime_diagnostics,
         runtime_diagnostics_status=(
             "warnings" if runtime_diagnostics else "no local runtime blockers found"
@@ -110,7 +110,7 @@ def build_backend_status_report(
             "No prompt was executed.",
             "No model tokens were consumed.",
             "No GitHub mutation was performed.",
-            "Fallback must be explicit and visible; no silent backend switch is allowed.",
+            "Automatic backend fallback is disabled; persistent failures require pilot takeover.",
         ),
     )
 
@@ -188,7 +188,7 @@ def _openclaw_health(
         selected_default=selected_default == "openclaw",
         execution_supported=True,
         status="ready" if preflight.ok else "blocked",
-        reason=f"legacy fallback: {preflight.reason}",
+        reason=f"explicit legacy backend: {preflight.reason}",
         command_path=preflight.openclaw_path,
     )
 
@@ -223,7 +223,8 @@ def format_backend_status_report(report: BackendStatusReport) -> str:
         "Signposter Backend Status",
         "",
         f"Default backend: {report.default_backend}",
-        "Fallback order: " + " -> ".join(report.fallback_order),
+        "Fallback order: "
+        + (" -> ".join(report.fallback_order) if report.fallback_order else "disabled"),
         "",
         "Compact summary:",
         f"  default: {report.default_backend}",

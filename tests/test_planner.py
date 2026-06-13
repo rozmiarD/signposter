@@ -12,11 +12,17 @@ from signposter.planner import (
     NEXT_ROADMAP_MIN_DAG_NODES,
     PLAN_VERSION,
     apply_planner_advance_plan,
+    apply_planner_body_sync_plan,
+    apply_planner_clear_manifest,
+    apply_planner_clear_recovery_plan,
     apply_planner_seed_manifest,
     build_manifest_issue_mapping_consistency,
     build_next_roadmap_bootstrap_contract,
     build_next_roadmap_bootstrap_status_artifact,
     build_planner_advance_plan_from_status,
+    build_planner_body_sync_plan,
+    build_planner_clear_plan,
+    build_planner_clear_recovery_plan,
     build_planner_draft,
     build_planner_impact_from_status,
     build_planner_next,
@@ -36,6 +42,8 @@ from signposter.planner import (
     format_next_roadmap_bootstrap_contract,
     format_planner_advance_apply_result,
     format_planner_advance_plan,
+    format_planner_body_sync_plan,
+    format_planner_clear_plan,
     format_planner_impact,
     format_planner_issue_body,
     format_planner_next_from_status,
@@ -381,17 +389,54 @@ def test_format_planner_issue_body_contains_agent_contract() -> None:
     body = format_planner_issue_body(plan, issue)
 
     assert body.startswith("Task: WATCH-001 — Define lifecycle watch CLI contract")
-    assert "Signposter policy:" in body
+    assert "Roadmap context:" in body
+    assert "Worker objective:" in body
+    assert "Deliverables:" in body
+    assert "Expected changed areas:" in body
+    assert "Lifecycle boundary:" in body
     assert "GitHub mutation only with --apply." in body
     assert "Backend execution only with --execute." in body
-    assert "Problem:" in body
-    assert "Goal:" in body
-    assert "Target command:" in body
-    assert "signposter lifecycle watch" in body
-    assert "Acceptance:" in body
+    assert "Problem:" not in body
+    assert "\nGoal:" not in body
+    assert "Acceptance criteria:" in body
     assert "Stop conditions:" in body
     assert "Expected output:" not in body
     assert "Report back:" not in body
+
+
+def test_format_planner_issue_body_preserves_structured_delivery_context() -> None:
+    plan = build_planner_draft("build lifecycle watch")
+    issue = {
+        **plan["issues"][0],
+        "body": (
+            "## Goal\n"
+            "Replace the planner issue body renderer with a compact handoff.\n\n"
+            "## Scope\n"
+            "- Render one worker objective.\n"
+            "- Preserve validation and implementation notes.\n\n"
+            "## Non-goals\n"
+            "- Do not change lifecycle transitions.\n\n"
+            "## Validation\n"
+            "- .venv/bin/python -m pytest tests/test_planner.py -q\n\n"
+            "## Implementation notes\n"
+            "- Remove the old Problem plus duplicate Goal pattern.\n"
+            "- Keep body-size checks green.\n\n"
+            "## Signposter metadata\n"
+            "route: worker\n"
+            "gate: ci"
+        ),
+    }
+
+    body = format_planner_issue_body(plan, issue)
+
+    assert "Worker objective:" in body
+    assert "Replace the planner issue body renderer" in body
+    assert "Deliverables:\n- Remove the old Problem plus duplicate Goal pattern." in body
+    assert "Non-goals:\n- Do not change lifecycle transitions." in body
+    assert "Validation:\n- .venv/bin/python -m pytest tests/test_planner.py -q" in body
+    assert "Signposter metadata:\nroute: worker\ngate: ci" in body
+    assert "Problem:\n## Goal" not in body
+    assert body.count("Worker objective:") == 1
 
 
 def test_format_planner_issue_body_compactness() -> None:
@@ -402,7 +447,7 @@ def test_format_planner_issue_body_compactness() -> None:
     size = evaluate_worker_issue_body_size(body)
 
     assert size["status"] == "pass"
-    assert size["char_count"] < 1800
+    assert size["char_count"] < 2200
     assert size["line_count"] < 70
 
 
@@ -419,6 +464,30 @@ def test_format_planner_issue_body_contains_dependency_metadata() -> None:
     assert "status: pending" in body
 
 
+def test_format_planner_issue_body_resolves_seeded_dependency_metadata() -> None:
+    plan = build_planner_draft("build lifecycle watch")
+    issue = {
+        **plan["issues"][1],
+        "dependency_metadata": [
+            {
+                "key": "WATCH-001",
+                "github_issue": 101,
+                "github_url": "https://github.com/ExatronOmega/signposter/issues/101",
+                "status": "resolved",
+            }
+        ],
+    }
+
+    body = format_planner_issue_body(plan, issue)
+
+    assert "Dependencies:\n* WATCH-001" in body
+    assert "Dependency metadata:" in body
+    assert "* key: WATCH-001" in body
+    assert "github issue: #101" in body
+    assert "status: resolved" in body
+    assert "assigned during guarded seed apply" not in body
+
+
 def test_build_planner_seed_plan_includes_issue_body() -> None:
     plan = build_planner_draft("build lifecycle watch")
 
@@ -428,7 +497,143 @@ def test_build_planner_seed_plan_includes_issue_body() -> None:
     assert seed_plan["status"] == "ready"
     assert "Task: WATCH-001" in body
     assert "GitHub mutation only with --apply." in body
-    assert "Target command:" in body
+    assert "Worker objective:" in body
+    assert "Deliverables:" in body
+
+
+def test_build_planner_body_sync_plan_targets_mapped_body_files(tmp_path: Path) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    write_planner_seed_issue_bodies(seed_plan, body_dir)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+
+    result = build_planner_body_sync_plan(
+        manifest=manifest,
+        manifest_path=manifest_path,
+        task_keys=["WATCH-001"],
+    )
+
+    assert result["status"] == "ready"
+    assert len(result["sync_targets"]) == 1
+    assert result["sync_targets"][0]["key"] == "WATCH-001"
+    assert result["sync_targets"][0]["github_issue"] == 10
+    assert result["sync_targets"][0]["body_size"]["status"] == "pass"
+    formatted = format_planner_body_sync_plan(result)
+    assert "update mapped GitHub issue bodies from local body files" in formatted
+    assert "no label, state, comment, PR, merge, integration, or cleanup mutation" in formatted
+
+
+def test_apply_planner_body_sync_plan_edits_issue_bodies_only(tmp_path: Path) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    calls: list[list[str]] = []
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    write_planner_seed_issue_bodies(seed_plan, body_dir)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+    write_planner_seed_manifest(manifest, manifest_path)
+
+    def fake_runner(args: list[str]) -> _FakeGhIssueCreateResult:
+        calls.append(args)
+        return _FakeGhIssueCreateResult(0, stdout="updated")
+
+    result = apply_planner_body_sync_plan(
+        manifest_path=manifest_path,
+        task_keys=["WATCH-001", "WATCH-002"],
+        runner=fake_runner,
+    )
+
+    assert result["status"] == "synced"
+    assert len(result["updated"]) == 2
+    assert calls[0] == [
+        "gh",
+        "issue",
+        "edit",
+        "10",
+        "-R",
+        "ExatronOmega/signposter",
+        "--body-file",
+        str(body_dir / "WATCH-001.md"),
+    ]
+    assert "--add-label" not in calls[0]
+    assert "--comment" not in calls[0]
+    dependency_body = (body_dir / "WATCH-002.md").read_text(encoding="utf-8")
+    assert "github issue: #10" in dependency_body
+    assert "status: resolved" in dependency_body
+    assert "assigned during guarded seed apply" not in dependency_body
+    saved = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert saved["body_sync_issue_count"] == 2
+    assert saved["body_sync_dependency_metadata_refresh_count"] == 1
+
+
+def test_cli_planner_sync_bodies_dry_run_reports_targets(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    write_planner_seed_issue_bodies(seed_plan, body_dir)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+    write_planner_seed_manifest(manifest, manifest_path)
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "sync-bodies",
+            "--manifest",
+            str(manifest_path),
+            "--task",
+            "WATCH-001",
+            "--dry-run",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+    assert exc_info.value.code in (None, 0)
+    assert "Signposter Planner Body Sync" in captured
+    assert "WATCH-001 -> #10" in captured
+    assert "Dry-run only unless --apply is explicitly used." in captured
 
 
 def test_evaluate_worker_issue_body_size_passes_preferred_range() -> None:
@@ -3121,6 +3326,603 @@ def test_cli_planner_status_sync_github_surfaces_stale_and_mismatched_mappings(
     assert "expected title: " + manifest["issues"][1]["title"] in captured
     assert "GitHub title: Unexpected title" in captured
     assert "No GitHub mutation was performed." in captured
+
+
+def test_build_planner_clear_plan_ready_with_open_and_closed_tasks(tmp_path: Path) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    archive_path = tmp_path / "seed-manifest.retired.json"
+
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+
+    issue_states = {
+        10: {"state": "closed", "github_state": "closed", "mapping_status": "ok"},
+        11: {"state": "open", "github_state": "open", "mapping_status": "ok"},
+        12: {"state": "open", "github_state": "open", "mapping_status": "ok"},
+        13: {"state": "open", "github_state": "open", "mapping_status": "ok"},
+        14: {"state": "open", "github_state": "open", "mapping_status": "ok"},
+    }
+
+    result = build_planner_clear_plan(
+        manifest=manifest,
+        manifest_path=manifest_path,
+        archive_manifest_path=archive_path,
+        issue_states=issue_states,
+    )
+
+    assert result["status"] == "ready"
+    assert len(result["close_targets"]) == 4
+    assert result["close_targets"][0]["github_issue"] == 11
+    assert result["already_closed"] == [
+        {
+            "key": "WATCH-001",
+            "github_issue": 10,
+            "title": "WATCH-001 — Define lifecycle watch CLI contract",
+            "github_url": "https://github.com/ExatronOmega/signposter/issues/10",
+            "state": "closed",
+        }
+    ]
+    assert result["errors"] == []
+    assert "Issues are closed, not deleted." in format_planner_clear_plan(result)
+
+
+def test_apply_planner_clear_manifest_comment_uses_repo_relative_paths(tmp_path: Path) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    archive_path = tmp_path / "seed-manifest.retired.json"
+    calls: list[list[str]] = []
+
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    issue = manifest["issues"][0]
+    issue["github_issue"] = 10
+    issue["github_url"] = "https://github.com/ExatronOmega/signposter/issues/10"
+    manifest["issues"] = [issue]
+    write_planner_seed_manifest(manifest, manifest_path)
+
+    def fake_runner(args: list[str]) -> _FakeGhIssueCreateResult:
+        calls.append(args)
+        return _FakeGhIssueCreateResult(0, stdout="closed")
+
+    result = apply_planner_clear_manifest(
+        manifest_path=manifest_path,
+        archive_manifest_path=archive_path,
+        issue_states={10: {"state": "open", "github_state": "open", "mapping_status": "ok"}},
+        implemented_issue_numbers=set(),
+        runner=fake_runner,
+    )
+
+    assert result["status"] == "cleared"
+    body = calls[0][-1]
+    assert "/home/probo/projects/signposter" not in body
+    assert "Active manifest: `seed-manifest.json`" in body
+    assert "Archive manifest: `seed-manifest.retired.json`" in body
+
+
+def test_build_planner_clear_plan_blocks_mismatched_mapping(tmp_path: Path) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+
+    issue_states = {
+        10: {
+            "state": "open",
+            "github_state": "open",
+            "mapping_status": "mismatched",
+            "mapping_reason": "GitHub issue title does not match planner manifest",
+        }
+    }
+
+    result = build_planner_clear_plan(
+        manifest=manifest,
+        manifest_path=tmp_path / "seed-manifest.json",
+        archive_manifest_path=tmp_path / "seed-manifest.retired.json",
+        issue_states=issue_states,
+    )
+
+    assert result["status"] == "blocked"
+    assert result["errors"] == [
+        "WATCH-001: GitHub issue mapping is mismatched: "
+        "GitHub issue title does not match planner manifest"
+    ]
+
+
+def test_build_planner_clear_plan_blocks_open_issue_with_merged_pr_evidence(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+
+    result = build_planner_clear_plan(
+        manifest=manifest,
+        manifest_path=tmp_path / "seed-manifest.json",
+        archive_manifest_path=tmp_path / "seed-manifest.retired.json",
+        issue_states={10: {"state": "open", "github_state": "open", "mapping_status": "ok"}},
+        implemented_issue_numbers={10},
+    )
+
+    assert result["status"] == "blocked"
+    assert result["errors"] == [
+        "WATCH-001: issue has merged PR evidence; recover or integrate it instead of clearing"
+    ]
+
+
+def test_apply_planner_clear_manifest_closes_issues_and_rewrites_manifest(tmp_path: Path) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    archive_path = tmp_path / "seed-manifest.retired.json"
+    calls: list[list[str]] = []
+
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+    write_planner_seed_manifest(manifest, manifest_path)
+
+    issue_states = {
+        issue["github_issue"]: {
+            "state": "open",
+            "github_state": "open",
+            "mapping_status": "ok",
+        }
+        for issue in manifest["issues"]
+    }
+
+    def fake_runner(args: list[str]) -> _FakeGhIssueCreateResult:
+        calls.append(args)
+        return _FakeGhIssueCreateResult(0, stdout="closed")
+
+    result = apply_planner_clear_manifest(
+        manifest_path=manifest_path,
+        archive_manifest_path=archive_path,
+        issue_states=issue_states,
+        implemented_issue_numbers=set(),
+        runner=fake_runner,
+    )
+
+    assert result["status"] == "cleared"
+    assert len(result["closed"]) == 5
+    assert len(calls) == 5
+    assert calls[0][:4] == ["gh", "issue", "close", "10"]
+    assert "--reason" in calls[0]
+    assert "not planned" in calls[0]
+    cleared = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert cleared["status"] == "cleared"
+    assert cleared["issues"] == []
+    assert cleared["archived_manifest"] == "seed-manifest.retired.json"
+    archived = json.loads(archive_path.read_text(encoding="utf-8"))
+    assert archived["status"] == "retired"
+    assert len(archived["issues"]) == 5
+    assert archived["issues"][0]["body_file"] == "WATCH-001.md"
+    assert str(tmp_path) not in json.dumps(archived)
+
+
+def test_apply_planner_clear_manifest_stops_before_manifest_rewrite_on_close_failure(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    archive_path = tmp_path / "seed-manifest.retired.json"
+    calls: list[list[str]] = []
+
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+    original_manifest = json.loads(json.dumps(manifest))
+    write_planner_seed_manifest(manifest, manifest_path)
+
+    issue_states = {
+        issue["github_issue"]: {
+            "state": "open",
+            "github_state": "open",
+            "mapping_status": "ok",
+        }
+        for issue in manifest["issues"]
+    }
+
+    def fake_runner(args: list[str]) -> _FakeGhIssueCreateResult:
+        calls.append(args)
+        if args[3] == "11":
+            return _FakeGhIssueCreateResult(1, stderr="second close failed")
+        return _FakeGhIssueCreateResult(0, stdout="closed")
+
+    result = apply_planner_clear_manifest(
+        manifest_path=manifest_path,
+        archive_manifest_path=archive_path,
+        issue_states=issue_states,
+        implemented_issue_numbers=set(),
+        runner=fake_runner,
+    )
+
+    assert result["status"] == "failed"
+    assert len(result["closed"]) == 1
+    assert result["errors"] == ["second close failed"]
+    assert json.loads(manifest_path.read_text(encoding="utf-8")) == original_manifest
+    assert not archive_path.exists()
+
+
+def test_cli_planner_clear_dry_run_reports_ready_plan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+    write_planner_seed_manifest(manifest, manifest_path)
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+        timeout: int | None = None,
+    ) -> _FakeGhIssueCreateResult:
+        if command[:3] == ["gh", "pr", "list"]:
+            return _FakeGhIssueCreateResult(0, stdout="[]")
+        issue_number = command[3]
+        title = manifest["issues"][int(issue_number) - 10]["title"]
+        return _FakeGhIssueCreateResult(
+            0,
+            stdout=json.dumps({"state": "OPEN", "labels": [], "title": title}),
+        )
+
+    monkeypatch.setattr("signposter.cli.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "clear",
+            "--manifest",
+            str(manifest_path),
+            "--sync-github",
+            "--dry-run",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+    assert exc_info.value.code in (None, 0)
+    assert "Signposter Planner Clear" in captured
+    assert "Status:\n  ready" in captured
+    assert "close mapped GitHub issues with reason: not planned" in captured
+    assert "Issues are closed, not deleted." in captured
+
+
+def test_cli_planner_clear_apply_closes_issues_and_clears_manifest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.json"
+    archive_path = tmp_path / "seed-manifest.retired.json"
+    close_calls: list[list[str]] = []
+
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "applied"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+    write_planner_seed_manifest(manifest, manifest_path)
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+        timeout: int | None = None,
+    ) -> _FakeGhIssueCreateResult:
+        if command[:3] == ["gh", "pr", "list"]:
+            return _FakeGhIssueCreateResult(0, stdout="[]")
+        if command[:3] == ["gh", "issue", "view"]:
+            issue_number = command[3]
+            title = manifest["issues"][int(issue_number) - 10]["title"]
+            return _FakeGhIssueCreateResult(
+                0,
+                stdout=json.dumps({"state": "OPEN", "labels": [], "title": title}),
+            )
+        close_calls.append(command)
+        return _FakeGhIssueCreateResult(0, stdout="closed")
+
+    monkeypatch.setattr("signposter.cli.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "clear",
+            "--manifest",
+            str(manifest_path),
+            "--archive-manifest",
+            str(archive_path),
+            "--sync-github",
+            "--apply",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+    cleared = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert exc_info.value.code in (None, 0)
+    assert len(close_calls) == 5
+    assert "Planner Clear Apply" in captured
+    assert "Status:\n  cleared" in captured
+    assert cleared["status"] == "cleared"
+    assert cleared["issues"] == []
+
+
+def test_build_planner_clear_recovery_plan_selects_only_implemented_issues(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.retired.json"
+
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "retired"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+
+    result = build_planner_clear_recovery_plan(
+        manifest=manifest,
+        manifest_path=manifest_path,
+        issue_states={
+            10: {"state": "closed", "github_state": "closed", "mapping_status": "ok"},
+            11: {
+                "state": "merged",
+                "github_state": "closed",
+                "workflow_state": "merged",
+                "mapping_status": "ok",
+            },
+        },
+        merged_prs_by_issue={10: {"number": 501}, 11: {"number": 502}},
+    )
+
+    assert result["status"] == "ready"
+    assert result["recover_targets"] == [
+        {
+            "key": "WATCH-001",
+            "github_issue": 10,
+            "title": "WATCH-001 — Define lifecycle watch CLI contract",
+            "github_url": "https://github.com/ExatronOmega/signposter/issues/10",
+            "state": "closed",
+            "pr_number": 501,
+        }
+    ]
+    assert result["already_recovered"] == [
+        {
+            "key": "WATCH-002",
+            "github_issue": 11,
+            "title": "WATCH-002 — Add read-only lifecycle watch data collector",
+            "github_url": "https://github.com/ExatronOmega/signposter/issues/11",
+            "state": "merged",
+            "pr_number": 502,
+        }
+    ]
+    assert len(result["retained_not_planned"]) == 3
+
+
+def test_apply_planner_clear_recovery_plan_reopens_and_recloses_completed(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.retired.json"
+    calls: list[list[str]] = []
+
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "retired"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+    write_planner_seed_manifest(manifest, manifest_path)
+
+    def fake_runner(args: list[str]) -> _FakeGhIssueCreateResult:
+        calls.append(args)
+        return _FakeGhIssueCreateResult(0, stdout="ok")
+
+    result = apply_planner_clear_recovery_plan(
+        manifest_path=manifest_path,
+        issue_states={10: {"state": "closed", "github_state": "closed", "mapping_status": "ok"}},
+        merged_prs_by_issue={10: {"number": 501}},
+        runner=fake_runner,
+    )
+
+    assert result["status"] == "recovered"
+    assert len(result["recovered"]) == 1
+    assert calls[0][:4] == ["gh", "issue", "reopen", "10"]
+    assert calls[1][:4] == ["gh", "issue", "edit", "10"]
+    assert calls[2][:4] == ["gh", "issue", "close", "10"]
+    saved = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert saved["recovered_completed_issue_count"] == 1
+
+
+def test_cli_planner_recover_clear_apply_recovers_only_implemented_issues(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    body_dir = tmp_path / "issue-bodies"
+    manifest_path = tmp_path / "seed-manifest.retired.json"
+    mutation_calls: list[list[str]] = []
+
+    plan = write_planner_draft("build lifecycle watch", plan_path)
+    seed_plan = build_planner_seed_plan(plan)
+    manifest = build_planner_seed_manifest(
+        plan_path=plan_path,
+        repo="ExatronOmega/signposter",
+        seed_plan=seed_plan,
+        body_dir=body_dir,
+    )
+    manifest["status"] = "retired"
+    for index, issue in enumerate(manifest["issues"], start=10):
+        issue["github_issue"] = index
+        issue["github_url"] = f"https://github.com/ExatronOmega/signposter/issues/{index}"
+    write_planner_seed_manifest(manifest, manifest_path)
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+        timeout: int | None = None,
+    ) -> _FakeGhIssueCreateResult:
+        if command[:3] == ["gh", "pr", "list"]:
+            return _FakeGhIssueCreateResult(
+                0,
+                stdout=json.dumps(
+                    [
+                        {
+                            "number": 501,
+                            "headRefName": "work/issue-10-watch-001",
+                            "title": "x",
+                            "mergedAt": "2026-06-13T00:00:00Z",
+                        }
+                    ]
+                ),
+            )
+        if command[:3] == ["gh", "issue", "view"]:
+            issue_number = command[3]
+            title = manifest["issues"][int(issue_number) - 10]["title"]
+            return _FakeGhIssueCreateResult(
+                0,
+                stdout=json.dumps({"state": "CLOSED", "labels": [], "title": title}),
+            )
+        mutation_calls.append(command)
+        return _FakeGhIssueCreateResult(0, stdout="ok")
+
+    monkeypatch.setattr("signposter.cli.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "signposter",
+            "planner",
+            "recover-clear",
+            "--manifest",
+            str(manifest_path),
+            "--sync-github",
+            "--apply",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    captured = capsys.readouterr().out
+    assert exc_info.value.code in (None, 0)
+    assert len(mutation_calls) == 3
+    assert "Planner Clear Recovery Apply" in captured
+    assert "Status:\n  recovered" in captured
 
 
 def test_build_planner_next_from_status_selects_first_open_ready_task(

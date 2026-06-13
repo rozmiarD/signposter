@@ -25,6 +25,7 @@ from signposter.codex_cli_backend import (
     plan_codex_cli_invocation,
 )
 from signposter.comments import ensure_github_comment_body
+from signposter.delegation import record_delegation_attempt
 from signposter.execution_backend import (
     build_backend_command_shape,
     resolve_execution_backend,
@@ -704,8 +705,10 @@ def build_review_prompt(
 {plan_notes}
 
 ## Scope and CI
-- Files changed: {plan.files_changed} (+{plan.additions}/-{plan.deletions}); risk: {plan.risk_level}; size: {plan.size}
-- CI: {plan.checks_status} (ok={plan.successful_checks}, fail={plan.failing_checks}, pending={plan.pending_checks})
+- Files changed: {plan.files_changed} (+{plan.additions}/-{plan.deletions});
+  risk: {plan.risk_level}; size: {plan.size}
+- CI: {plan.checks_status} (ok={plan.successful_checks},
+  fail={plan.failing_checks}, pending={plan.pending_checks})
 
 ## Prompt Budget
 - Changed files shown: first {changed_files_limit} paths
@@ -723,8 +726,10 @@ def build_review_prompt(
 
 ## Prompt Contract
 - expected output format: structured review opinion exactly matching the format below
-- artifact requirements: raw backend output stays local; GitHub comments/reviews use bounded summaries
-- validation provenance: verify command/source provenance from worker summary evidence and PR checks;
+- artifact requirements: raw backend output stays local; GitHub comments/reviews
+  use bounded summaries
+- validation provenance: verify command/source provenance from worker summary
+  evidence and PR checks;
   do not include raw validation logs in GitHub-facing output
 - uncertainty handling: prefer NEEDS_CHANGES or BLOCK when evidence is insufficient
 - confidence: 0.00-1.00; confidence >= 0.85 may enable automerge only with low risk, small scope,
@@ -736,7 +741,8 @@ def build_review_prompt(
 ## Changed Files Excerpt (from GitHub metadata, bounded)
 {_format_authoritative_changed_files(file_paths or [])}
 
-bounded excerpt of the GitHub changed-file metadata; broader true scope may be visible in counts and diff.
+bounded excerpt of the GitHub changed-file metadata; broader true scope may be
+visible in counts and diff.
 
 ## PR Body (bounded)
 {pr_body_excerpt}
@@ -972,6 +978,14 @@ def execute_pr_review(
             raw_path=raw_path,
             summary_path=summary_path,
         )
+        _record_review_delegation_attempt(
+            pr_number=pr_number,
+            plan=plan,
+            status=result.status,
+            reason=result.reason,
+            raw_path=str(result.raw_path),
+            summary_path=str(result.summary_path),
+        )
         return {
             "exit_code": result.exit_code,
             "raw_path": str(result.raw_path),
@@ -1036,6 +1050,14 @@ def execute_pr_review(
             diagnostics_warnings=diagnostics_warnings,
         )
         summary_path.write_text(summary, encoding="utf-8")
+        _record_review_delegation_attempt(
+            pr_number=pr_number,
+            plan=plan,
+            status=diagnosis.status,
+            reason=diagnosis.reason,
+            raw_path=str(raw_path),
+            summary_path=str(summary_path),
+        )
         _record_review_runtime_bug(
             pr_number=pr_number,
             plan=plan,
@@ -1115,6 +1137,14 @@ def execute_pr_review(
             diagnostics_warnings=diagnostics_warnings,
         )
         summary_path.write_text(summary, encoding="utf-8")
+        _record_review_delegation_attempt(
+            pr_number=pr_number,
+            plan=plan,
+            status=diagnosis.status,
+            reason=diagnosis.reason,
+            raw_path=str(raw_path),
+            summary_path=str(summary_path),
+        )
         _record_review_runtime_bug(
             pr_number=pr_number,
             plan=plan,
@@ -1161,6 +1191,14 @@ def execute_pr_review(
             diagnostics_warnings=diagnostics_warnings,
         )
         summary_path.write_text(summary, encoding="utf-8")
+        _record_review_delegation_attempt(
+            pr_number=pr_number,
+            plan=plan,
+            status=diagnosis.status,
+            reason=diagnosis.reason,
+            raw_path=str(raw_path),
+            summary_path=str(summary_path),
+        )
         _record_review_runtime_bug(
             pr_number=pr_number,
             plan=plan,
@@ -1198,6 +1236,14 @@ def execute_pr_review(
             diagnostics_warnings=diagnostics_warnings,
         )
         summary_path.write_text(summary, encoding="utf-8")
+        _record_review_delegation_attempt(
+            pr_number=pr_number,
+            plan=plan,
+            status=diagnosis.status,
+            reason=diagnosis.reason,
+            raw_path=str(raw_path),
+            summary_path=str(summary_path),
+        )
         _record_review_runtime_bug(
             pr_number=pr_number,
             plan=plan,
@@ -1213,6 +1259,31 @@ def execute_pr_review(
             "error": diagnosis.reason,
             "diagnosis_status": diagnosis.status,
         }
+
+
+def _record_review_delegation_attempt(
+    *,
+    pr_number: int,
+    plan: ReviewPlan,
+    status: str,
+    reason: str,
+    raw_path: str,
+    summary_path: str,
+) -> None:
+    try:
+        record_delegation_attempt(
+            target_kind="pr",
+            target_number=pr_number,
+            role=plan.selected_role_name,
+            backend=plan.proposed_runner,
+            model=plan.selected_model,
+            status=status,
+            reason=reason,
+            raw_path=raw_path,
+            summary_path=summary_path,
+        )
+    except Exception:
+        return
 
 
 def _record_review_runtime_bug(

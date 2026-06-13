@@ -91,6 +91,76 @@ def test_orchestrator_next_allows_execute_planning_with_flag() -> None:
     assert result.would_execute is True
 
 
+def test_orchestrator_blocks_execute_when_delegation_circuit_is_open(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from signposter.delegation import record_delegation_attempt
+
+    monkeypatch.chdir(tmp_path)
+    for status in ("timeout", "runtime-stall", "unsupported-model"):
+        record_delegation_attempt(
+            target_kind="issue",
+            target_number=46,
+            role="WORKER_CODE",
+            backend="codex-cli",
+            model="openai/gpt-5.3-codex",
+            status=status,
+            reason=status,
+        )
+
+    item = LabeledItem(
+        number=46,
+        title="Issue 46",
+        html_url="https://github.com/example/repo/issues/46",
+        labels=["state:active", "phase:build", "role:worker"],
+        item_type="issue",
+    )
+
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=None),
+        patch("signposter.runner.fetch_issue_by_number", return_value=item),
+    ):
+        planned = plan_orchestrator_next(
+            "ExatronOmega/signposter",
+            issue=46,
+            allow_execute=True,
+        )
+
+    assert planned.takeover_category == "delegation-circuit-open"
+    assert "pilot takeover is required" in (planned.takeover_reason or "")
+    assert planned.status == "actionable"
+    assert planned.recovery_commands == (
+        "signposter artifact write-worker-summary --repo ExatronOmega/signposter "
+        "--issue 46 --apply",
+        "signposter artifact validate-worker-summary --issue 46",
+        "signposter report --repo ExatronOmega/signposter --issue 46 --apply",
+        "signposter gate --repo ExatronOmega/signposter --issue 46",
+    )
+
+    run_command = Mock()
+    with (
+        patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()),
+        patch("signposter.orchestrator.fetch_issue_by_number", return_value=None),
+        patch("signposter.runner.fetch_issue_by_number", return_value=item),
+    ):
+        step = run_orchestrator_step(
+            "ExatronOmega/signposter",
+            issue=46,
+            apply=True,
+            execute=True,
+            run_command=run_command,
+        )
+
+    assert step.status == "blocked"
+    assert step.stop_reason == (
+        "takeover plan requires explicit manual recovery before apply: "
+        "delegation-circuit-open"
+    )
+    run_command.assert_not_called()
+
+
 def test_orchestrator_next_marks_mutating_lifecycle_action() -> None:
     lifecycle_next = _next(
         workflow_state="state:ready",
@@ -409,7 +479,11 @@ def test_orchestrator_next_plans_inspect_blocker_for_stale_active_issue(
     assert "lacks a safe resume path" in (result.takeover_reason or "")
 
 
-def test_orchestrator_next_degrades_when_issue_fetch_fails() -> None:
+def test_orchestrator_next_degrades_when_issue_fetch_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
     with (
         patch("signposter.orchestrator.plan_lifecycle_next", return_value=_next()),
         patch(
@@ -662,7 +736,11 @@ def test_orchestrator_step_apply_runs_allowlisted_command() -> None:
     ][-5:]
 
 
-def test_orchestrator_step_allows_write_prompt_action() -> None:
+def test_orchestrator_step_allows_write_prompt_action(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
     lifecycle_next = _next(
         workflow_state="state:active",
         action="write-prompt",
@@ -1339,7 +1417,11 @@ def test_format_orchestrator_run_next_contains_selection_and_action() -> None:
     assert "No lifecycle command was executed." in out
 
 
-def test_format_orchestrator_run_next_summary_is_concise() -> None:
+def test_format_orchestrator_run_next_summary_is_concise(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
     issue = LabeledItem(
         number=55,
         title="Issue 55",

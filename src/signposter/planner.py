@@ -1149,50 +1149,192 @@ def format_planner_roadmap(plan: dict[str, Any]) -> str:
     )
 
 
+def _parse_planner_issue_sections(body: str) -> dict[str, str]:
+    """Parse common planner issue Markdown sections without requiring them."""
+    sections: dict[str, list[str]] = {}
+    current = "Details"
+    sections[current] = []
+
+    for line in body.splitlines():
+        match = re.match(r"^\s{0,4}#{2,3}\s+(.+?)\s*$", line)
+        if match:
+            current = match.group(1).strip().rstrip(":")
+            sections.setdefault(current, [])
+            continue
+        sections.setdefault(current, []).append(line)
+
+    return {
+        name: _normalize_planner_section(lines)
+        for name, lines in sections.items()
+        if _normalize_planner_section(lines)
+    }
+
+
+def _normalize_planner_section(lines: list[str]) -> str:
+    normalized: list[str] = []
+    for line in lines:
+        normalized.append(line[4:] if line.startswith("    ") else line)
+    text = "\n".join(line.rstrip() for line in normalized).strip()
+    return re.sub(r"\n{3,}", "\n\n", text)
+
+
+def _compact_single_line(text: str, *, max_chars: int = 220) -> str:
+    compact = " ".join(text.split())
+    if len(compact) <= max_chars:
+        return compact
+    return compact[: max_chars - 3].rstrip() + "..."
+
+
+def _section_or_fallback(
+    sections: dict[str, str],
+    name: str,
+    fallback: str,
+) -> str:
+    text = sections.get(name, "").strip()
+    return text if text else fallback
+
+
+def _planner_worker_objective(
+    *,
+    issue: dict[str, Any],
+    sections: dict[str, str],
+) -> str:
+    explicit = sections.get("Worker objective", "").strip()
+    if explicit:
+        return explicit
+
+    goal = _section_or_fallback(sections, "Goal", str(issue["title"]))
+    notes = sections.get("Implementation notes", "").strip()
+    if notes:
+        first_action = _first_planner_action(notes)
+        return (
+            f"{_compact_single_line(goal)} Use this task to {first_action}. "
+            "Success means the deliverables are completed with enough evidence for "
+            "Signposter to advance the lifecycle without guessing."
+        )
+    return (
+        f"{_compact_single_line(goal)} "
+        "Success means the worker can identify and deliver the exact code, test, "
+        "or documentation change from this issue body alone."
+    )
+
+
+def _first_planner_action(text: str) -> str:
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith(("- ", "* ")):
+            line = line[2:].strip()
+        line = line.rstrip(".")
+        if not line:
+            continue
+        return line[:1].lower() + line[1:]
+    return "deliver the scoped planner task"
+
+
+def _planner_deliverables(issue: dict[str, Any], sections: dict[str, str]) -> str:
+    explicit = sections.get("Deliverables", "").strip()
+    if explicit:
+        return explicit
+
+    notes = sections.get("Implementation notes", "").strip()
+    if notes:
+        return notes
+
+    scope = sections.get("Scope", "").strip()
+    if scope:
+        return scope
+
+    details = sections.get("Details", "").strip()
+    if details:
+        return details
+
+    return f"- Deliver the scoped task: {issue['title']}."
+
+
+def _planner_expected_changed_areas(issue: dict[str, Any], sections: dict[str, str]) -> str:
+    explicit = (
+        sections.get("Expected changed areas", "").strip()
+        or sections.get("Likely changed files", "").strip()
+        or sections.get("Files", "").strip()
+    )
+    if explicit:
+        return explicit
+    area = str(issue.get("area", "")).strip() or "unknown"
+    return f"- area:{area}"
+
+
 def format_planner_issue_body(plan: dict[str, Any], issue: dict[str, Any]) -> str:
     """Format a planner task as a bounded GitHub issue body."""
     dependencies = issue.get("depends_on", [])
     dependency_lines = _markdown_bullets(dependencies, fallback="none")
-    dependency_metadata_lines = _format_issue_dependency_metadata(dependencies)
+    dependency_metadata_lines = _format_issue_dependency_metadata(
+        dependencies,
+        issue.get("dependency_metadata", []),
+    )
+    sections = _parse_planner_issue_sections(str(issue.get("body", "")))
+    worker_objective = _planner_worker_objective(issue=issue, sections=sections)
+    deliverables = _planner_deliverables(issue, sections)
+    changed_areas = _planner_expected_changed_areas(issue, sections)
+    non_goals = _section_or_fallback(sections, "Non-goals", "No broad rewrite.")
+    validation = sections.get("Validation", "").strip()
+    implementation_notes = sections.get("Implementation notes", "").strip()
+    metadata = sections.get("Signposter metadata", "").strip()
     acceptance_lines = _markdown_bullets(issue.get("acceptance", []))
     stop_condition_lines = _markdown_bullets(issue.get("stop_conditions", []))
 
-    return "\n".join(
+    lines = [
+        f"Task: {issue['key']} — {issue['title']}",
+        "",
+        "Roadmap context:",
+        _compact_single_line(str(plan["goal"])),
+        "",
+        "Worker objective:",
+        worker_objective,
+        "",
+        "Deliverables:",
+        deliverables,
+        "",
+        "Expected changed areas:",
+        changed_areas,
+        "",
+        "Non-goals:",
+        non_goals,
+        "",
+        "Dependencies:",
+        dependency_lines,
+        "",
+        "Dependency metadata:",
+        dependency_metadata_lines,
+        "",
+        "Acceptance criteria:",
+        acceptance_lines,
+        "* ruff check . passes.",
+        "* python -m pytest tests/ -q passes.",
+    ]
+
+    if validation:
+        lines.extend(["", "Validation:", validation])
+    if implementation_notes:
+        lines.extend(["", "Implementation notes:", implementation_notes])
+    if metadata:
+        lines.extend(["", "Signposter metadata:", metadata])
+
+    lines.extend(
         [
-            f"Task: {issue['key']} — {issue['title']}",
             "",
-            "Signposter policy:",
-            "Local-first supervised workflow. GitHub mutation only with --apply.",
-            "Backend execution only with --execute. Block safely on missing preconditions.",
-            "Keep output compact and deterministic.",
-            f"Source plan goal: {plan['goal']}",
-            "",
-            "Problem:",
-            issue["body"],
-            "",
-            "Goal:",
-            f"Complete this narrow task: {issue['title']}.",
-            "",
-            "Target command:",
-            "```bash",
-            _target_command_for_issue(issue),
-            "```",
-            "",
-            "Dependencies:",
-            dependency_lines,
-            "",
-            "Dependency metadata:",
-            dependency_metadata_lines,
-            "",
-            "Acceptance:",
-            acceptance_lines,
-            "* ruff check . passes.",
-            "* python -m pytest tests/ -q passes.",
+            "Lifecycle boundary:",
+            (
+                "Local-first. GitHub mutation only with --apply. Backend execution only "
+                "with --execute. Keep public output bounded."
+            ),
             "",
             "Stop conditions:",
             stop_condition_lines,
         ]
     )
+    return "\n".join(lines)
 
 
 def build_planner_seed_plan(plan: dict[str, Any]) -> dict[str, Any]:
@@ -1237,17 +1379,32 @@ def build_planner_seed_plan(plan: dict[str, Any]) -> dict[str, Any]:
     return {"status": "ready", "errors": [], "issues": issues}
 
 
-def _format_issue_dependency_metadata(dependencies: list[str]) -> str:
+def _format_issue_dependency_metadata(
+    dependencies: list[str],
+    dependency_metadata: list[dict[str, Any]] | None = None,
+) -> str:
     if not dependencies:
         return "* none"
 
+    metadata_by_key = {
+        str(item.get("key") or ""): item
+        for item in dependency_metadata or []
+        if isinstance(item, dict)
+    }
     lines: list[str] = []
     for dependency in dependencies:
+        metadata = metadata_by_key.get(str(dependency), {})
+        github_issue = metadata.get("github_issue")
+        if github_issue is None:
+            github_issue_line = "  github issue: assigned during guarded seed apply"
+        else:
+            github_issue_line = f"  github issue: #{int(github_issue)}"
+        status = str(metadata.get("status") or "pending")
         lines.extend(
             [
                 f"* key: {dependency}",
-                "  github issue: assigned during guarded seed apply",
-                "  status: pending",
+                github_issue_line,
+                f"  status: {status}",
             ]
         )
     return "\n".join(lines)
@@ -1359,6 +1516,984 @@ def format_planner_seed_apply_result(
             "  GitHub mutation is only performed when --apply is explicitly used.",
             "  OpenClaw execution was not performed.",
             "  Task execution was not performed.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def build_planner_clear_plan(
+    *,
+    manifest: dict[str, Any],
+    manifest_path: Path,
+    archive_manifest_path: Path,
+    issue_states: dict[int, object] | None = None,
+    implemented_issue_numbers: set[int] | None = None,
+) -> dict[str, Any]:
+    """Build a guarded plan to retire a seeded roadmap and clear its manifest."""
+    manifest = _refresh_seed_manifest_dependency_metadata(dict(manifest))
+    tasks = build_planner_status(manifest, issue_states or {}).get("tasks", [])
+    repo = str(manifest.get("repo", "") or "")
+
+    if manifest_path == archive_manifest_path:
+        return {
+            "status": "blocked",
+            "repo": repo,
+            "manifest_path": str(manifest_path),
+            "archive_manifest_path": str(archive_manifest_path),
+            "close_targets": [],
+            "already_closed": [],
+            "unseeded": [],
+            "errors": ["archive manifest path must differ from the active manifest path"],
+            "requires_llm_analysis": False,
+        }
+
+    if not repo:
+        return {
+            "status": "blocked",
+            "repo": repo,
+            "manifest_path": str(manifest_path),
+            "archive_manifest_path": str(archive_manifest_path),
+            "close_targets": [],
+            "already_closed": [],
+            "unseeded": [],
+            "errors": ["manifest repo is missing"],
+            "requires_llm_analysis": False,
+        }
+
+    if not tasks:
+        return {
+            "status": "completed",
+            "repo": repo,
+            "manifest_path": str(manifest_path),
+            "archive_manifest_path": str(archive_manifest_path),
+            "close_targets": [],
+            "already_closed": [],
+            "unseeded": [],
+            "errors": [],
+            "requires_llm_analysis": False,
+        }
+
+    close_targets: list[dict[str, Any]] = []
+    already_closed: list[dict[str, Any]] = []
+    unseeded: list[dict[str, Any]] = []
+    errors: list[str] = []
+    implemented_issue_numbers = implemented_issue_numbers or set()
+
+    for task in tasks:
+        key = str(task.get("key") or "unknown")
+        github_issue = task.get("github_issue")
+        if github_issue is None:
+            unseeded.append({"key": key})
+            continue
+
+        mapping_status = str(task.get("mapping_status", "") or "").strip().lower()
+        if mapping_status in {"stale", "missing", "mismatched"}:
+            reason = str(task.get("mapping_reason", "") or "").strip()
+            error = f"{key}: GitHub issue mapping is {mapping_status}"
+            if reason:
+                error += f": {reason}"
+            errors.append(error)
+            continue
+
+        item = {
+            "key": key,
+            "github_issue": int(github_issue),
+            "title": str(task.get("title") or ""),
+            "github_url": str(task.get("github_url") or ""),
+            "state": str(task.get("state") or "").lower(),
+        }
+        if (
+            item["github_issue"] in implemented_issue_numbers
+            and item["state"] not in COMPLETED_PLANNER_STATES
+        ):
+            errors.append(
+                f"{key}: issue has merged PR evidence; recover or integrate it instead of clearing"
+            )
+            continue
+        if item["state"] in COMPLETED_PLANNER_STATES:
+            already_closed.append(item)
+        else:
+            close_targets.append(item)
+
+    status = "ready"
+    if errors:
+        status = "blocked"
+    elif archive_manifest_path.exists():
+        status = "blocked"
+        errors.append(f"archive manifest already exists: {archive_manifest_path}")
+
+    return {
+        "status": status,
+        "repo": repo,
+        "manifest_path": str(manifest_path),
+        "archive_manifest_path": str(archive_manifest_path),
+        "close_targets": close_targets,
+        "already_closed": already_closed,
+        "unseeded": unseeded,
+        "errors": errors,
+        "requires_llm_analysis": False,
+    }
+
+
+def format_planner_clear_plan(plan: dict[str, Any]) -> str:
+    """Format a dry-run roadmap clear plan."""
+    lines = [
+        "Signposter Planner Clear",
+        "",
+        "Manifest:",
+        f"  {plan['manifest_path']}",
+        "",
+        "Archive manifest:",
+        f"  {plan['archive_manifest_path']}",
+        "",
+        "Repo:",
+        f"  {plan['repo']}",
+        "",
+        "Status:",
+        f"  {plan['status']}",
+        "",
+        "Close targets:",
+        f"  total: {len(plan.get('close_targets', []))}",
+    ]
+
+    for item in plan.get("close_targets", [])[:5]:
+        lines.append(f"  {item['key']} -> #{item['github_issue']}")
+    remaining_targets = len(plan.get("close_targets", [])) - 5
+    if remaining_targets > 0:
+        lines.append(f"  ... {remaining_targets} additional close target(s) omitted")
+
+    lines.extend(
+        [
+            "",
+            "Already closed:",
+            f"  total: {len(plan.get('already_closed', []))}",
+        ]
+    )
+    for item in plan.get("already_closed", [])[:3]:
+        lines.append(f"  {item['key']} -> #{item['github_issue']}")
+    remaining_closed = len(plan.get("already_closed", [])) - 3
+    if remaining_closed > 0:
+        lines.append(f"  ... {remaining_closed} additional closed task(s) omitted")
+
+    if plan.get("unseeded"):
+        lines.extend(["", "Unseeded tasks:"])
+        for item in plan["unseeded"][:3]:
+            lines.append(f"  {item['key']}")
+        remaining_unseeded = len(plan["unseeded"]) - 3
+        if remaining_unseeded > 0:
+            lines.append(f"  ... {remaining_unseeded} additional unseeded task(s) omitted")
+
+    if plan.get("errors"):
+        lines.extend(["", "Errors:"])
+        lines.extend(f"  - {error}" for error in plan["errors"])
+
+    lines.extend(
+        [
+            "",
+            "Planned mutations:",
+        ]
+    )
+    if plan["status"] == "ready":
+        lines.append("  close mapped GitHub issues with reason: not planned")
+        lines.append("  write archive manifest copy")
+        lines.append("  rewrite active manifest as empty")
+    else:
+        lines.append(f"  none — clear plan is not ready ({plan['status']})")
+
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "  Dry-run only.",
+            "  Issues are closed, not deleted.",
+            "  Manifest is rewritten only after all GitHub issue closures succeed.",
+            "  No OpenClaw execution was performed.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _public_manifest_path(path: Path) -> str:
+    raw = path.as_posix()
+    for marker in ("docs/roadmaps/", "artifacts/", "tests/", "src/"):
+        if marker in raw:
+            return marker + raw.split(marker, 1)[1]
+    return path.name
+
+
+def _planner_clear_comment(
+    *,
+    manifest_path: Path,
+    archive_manifest_path: Path,
+) -> str:
+    return (
+        "Signposter roadmap reset\n\n"
+        "This DAG issue was retired through the guarded Signposter planner clear flow.\n"
+        f"Active manifest: `{_public_manifest_path(manifest_path)}`\n"
+        f"Archive manifest: `{_public_manifest_path(archive_manifest_path)}`\n"
+        "Reason: roadmap reset requested; issue closed as not planned."
+    )
+
+
+def _sanitize_retired_seed_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Remove host-local paths from a retired manifest copy."""
+    sanitized = dict(manifest)
+    plan_path = sanitized.get("plan")
+    if isinstance(plan_path, str):
+        sanitized["plan"] = _public_manifest_path(Path(plan_path))
+    sanitized_issues: list[dict[str, Any]] = []
+    for issue in manifest.get("issues", []):
+        sanitized_issue = dict(issue)
+        body_file = sanitized_issue.get("body_file")
+        if isinstance(body_file, str):
+            sanitized_issue["body_file"] = _public_manifest_path(Path(body_file))
+        sanitized_issues.append(sanitized_issue)
+    sanitized["issues"] = sanitized_issues
+    return sanitized
+
+
+def _build_gh_issue_close_args(
+    *,
+    repo: str,
+    issue_number: int,
+    comment: str,
+) -> list[str]:
+    return [
+        "gh",
+        "issue",
+        "close",
+        str(issue_number),
+        "-R",
+        repo,
+        "--reason",
+        "not planned",
+        "--comment",
+        comment,
+    ]
+
+
+def _build_cleared_seed_manifest(
+    *,
+    manifest: dict[str, Any],
+    archive_manifest_path: Path,
+) -> dict[str, Any]:
+    return {
+        "version": manifest.get("version", "planner.seed-manifest.v0.1"),
+        "plan": manifest.get("plan"),
+        "repo": manifest.get("repo"),
+        "status": "cleared",
+        "cleared_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "archived_manifest": _public_manifest_path(archive_manifest_path),
+        "cleared_issue_count": len(manifest.get("issues", [])),
+        "issues": [],
+        "issue_key_map": {},
+    }
+
+
+def apply_planner_clear_manifest(
+    *,
+    manifest_path: Path,
+    archive_manifest_path: Path,
+    issue_states: dict[int, object] | None,
+    implemented_issue_numbers: set[int] | None,
+    runner: Any,
+) -> dict[str, Any]:
+    """Apply a guarded roadmap clear after manifest mapping verification."""
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    plan = build_planner_clear_plan(
+        manifest=manifest,
+        manifest_path=manifest_path,
+        archive_manifest_path=archive_manifest_path,
+        issue_states=issue_states,
+        implemented_issue_numbers=implemented_issue_numbers,
+    )
+
+    if plan["status"] == "completed":
+        return {
+            "status": "completed",
+            "closed": [],
+            "errors": [],
+            "plan": plan,
+        }
+
+    if plan["status"] != "ready":
+        return {
+            "status": "blocked",
+            "closed": [],
+            "errors": list(plan.get("errors", [])),
+            "plan": plan,
+        }
+
+    comment = _planner_clear_comment(
+        manifest_path=manifest_path,
+        archive_manifest_path=archive_manifest_path,
+    )
+    closed: list[dict[str, Any]] = []
+    for target in plan["close_targets"]:
+        result = runner(
+            _build_gh_issue_close_args(
+                repo=plan["repo"],
+                issue_number=int(target["github_issue"]),
+                comment=comment,
+            )
+        )
+        returncode = int(getattr(result, "returncode", 1))
+        if returncode != 0:
+            stderr = str(getattr(result, "stderr", "") or "")
+            stdout = str(getattr(result, "stdout", "") or "")
+            output = "\n".join(part for part in [stderr.strip(), stdout.strip()] if part)
+            return {
+                "status": "failed",
+                "closed": closed,
+                "errors": [
+                    _bounded_error(
+                        output or f"gh issue close failed for #{target['github_issue']}"
+                    )
+                ],
+                "plan": plan,
+            }
+        closed.append(target)
+
+    archived_manifest = _sanitize_retired_seed_manifest(manifest)
+    archived_manifest["status"] = "retired"
+    archived_manifest["retired_at"] = datetime.now(UTC).isoformat(timespec="seconds")
+    archived_manifest["retired_reason"] = "roadmap reset"
+    write_planner_seed_manifest(archived_manifest, archive_manifest_path)
+    write_planner_seed_manifest(
+        _build_cleared_seed_manifest(
+            manifest=manifest,
+            archive_manifest_path=archive_manifest_path,
+        ),
+        manifest_path,
+    )
+    return {
+        "status": "cleared",
+        "closed": closed,
+        "errors": [],
+        "plan": plan,
+    }
+
+
+def format_planner_clear_apply_result(result: dict[str, Any]) -> str:
+    """Format the apply result for planner clear."""
+    plan = result.get("plan", {})
+    lines = [
+        "Planner Clear Apply",
+        "",
+        "Manifest:",
+        f"  {plan.get('manifest_path', 'unknown')}",
+        "",
+        "Archive manifest:",
+        f"  {plan.get('archive_manifest_path', 'unknown')}",
+        "",
+        "Status:",
+        f"  {result['status']}",
+    ]
+
+    if result.get("closed"):
+        lines.extend(["", "Closed GitHub issues:"])
+        for item in result["closed"]:
+            lines.append(f"  {item['key']} -> #{item['github_issue']}")
+
+    if result.get("errors"):
+        lines.extend(["", "Errors:"])
+        lines.extend(f"  - {error}" for error in result["errors"])
+
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "  GitHub mutation is only performed when --apply is explicitly used.",
+            "  Issues are closed as not planned, not deleted.",
+            "  Manifest rewrite happens only after successful issue closure.",
+            "  No OpenClaw execution was performed.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def build_planner_clear_recovery_plan(
+    *,
+    manifest: dict[str, Any],
+    manifest_path: Path,
+    issue_states: dict[int, object] | None = None,
+    merged_prs_by_issue: dict[int, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Build a guarded plan to recover implemented issues after an overly broad clear."""
+    manifest = _refresh_seed_manifest_dependency_metadata(dict(manifest))
+    tasks = build_planner_status(manifest, issue_states or {}).get("tasks", [])
+    repo = str(manifest.get("repo", "") or "")
+    merged_prs_by_issue = merged_prs_by_issue or {}
+
+    recover_targets: list[dict[str, Any]] = []
+    already_recovered: list[dict[str, Any]] = []
+    retained_not_planned: list[dict[str, Any]] = []
+    errors: list[str] = []
+
+    for task in tasks:
+        key = str(task.get("key") or "unknown")
+        github_issue = task.get("github_issue")
+        if github_issue is None:
+            continue
+
+        mapping_status = str(task.get("mapping_status", "") or "").strip().lower()
+        if mapping_status in {"stale", "missing", "mismatched"}:
+            reason = str(task.get("mapping_reason", "") or "").strip()
+            error = f"{key}: GitHub issue mapping is {mapping_status}"
+            if reason:
+                error += f": {reason}"
+            errors.append(error)
+            continue
+
+        item = {
+            "key": key,
+            "github_issue": int(github_issue),
+            "title": str(task.get("title") or ""),
+            "github_url": str(task.get("github_url") or ""),
+            "state": str(task.get("state") or "").lower(),
+        }
+        pr_info = merged_prs_by_issue.get(int(github_issue))
+        if pr_info is None:
+            retained_not_planned.append(item)
+            continue
+        item["pr_number"] = int(pr_info["number"])
+        if item["state"] == "merged":
+            already_recovered.append(item)
+        else:
+            recover_targets.append(item)
+
+    status = "ready"
+    if errors:
+        status = "blocked"
+    elif not recover_targets:
+        status = "completed"
+
+    return {
+        "status": status,
+        "repo": repo,
+        "manifest_path": str(manifest_path),
+        "recover_targets": recover_targets,
+        "already_recovered": already_recovered,
+        "retained_not_planned": retained_not_planned,
+        "errors": errors,
+        "requires_llm_analysis": False,
+    }
+
+
+def format_planner_clear_recovery_plan(plan: dict[str, Any]) -> str:
+    """Format a dry-run planner clear recovery plan."""
+    lines = [
+        "Signposter Planner Clear Recovery",
+        "",
+        "Manifest:",
+        f"  {plan['manifest_path']}",
+        "",
+        "Repo:",
+        f"  {plan['repo']}",
+        "",
+        "Status:",
+        f"  {plan['status']}",
+        "",
+        "Recover implemented issues:",
+        f"  total: {len(plan.get('recover_targets', []))}",
+    ]
+    for item in plan.get("recover_targets", [])[:5]:
+        lines.append(f"  {item['key']} -> #{item['github_issue']} via PR #{item['pr_number']}")
+    remaining_targets = len(plan.get("recover_targets", [])) - 5
+    if remaining_targets > 0:
+        lines.append(f"  ... {remaining_targets} additional recovery target(s) omitted")
+
+    lines.extend(
+        [
+            "",
+            "Already recovered:",
+            f"  total: {len(plan.get('already_recovered', []))}",
+        ]
+    )
+    for item in plan.get("already_recovered", [])[:3]:
+        lines.append(f"  {item['key']} -> #{item['github_issue']}")
+
+    lines.extend(
+        [
+            "",
+            "Retained not planned:",
+            f"  total: {len(plan.get('retained_not_planned', []))}",
+        ]
+    )
+    for item in plan.get("retained_not_planned", [])[:3]:
+        lines.append(f"  {item['key']} -> #{item['github_issue']}")
+
+    if plan.get("errors"):
+        lines.extend(["", "Errors:"])
+        lines.extend(f"  - {error}" for error in plan["errors"])
+
+    lines.extend(["", "Planned mutations:"])
+    if plan["status"] == "ready":
+        lines.append("  reopen implemented issues closed as not planned")
+        lines.append("  add label: state:merged")
+        lines.append("  close those issues again with reason: completed")
+    else:
+        lines.append(f"  none — clear recovery plan is not ready ({plan['status']})")
+
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "  Dry-run only.",
+            "  Only issues with merged PR evidence are recovered.",
+            "  Issues without implementation evidence remain closed as not planned.",
+            "  No OpenClaw execution was performed.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _planner_clear_recovery_reopen_comment(pr_number: int) -> str:
+    return (
+        "Signposter roadmap clear recovery\n\n"
+        "This issue is being reopened because it was previously retired too broadly.\n"
+        f"Implementation evidence: merged PR #{pr_number}."
+    )
+
+
+def _planner_clear_recovery_close_comment(pr_number: int) -> str:
+    return (
+        "Signposter roadmap clear recovery complete\n\n"
+        "Recovered from mistaken roadmap retirement. "
+        f"Implementation evidence: merged PR #{pr_number}.\n"
+        "Issue is now closed as completed."
+    )
+
+
+def apply_planner_clear_recovery_plan(
+    *,
+    manifest_path: Path,
+    issue_states: dict[int, object] | None,
+    merged_prs_by_issue: dict[int, dict[str, Any]] | None,
+    runner: Any,
+) -> dict[str, Any]:
+    """Recover implemented issues from a mistaken planner clear operation."""
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    plan = build_planner_clear_recovery_plan(
+        manifest=manifest,
+        manifest_path=manifest_path,
+        issue_states=issue_states,
+        merged_prs_by_issue=merged_prs_by_issue,
+    )
+
+    if plan["status"] == "completed":
+        return {
+            "status": "completed",
+            "recovered": [],
+            "errors": [],
+            "plan": plan,
+        }
+
+    if plan["status"] != "ready":
+        return {
+            "status": "blocked",
+            "recovered": [],
+            "errors": list(plan.get("errors", [])),
+            "plan": plan,
+        }
+
+    recovered: list[dict[str, Any]] = []
+    for target in plan["recover_targets"]:
+        issue_number = int(target["github_issue"])
+        pr_number = int(target["pr_number"])
+        commands = [
+            [
+                "gh",
+                "issue",
+                "reopen",
+                str(issue_number),
+                "-R",
+                plan["repo"],
+                "--comment",
+                _planner_clear_recovery_reopen_comment(pr_number),
+            ],
+            [
+                "gh",
+                "issue",
+                "edit",
+                str(issue_number),
+                "-R",
+                plan["repo"],
+                "--add-label",
+                "state:merged",
+            ],
+            [
+                "gh",
+                "issue",
+                "close",
+                str(issue_number),
+                "-R",
+                plan["repo"],
+                "--reason",
+                "completed",
+                "--comment",
+                _planner_clear_recovery_close_comment(pr_number),
+            ],
+        ]
+        for command in commands:
+            result = runner(command)
+            returncode = int(getattr(result, "returncode", 1))
+            if returncode != 0:
+                stderr = str(getattr(result, "stderr", "") or "")
+                stdout = str(getattr(result, "stdout", "") or "")
+                output = "\n".join(part for part in [stderr.strip(), stdout.strip()] if part)
+                return {
+                    "status": "failed",
+                    "recovered": recovered,
+                    "errors": [
+                        _bounded_error(
+                            output or f"recovery command failed for #{issue_number}"
+                        )
+                    ],
+                    "plan": plan,
+                }
+        recovered.append(target)
+
+    manifest["clear_recovery_at"] = datetime.now(UTC).isoformat(timespec="seconds")
+    manifest["recovered_completed_issue_count"] = len(recovered)
+    manifest["retained_not_planned_issue_count"] = len(plan.get("retained_not_planned", []))
+    write_planner_seed_manifest(manifest, manifest_path)
+    return {
+        "status": "recovered",
+        "recovered": recovered,
+        "errors": [],
+        "plan": plan,
+    }
+
+
+def format_planner_clear_recovery_apply_result(result: dict[str, Any]) -> str:
+    """Format the apply result for planner clear recovery."""
+    plan = result.get("plan", {})
+    lines = [
+        "Planner Clear Recovery Apply",
+        "",
+        "Manifest:",
+        f"  {plan.get('manifest_path', 'unknown')}",
+        "",
+        "Status:",
+        f"  {result['status']}",
+    ]
+
+    if result.get("recovered"):
+        lines.extend(["", "Recovered issues:"])
+        for item in result["recovered"]:
+            lines.append(
+                f"  {item['key']} -> #{item['github_issue']} via PR #{item['pr_number']}"
+            )
+
+    if result.get("errors"):
+        lines.extend(["", "Errors:"])
+        lines.extend(f"  - {error}" for error in result["errors"])
+
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "  GitHub mutation is only performed when --apply is explicitly used.",
+            "  Recovered issues are reopened and reclosed as completed.",
+            "  Issues without implementation evidence remain closed as not planned.",
+            "  No OpenClaw execution was performed.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def build_planner_body_sync_plan(
+    *,
+    manifest: dict[str, Any],
+    manifest_path: Path,
+    task_keys: list[str] | None = None,
+) -> dict[str, Any]:
+    """Build a guarded plan to sync seeded GitHub issue bodies from body files."""
+    manifest = _refresh_seed_manifest_dependency_metadata(_copy_json_object(manifest))
+    repo = str(manifest.get("repo", "") or "")
+    selected_keys = {key.strip() for key in (task_keys or []) if key.strip()}
+    errors: list[str] = []
+    targets: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+
+    if not repo:
+        errors.append("manifest repo is missing")
+
+    issues = manifest.get("issues", [])
+    if not isinstance(issues, list) or not issues:
+        errors.append("manifest contains no seeded issues")
+        issues = []
+
+    available_keys = {
+        str(issue.get("key") or "")
+        for issue in issues
+        if isinstance(issue, dict)
+    }
+    for key in sorted(selected_keys - available_keys):
+        errors.append(f"unknown task key: {key}")
+
+    for issue in issues:
+        if not isinstance(issue, dict):
+            continue
+        key = str(issue.get("key") or "unknown")
+        if selected_keys and key not in selected_keys:
+            skipped.append({"key": key, "reason": "not selected"})
+            continue
+
+        github_issue = issue.get("github_issue")
+        body_file = str(issue.get("body_file") or "")
+        if github_issue is None:
+            errors.append(f"{key}: missing github_issue mapping")
+            continue
+        if not body_file:
+            errors.append(f"{key}: missing body_file")
+            continue
+
+        body_path = Path(body_file)
+        if not body_path.is_file():
+            errors.append(f"{key}: body_file does not exist: {body_file}")
+            continue
+
+        body = body_path.read_text(encoding="utf-8")
+        refreshed_body = _body_with_resolved_dependency_metadata(body, issue)
+        targets.append(
+            {
+                "key": key,
+                "github_issue": int(github_issue),
+                "github_url": str(issue.get("github_url") or ""),
+                "title": str(issue.get("title") or ""),
+                "body_file": body_file,
+                "body_size": evaluate_worker_issue_body_size(refreshed_body),
+                "dependency_metadata_refresh": refreshed_body != body,
+            }
+        )
+
+    status = "blocked" if errors else "ready" if targets else "completed"
+    return {
+        "status": status,
+        "repo": repo,
+        "manifest_path": str(manifest_path),
+        "sync_targets": targets,
+        "skipped": skipped,
+        "errors": errors,
+        "requires_llm_analysis": False,
+    }
+
+
+def format_planner_body_sync_plan(plan: dict[str, Any]) -> str:
+    """Format a dry-run issue body sync plan."""
+    lines = [
+        "Signposter Planner Body Sync",
+        "",
+        "Manifest:",
+        f"  {plan['manifest_path']}",
+        "",
+        "Repo:",
+        f"  {plan['repo'] or 'unknown'}",
+        "",
+        "Status:",
+        f"  {plan['status']}",
+        "",
+        "Sync targets:",
+        f"  total: {len(plan.get('sync_targets', []))}",
+    ]
+    for item in plan.get("sync_targets", [])[:8]:
+        size = item.get("body_size", {})
+        lines.append(
+            f"  {item['key']} -> #{item['github_issue']} "
+            f"({size.get('line_count', '?')} lines, {size.get('char_count', '?')} chars)"
+        )
+    remaining = len(plan.get("sync_targets", [])) - 8
+    if remaining > 0:
+        lines.append(f"  ... {remaining} additional sync target(s) omitted")
+
+    if plan.get("skipped"):
+        lines.extend(["", "Skipped:"])
+        for item in plan["skipped"][:5]:
+            lines.append(f"  {item['key']}: {item['reason']}")
+        remaining_skipped = len(plan["skipped"]) - 5
+        if remaining_skipped > 0:
+            lines.append(f"  ... {remaining_skipped} additional skipped task(s) omitted")
+
+    if plan.get("errors"):
+        lines.extend(["", "Errors:"])
+        lines.extend(f"  - {error}" for error in plan["errors"])
+
+    lines.extend(["", "Planned mutations:"])
+    if plan["status"] == "ready":
+        lines.append("  update mapped GitHub issue bodies from local body files")
+        lines.append("  no label, state, comment, PR, merge, integration, or cleanup mutation")
+    else:
+        lines.append(f"  none — body sync plan is not ready ({plan['status']})")
+
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "  Dry-run only unless --apply is explicitly used.",
+            "  Body content is read from local body files.",
+            "  No OpenClaw execution is performed.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _body_with_resolved_dependency_metadata(body: str, issue: dict[str, Any]) -> str:
+    dependencies = [
+        str(dependency)
+        for dependency in issue.get("depends_on", [])
+        if str(dependency).strip()
+    ]
+    if not dependencies:
+        return body
+
+    dependency_metadata_lines = _format_issue_dependency_metadata(
+        dependencies,
+        issue.get("dependency_metadata", []),
+    )
+    replacement = f"Dependency metadata:\n{dependency_metadata_lines}"
+    pattern = re.compile(r"(?ms)^Dependency metadata:\n.*?(?=\n\nAcceptance criteria:\n)")
+    if pattern.search(body):
+        return pattern.sub(replacement, body, count=1)
+
+    marker = "\n\nAcceptance criteria:\n"
+    if marker in body:
+        return body.replace(marker, f"\n\n{replacement}{marker}", 1)
+    return body
+
+
+def _refresh_issue_body_file_dependency_metadata(
+    body_path: Path,
+    issue: dict[str, Any],
+) -> bool:
+    body = body_path.read_text(encoding="utf-8")
+    refreshed = _body_with_resolved_dependency_metadata(body, issue)
+    if refreshed == body:
+        return False
+    body_path.write_text(refreshed, encoding="utf-8")
+    return True
+
+
+def apply_planner_body_sync_plan(
+    *,
+    manifest_path: Path,
+    task_keys: list[str] | None,
+    runner: Any,
+) -> dict[str, Any]:
+    """Apply a guarded issue body sync plan using an injected command runner."""
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    plan = build_planner_body_sync_plan(
+        manifest=manifest,
+        manifest_path=manifest_path,
+        task_keys=task_keys,
+    )
+
+    if plan["status"] == "completed":
+        return {"status": "completed", "updated": [], "errors": [], "plan": plan}
+    if plan["status"] != "ready":
+        return {
+            "status": "blocked",
+            "updated": [],
+            "errors": list(plan.get("errors", [])),
+            "plan": plan,
+        }
+
+    updated: list[dict[str, Any]] = []
+    refreshed: list[dict[str, Any]] = []
+    issues_by_key = {
+        str(issue.get("key") or ""): issue
+        for issue in _refresh_seed_manifest_dependency_metadata(manifest).get("issues", [])
+        if isinstance(issue, dict)
+    }
+    for target in plan["sync_targets"]:
+        issue = issues_by_key.get(str(target["key"]))
+        if issue is not None and _refresh_issue_body_file_dependency_metadata(
+            Path(str(target["body_file"])),
+            issue,
+        ):
+            refreshed.append(target)
+        result = runner(
+            [
+                "gh",
+                "issue",
+                "edit",
+                str(target["github_issue"]),
+                "-R",
+                plan["repo"],
+                "--body-file",
+                target["body_file"],
+            ]
+        )
+        returncode = int(getattr(result, "returncode", 1))
+        if returncode != 0:
+            stderr = str(getattr(result, "stderr", "") or "")
+            stdout = str(getattr(result, "stdout", "") or "")
+            output = "\n".join(part for part in [stderr.strip(), stdout.strip()] if part)
+            return {
+                "status": "failed",
+                "updated": updated,
+                "errors": [
+                    _bounded_error(
+                        output or f"gh issue edit failed for #{target['github_issue']}"
+                    )
+                ],
+                "plan": plan,
+            }
+        updated.append(target)
+
+    manifest["body_sync_at"] = datetime.now(UTC).isoformat(timespec="seconds")
+    manifest["body_sync_issue_count"] = len(updated)
+    manifest["body_sync_dependency_metadata_refresh_count"] = len(refreshed)
+    write_planner_seed_manifest(manifest, manifest_path)
+    return {
+        "status": "synced",
+        "updated": updated,
+        "refreshed": refreshed,
+        "errors": [],
+        "plan": plan,
+    }
+
+
+def format_planner_body_sync_apply_result(result: dict[str, Any]) -> str:
+    """Format the apply result for planner body sync."""
+    plan = result.get("plan", {})
+    lines = [
+        "Planner Body Sync Apply",
+        "",
+        "Manifest:",
+        f"  {plan.get('manifest_path', 'unknown')}",
+        "",
+        "Repo:",
+        f"  {plan.get('repo') or 'unknown'}",
+        "",
+        "Status:",
+        f"  {result['status']}",
+    ]
+
+    if result.get("updated"):
+        lines.extend(["", "Updated GitHub issue bodies:"])
+        for item in result["updated"][:10]:
+            lines.append(f"  {item['key']} -> #{item['github_issue']}")
+        remaining = len(result["updated"]) - 10
+        if remaining > 0:
+            lines.append(f"  ... {remaining} additional update(s) omitted")
+
+    if result.get("refreshed"):
+        lines.extend(["", "Resolved dependency metadata in local body files:"])
+        lines.append(f"  total: {len(result['refreshed'])}")
+
+    if result.get("errors"):
+        lines.extend(["", "Errors:"])
+        lines.extend(f"  - {error}" for error in result["errors"])
+
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "  Only issue bodies were updated.",
+            "  No labels, states, PRs, merges, integration, or cleanup were changed.",
+            "  No OpenClaw execution was performed.",
         ]
     )
     return "\n".join(lines)

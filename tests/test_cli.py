@@ -48,7 +48,7 @@ def test_backend_status_cli_renders_compact_summary(
                     selected_default=False,
                     execution_supported=True,
                     status="blocked",
-                    reason="legacy fallback not ready",
+                    reason="explicit legacy backend not ready",
                 ),
                 BackendHealth(
                     name="codex-cli",
@@ -59,7 +59,7 @@ def test_backend_status_cli_renders_compact_summary(
                     command_path="/usr/bin/codex",
                 ),
             ),
-            fallback_order=("codex-cli", "openclaw"),
+            fallback_order=(),
             runtime_diagnostics=(
                 RuntimeAvailabilityDiagnostic(
                     artifact_path="artifacts/runs/issue-1-worker.summary.md",

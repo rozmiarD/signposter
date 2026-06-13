@@ -97,17 +97,17 @@ def test_format_runner_plan_includes_backend_visibility():
     assert "silent_fallback: forbidden" in output
 
 
-def test_format_runner_plan_surfaces_explicit_openclaw_fallback_candidate():
+def test_format_runner_plan_disables_openclaw_fallback_candidate():
     from signposter.runner import format_runner_plan
 
     plan = make_runner_plan_for_test("worker", "build", number=43, proposed_runner="openclaw")
     output = format_runner_plan([plan])
 
     assert "fallback_takeover:" in output
-    assert "automatic_fallback: yes" in output
-    assert "fallback_candidate: WORKER_CORE / openai/gpt-5.4 / medium" in output
-    assert "fallback_trigger: unsupported selected model from runtime output" in output
-    assert "silent_fallback: forbidden; retry is recorded" in output
+    assert "automatic_fallback: no" in output
+    assert "fallback_candidate: pilot takeover only" in output
+    assert "fallback_trigger: disabled" in output
+    assert "silent_fallback: forbidden" in output
 
 
 def test_execute_plan_uses_codex_cli_adapter(monkeypatch):
@@ -1109,11 +1109,16 @@ def test_generate_execution_summary_includes_token_usage_status():
     assert "Estimated cost USD: 0.0001" in summary
 
 
-def test_execute_plan_retries_once_with_explicit_fallback_on_unsupported_model():
+def test_execute_plan_records_unsupported_model_without_openclaw_fallback(
+    tmp_path,
+    monkeypatch,
+):
     from unittest.mock import patch
 
+    from signposter.delegation import load_delegation_attempts
     from signposter.runner import execute_plan
 
+    monkeypatch.chdir(tmp_path)
     plan = make_runner_plan_for_test("worker", "build", number=47)
 
     unsupported = type(
@@ -1128,14 +1133,13 @@ def test_execute_plan_retries_once_with_explicit_fallback_on_unsupported_model()
             "returncode": 1,
         },
     )()
-    fallback = type("proc", (), {"stdout": "ok", "stderr": "", "returncode": 0})()
 
     with patch("signposter.runner.find_uncommitted_repo_changes", return_value=[]), \
          patch("signposter.runner.check_openclaw_preflight") as mock_preflight, \
          patch("signposter.runner.gather_openclaw_runtime_diagnostics") as mock_diag, \
          patch(
              "signposter.runner.subprocess.run",
-             side_effect=[unsupported, fallback],
+             return_value=unsupported,
          ) as mock_run, \
          patch("builtins.open", create=True) as mock_open:
         mock_preflight.return_value = type("pf", (), {"ok": True})()
@@ -1143,63 +1147,14 @@ def test_execute_plan_retries_once_with_explicit_fallback_on_unsupported_model()
         mock_open.return_value.__enter__.return_value.read.return_value = "mock prompt"
         result = execute_plan(plan, "test/repo", allow_dirty=False)
 
-    assert result["success"] is True
-    assert result["fallback_used"] is True
-    assert mock_run.call_count == 2
-    second_cmd = mock_run.call_args_list[1].args[0]
-    assert "openai/gpt-5.4" in second_cmd
-
-
-def test_generate_execution_summary_records_runtime_fallback():
-    from signposter.dispatch import DispatchDecision
-    from signposter.runner import RunnerPlan, _generate_execution_summary
-    from signposter.scan import LabeledItem
-
-    fake_item = LabeledItem(101, "Test", "url", ["state:active"], "issue")
-    fake_dispatch = DispatchDecision(
-        item=fake_item,
-        phase="build",
-        state="active",
-        role="worker",
-        risk="medium",
-        area=None,
-        proposed_route="worker",
-        proposed_gate="ci",
-        reason="test",
-    )
-    plan = RunnerPlan(
-        item=fake_item,
-        dispatch=fake_dispatch,
-        proposed_runner="openclaw",
-        proposed_profile="worker",
-        proposed_working_dir="~/work/101",
-        proposed_prompt_path="artifacts/prompts/issue-101.md",
-        proposed_command_shape="test",
-        reason="test",
-        selected_role_name="WORKER_CORE",
-        selected_model="openai/gpt-5.4",
-        selected_reasoning_effort="medium",
-    )
-
-    summary = _generate_execution_summary(
-        repo="test/repo",
-        plan=plan,
-        session_key="signposter-v2-issue-101-worker-fallback-worker_core",
-        exit_code=0,
-        raw_path="artifacts/runs/issue-101-worker.raw.txt",
-        stdout="ok",
-        stderr="",
-        start_time=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
-        fallback_used=True,
-        original_role_name="WORKER_CODE",
-        original_model="openai/gpt-5.3-codex",
-    )
-
-    assert "**Runtime Fallback Used:** yes" in summary
-    assert "**Original Selected Model:** openai/gpt-5.3-codex" in summary
-    assert "## Fallback / takeover transparency" in summary
-    assert "automatic fallback retry was used" in summary
-    assert "silent fallback: forbidden" in summary
+    assert result["success"] is False
+    assert result["fallback_used"] is False
+    assert result["diagnosis_status"] == "unsupported-model"
+    assert mock_run.call_count == 1
+    attempts = load_delegation_attempts("artifacts/automation/delegation-attempts.json")
+    assert len(attempts) == 1
+    assert attempts[0].backend == "openclaw"
+    assert attempts[0].status == "unsupported-model"
 
 
 def test_execute_plan_preflight_blocks_before_openclaw_and_artifacts(tmp_path):
@@ -1238,53 +1193,6 @@ def test_execute_plan_preflight_blocks_before_openclaw_and_artifacts(tmp_path):
     assert "provider token" in result["error"]
     mock_run.assert_not_called()
     mock_open.assert_not_called()
-
-
-def test_fallback_runner_plan_prefers_role_fallback_model_before_escalation():
-    from signposter.dispatch import DispatchDecision
-    from signposter.runner import RunnerPlan, _fallback_runner_plan
-    from signposter.scan import LabeledItem
-
-    fake_item = LabeledItem(
-        number=88,
-        title="Docs: light worker fallback",
-        html_url="https://github.com/example/repo/issues/88",
-        labels=["state:ready", "phase:build", "role:worker", "risk:low", "area:docs"],
-        item_type="issue",
-    )
-    fake_dispatch = DispatchDecision(
-        item=fake_item,
-        phase="build",
-        state="ready",
-        role="worker",
-        risk="low",
-        area="docs",
-        proposed_route="worker",
-        proposed_gate="ci",
-        reason="test",
-    )
-    plan = RunnerPlan(
-        item=fake_item,
-        dispatch=fake_dispatch,
-        proposed_runner="openclaw",
-        proposed_profile="worker",
-        proposed_working_dir="~/work/88",
-        proposed_prompt_path="artifacts/prompts/issue-88.md",
-        proposed_command_shape="test",
-        reason="test",
-        selected_role_name="WORKER_LIGHT",
-        selected_model="xai/grok-build-0.1",
-        selected_reasoning_effort="low",
-        selected_openclaw_agent="worker",
-    )
-
-    fallback = _fallback_runner_plan(plan)
-
-    assert fallback is not None
-    assert fallback.selected_role_name == "WORKER_LIGHT"
-    assert fallback.selected_model == "openai/gpt-5.4-mini"
-    assert fallback.selected_openclaw_agent == "worker"
-    assert "fallback model for WORKER_LIGHT" in fallback.role_selection_reason
 
 
 def test_execute_plan_timeout_writes_bounded_summary(tmp_path, monkeypatch):
