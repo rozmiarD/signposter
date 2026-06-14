@@ -2,7 +2,7 @@
   "version": "planner.seed-manifest.v0.1",
   "plan": "docs/roadmaps/h050-plan.json",
   "repo": "ExatronOmega/signposter",
-  "status": "applied",
+  "status": "retired",
   "issues": [
     {
       "key": "H050-001",
@@ -3397,5 +3397,16 @@
     "H050-079": 449,
     "H050-080": 450
   },
-  "applied_at": "2026-06-04T10:55:33+00:00"
+  "applied_at": "2026-06-04T10:55:33+00:00",
+  "roadmap_scope": {
+    "prefix": "H050",
+    "active_branch": "main",
+    "superseded_by": "docs/roadmaps/h052-seed-manifest.json",
+    "retired_for_branch": "test-last-know-working",
+    "retired_at": "2026-06-14T15:39:20+00:00"
+  },
+  "operator_notes": [
+    "Retired for test-last-know-working; do not pass this manifest to planner run/status.",
+    "Active manifest: docs/roadmaps/h052-seed-manifest.json"
+  ]
 }

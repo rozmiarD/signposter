@@ -1,0 +1,3253 @@
+{
+  "version": "planner.seed-manifest.v0.1",
+  "plan": "docs/roadmaps/h052-plan.json",
+  "repo": "rozmiarD/signposter",
+  "status": "applied",
+  "roadmap_scope": {
+    "prefix": "H052",
+    "active_branch": "test-last-know-working",
+    "supersedes": [
+      "docs/roadmaps/h051-seed-manifest.json",
+      "docs/roadmaps/h050-seed-manifest.json"
+    ]
+  },
+  "applied_at": "2026-06-14T15:39:20+00:00",
+  "issues": [
+    {
+      "key": "H052-001",
+      "title": "H052-001 — Repository and GitHub state grounding audit",
+      "labels": [
+        "phase:plan",
+        "risk:low",
+        "role:planner",
+        "area:core"
+      ],
+      "depends_on": [],
+      "body_file": "/tmp/signposter-h052-bodies/H052-001.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 65,
+        "char_count": 2459,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 673,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/673",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [],
+      "github_depends_on": [],
+      "github_dependency_urls": []
+    },
+    {
+      "key": "H052-002",
+      "title": "H052-002 — TODO reconciliation and non-goal classification",
+      "labels": [
+        "phase:plan",
+        "risk:low",
+        "role:planner",
+        "area:docs"
+      ],
+      "depends_on": [
+        "H052-001"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-002.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2654,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 674,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/674",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-001",
+          "github_issue": 673,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/673",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        673
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/673"
+      ]
+    },
+    {
+      "key": "H052-003",
+      "title": "H052-003 — H052 roadmap scope and success criteria artifact",
+      "labels": [
+        "phase:plan",
+        "risk:medium",
+        "role:planner",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-002"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-003.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2541,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 675,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/675",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-002",
+          "github_issue": 674,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/674",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        674
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/674"
+      ]
+    },
+    {
+      "key": "H052-004",
+      "title": "H052-004 — Seed manifest and label compatibility smoke",
+      "labels": [
+        "phase:plan",
+        "risk:low",
+        "role:planner",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-001"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-004.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 67,
+        "char_count": 2670,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 676,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/676",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-001",
+          "github_issue": 673,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/673",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        673
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/673"
+      ]
+    },
+    {
+      "key": "H052-005",
+      "title": "H052-005 — Existing validation failures recovery audit",
+      "labels": [
+        "phase:plan",
+        "risk:high",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H052-001"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-005.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 67,
+        "char_count": 2577,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 677,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/677",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-001",
+          "github_issue": 673,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/673",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        673
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/673"
+      ]
+    },
+    {
+      "key": "H052-006",
+      "title": "H052-006 — GitHub-facing text surface inventory beyond report",
+      "labels": [
+        "phase:plan",
+        "risk:low",
+        "role:planner",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-002"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-006.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2634,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 678,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/678",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-002",
+          "github_issue": 674,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/674",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        674
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/674"
+      ]
+    },
+    {
+      "key": "H052-007",
+      "title": "H052-007 — Reviewer comment compact format design",
+      "labels": [
+        "phase:plan",
+        "risk:medium",
+        "role:planner",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-006"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-007.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2553,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 679,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/679",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-006",
+          "github_issue": 678,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/678",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        678
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/678"
+      ]
+    },
+    {
+      "key": "H052-008",
+      "title": "H052-008 — Reviewer public summary formatter",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-007"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-008.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2439,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 680,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/680",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-007",
+          "github_issue": 679,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/679",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        679
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/679"
+      ]
+    },
+    {
+      "key": "H052-009",
+      "title": "H052-009 — Reviewer comment local-path and raw-log regression tests",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H052-008"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-009.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2613,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 681,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/681",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-008",
+          "github_issue": 680,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/680",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        680
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/680"
+      ]
+    },
+    {
+      "key": "H052-010",
+      "title": "H052-010 — Transition comment safety audit",
+      "labels": [
+        "phase:plan",
+        "risk:low",
+        "role:planner",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-006"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-010.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2523,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 682,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/682",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-006",
+          "github_issue": 678,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/678",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        678
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/678"
+      ]
+    },
+    {
+      "key": "H052-011",
+      "title": "H052-011 — Transition comment compactness tests",
+      "labels": [
+        "phase:build",
+        "risk:low",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H052-010"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-011.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2492,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 683,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/683",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-010",
+          "github_issue": 682,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/682",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        682
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/682"
+      ]
+    },
+    {
+      "key": "H052-012",
+      "title": "H052-012 — Gate output public-versus-local evidence audit",
+      "labels": [
+        "phase:plan",
+        "risk:medium",
+        "role:planner",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-006"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-012.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2490,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 684,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/684",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-006",
+          "github_issue": 678,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/678",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        678
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/678"
+      ]
+    },
+    {
+      "key": "H052-013",
+      "title": "H052-013 — Shared public summary contract for report and gate surfaces",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-008",
+        "H052-012"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-013.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 70,
+        "char_count": 2627,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 685,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/685",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-008",
+          "github_issue": 680,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/680",
+          "status": "resolved"
+        },
+        {
+          "key": "H052-012",
+          "github_issue": 684,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/684",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        680,
+        684
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/680",
+        "https://github.com/rozmiarD/signposter/issues/684"
+      ]
+    },
+    {
+      "key": "H052-014",
+      "title": "H052-014 — Public comment regression corpus",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H052-009",
+        "H052-011",
+        "H052-013"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-014.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 74,
+        "char_count": 2791,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 686,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/686",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-009",
+          "github_issue": 681,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/681",
+          "status": "resolved"
+        },
+        {
+          "key": "H052-011",
+          "github_issue": 683,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/683",
+          "status": "resolved"
+        },
+        {
+          "key": "H052-013",
+          "github_issue": 685,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/685",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        681,
+        683,
+        685
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/681",
+        "https://github.com/rozmiarD/signposter/issues/683",
+        "https://github.com/rozmiarD/signposter/issues/685"
+      ]
+    },
+    {
+      "key": "H052-015",
+      "title": "H052-015 — Planner issue body boilerplate measurement audit",
+      "labels": [
+        "phase:plan",
+        "risk:low",
+        "role:planner",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-002"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-015.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2598,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 687,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/687",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-002",
+          "github_issue": 674,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/674",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        674
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/674"
+      ]
+    },
+    {
+      "key": "H052-016",
+      "title": "H052-016 — Compact planner issue policy block design",
+      "labels": [
+        "phase:plan",
+        "risk:medium",
+        "role:planner",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-015"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-016.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2645,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 688,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/688",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-015",
+          "github_issue": 687,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/687",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        687
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/687"
+      ]
+    },
+    {
+      "key": "H052-017",
+      "title": "H052-017 — Compact planner issue body renderer",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-016"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-017.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2491,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 689,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/689",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-016",
+          "github_issue": 688,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/688",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        688
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/688"
+      ]
+    },
+    {
+      "key": "H052-018",
+      "title": "H052-018 — Planner issue body compactness regression tests",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H052-017"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-018.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2527,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 690,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/690",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-017",
+          "github_issue": 689,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/689",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        689
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/689"
+      ]
+    },
+    {
+      "key": "H052-019",
+      "title": "H052-019 — Worker prompt scaffolding duplication audit",
+      "labels": [
+        "phase:plan",
+        "risk:low",
+        "role:planner",
+        "area:runner"
+      ],
+      "depends_on": [
+        "H052-015"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-019.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2528,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 691,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/691",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-015",
+          "github_issue": 687,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/687",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        687
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/687"
+      ]
+    },
+    {
+      "key": "H052-020",
+      "title": "H052-020 — Shared prompt fragment registry design",
+      "labels": [
+        "phase:plan",
+        "risk:medium",
+        "role:planner",
+        "area:runner"
+      ],
+      "depends_on": [
+        "H052-019"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-020.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2517,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 692,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/692",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-019",
+          "github_issue": 691,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/691",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        691
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/691"
+      ]
+    },
+    {
+      "key": "H052-021",
+      "title": "H052-021 — Worker prompt fragment extraction",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:runner"
+      ],
+      "depends_on": [
+        "H052-020"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-021.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2536,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 693,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/693",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-020",
+          "github_issue": 692,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/692",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        692
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/692"
+      ]
+    },
+    {
+      "key": "H052-022",
+      "title": "H052-022 — Reviewer prompt fragment extraction",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:runner"
+      ],
+      "depends_on": [
+        "H052-020"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-022.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2544,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 694,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/694",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-020",
+          "github_issue": 692,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/692",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        692
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/692"
+      ]
+    },
+    {
+      "key": "H052-023",
+      "title": "H052-023 — Prompt budget report conditionality design",
+      "labels": [
+        "phase:plan",
+        "risk:low",
+        "role:planner",
+        "area:runner"
+      ],
+      "depends_on": [
+        "H052-019"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-023.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2545,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 695,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/695",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-019",
+          "github_issue": 691,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/691",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        691
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/691"
+      ]
+    },
+    {
+      "key": "H052-024",
+      "title": "H052-024 — Prompt token measurement smoke",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H052-021",
+        "H052-022",
+        "H052-023"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-024.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 74,
+        "char_count": 2577,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 696,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/696",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-021",
+          "github_issue": 693,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/693",
+          "status": "resolved"
+        },
+        {
+          "key": "H052-022",
+          "github_issue": 694,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/694",
+          "status": "resolved"
+        },
+        {
+          "key": "H052-023",
+          "github_issue": 695,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/695",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        693,
+        694,
+        695
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/693",
+        "https://github.com/rozmiarD/signposter/issues/694",
+        "https://github.com/rozmiarD/signposter/issues/695"
+      ]
+    },
+    {
+      "key": "H052-025",
+      "title": "H052-025 — Artifact storage current-state audit",
+      "labels": [
+        "phase:plan",
+        "risk:medium",
+        "role:planner",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-001"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-025.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2540,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 697,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/697",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-001",
+          "github_issue": 673,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/673",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        673
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/673"
+      ]
+    },
+    {
+      "key": "H052-026",
+      "title": "H052-026 — Artifact root configuration contract",
+      "labels": [
+        "phase:plan",
+        "risk:high",
+        "role:planner",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-025"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-026.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2582,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 698,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/698",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-025",
+          "github_issue": 697,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/697",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        697
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/697"
+      ]
+    },
+    {
+      "key": "H052-027",
+      "title": "H052-027 — External artifact root resolver",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-026"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-027.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2581,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 699,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/699",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-026",
+          "github_issue": 698,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/698",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        698
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/698"
+      ]
+    },
+    {
+      "key": "H052-028",
+      "title": "H052-028 — Repository-local fallback artifact policy",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-026"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-028.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2610,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 700,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/700",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-026",
+          "github_issue": 698,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/698",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        698
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/698"
+      ]
+    },
+    {
+      "key": "H052-029",
+      "title": "H052-029 — Artifact fallback gitignore preflight plan",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:github"
+      ],
+      "depends_on": [
+        "H052-028"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-029.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2591,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 701,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/701",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-028",
+          "github_issue": 700,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/700",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        700
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/700"
+      ]
+    },
+    {
+      "key": "H052-030",
+      "title": "H052-030 — Runner artifact writer uses artifact root",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:runner"
+      ],
+      "depends_on": [
+        "H052-027"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-030.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2572,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 702,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/702",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-027",
+          "github_issue": 699,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/699",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        699
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/699"
+      ]
+    },
+    {
+      "key": "H052-031",
+      "title": "H052-031 — Reviewer and gate artifact writers use artifact root",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-027"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-031.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2581,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 703,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/703",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-027",
+          "github_issue": 699,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/699",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        699
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/699"
+      ]
+    },
+    {
+      "key": "H052-032",
+      "title": "H052-032 — Artifact path redaction regression suite",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H052-030",
+        "H052-031"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-032.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 70,
+        "char_count": 2704,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 704,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/704",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-030",
+          "github_issue": 702,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/702",
+          "status": "resolved"
+        },
+        {
+          "key": "H052-031",
+          "github_issue": 703,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/703",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        702,
+        703
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/702",
+        "https://github.com/rozmiarD/signposter/issues/703"
+      ]
+    },
+    {
+      "key": "H052-033",
+      "title": "H052-033 — Foreign repository artifact locality fixture",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H052-029",
+        "H052-030",
+        "H052-031"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-033.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 74,
+        "char_count": 2775,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 705,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/705",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-029",
+          "github_issue": 701,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/701",
+          "status": "resolved"
+        },
+        {
+          "key": "H052-030",
+          "github_issue": 702,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/702",
+          "status": "resolved"
+        },
+        {
+          "key": "H052-031",
+          "github_issue": 703,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/703",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        701,
+        702,
+        703
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/701",
+        "https://github.com/rozmiarD/signposter/issues/702",
+        "https://github.com/rozmiarD/signposter/issues/703"
+      ]
+    },
+    {
+      "key": "H052-034",
+      "title": "H052-034 — Artifact storage operator runbook update",
+      "labels": [
+        "phase:build",
+        "risk:low",
+        "role:worker",
+        "area:docs"
+      ],
+      "depends_on": [
+        "H052-033"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-034.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2525,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 706,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/706",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-033",
+          "github_issue": 705,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/705",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        705
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/705"
+      ]
+    },
+    {
+      "key": "H052-035",
+      "title": "H052-035 — Lifecycle and orchestrator action contract audit",
+      "labels": [
+        "phase:plan",
+        "risk:medium",
+        "role:planner",
+        "area:dispatcher"
+      ],
+      "depends_on": [
+        "H052-002"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-035.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2586,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 707,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/707",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-002",
+          "github_issue": 674,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/674",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        674
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/674"
+      ]
+    },
+    {
+      "key": "H052-036",
+      "title": "H052-036 — Lifecycle next stop and recovery schema",
+      "labels": [
+        "phase:plan",
+        "risk:high",
+        "role:planner",
+        "area:dispatcher"
+      ],
+      "depends_on": [
+        "H052-035"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-036.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2639,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 708,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/708",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-035",
+          "github_issue": 707,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/707",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        707
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/707"
+      ]
+    },
+    {
+      "key": "H052-037",
+      "title": "H052-037 — Orchestrator compact summary fields",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:dispatcher"
+      ],
+      "depends_on": [
+        "H052-036"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-037.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2614,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 709,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/709",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-036",
+          "github_issue": 708,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/708",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        708
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/708"
+      ]
+    },
+    {
+      "key": "H052-038",
+      "title": "H052-038 — Control-plane status agreement check",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:dispatcher"
+      ],
+      "depends_on": [
+        "H052-037"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-038.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2594,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 710,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/710",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-037",
+          "github_issue": 709,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/709",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        709
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/709"
+      ]
+    },
+    {
+      "key": "H052-039",
+      "title": "H052-039 — Lifecycle root and artifact path normalization preflight",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:dispatcher"
+      ],
+      "depends_on": [
+        "H052-025",
+        "H052-035"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-039.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 70,
+        "char_count": 2732,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 711,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/711",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-025",
+          "github_issue": 697,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/697",
+          "status": "resolved"
+        },
+        {
+          "key": "H052-035",
+          "github_issue": 707,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/707",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        697,
+        707
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/697",
+        "https://github.com/rozmiarD/signposter/issues/707"
+      ]
+    },
+    {
+      "key": "H052-040",
+      "title": "H052-040 — Resume snapshot command contract",
+      "labels": [
+        "phase:plan",
+        "risk:medium",
+        "role:planner",
+        "area:dispatcher"
+      ],
+      "depends_on": [
+        "H052-038",
+        "H052-039"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-040.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 70,
+        "char_count": 2745,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 712,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/712",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-038",
+          "github_issue": 710,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/710",
+          "status": "resolved"
+        },
+        {
+          "key": "H052-039",
+          "github_issue": 711,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/711",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        710,
+        711
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/710",
+        "https://github.com/rozmiarD/signposter/issues/711"
+      ]
+    },
+    {
+      "key": "H052-041",
+      "title": "H052-041 — Takeover decision table structured output",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:dispatcher"
+      ],
+      "depends_on": [
+        "H052-036"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-041.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2560,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 713,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/713",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-036",
+          "github_issue": 708,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/708",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        708
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/708"
+      ]
+    },
+    {
+      "key": "H052-042",
+      "title": "H052-042 — Orchestrator loop stop reason regression tests",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H052-037",
+        "H052-041"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-042.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 70,
+        "char_count": 2710,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 714,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/714",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-037",
+          "github_issue": 709,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/709",
+          "status": "resolved"
+        },
+        {
+          "key": "H052-041",
+          "github_issue": 713,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/713",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        709,
+        713
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/709",
+        "https://github.com/rozmiarD/signposter/issues/713"
+      ]
+    },
+    {
+      "key": "H052-043",
+      "title": "H052-043 — Full lifecycle happy-path smoke refresh",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H052-042"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-043.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2507,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 715,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/715",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-042",
+          "github_issue": 714,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/714",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        714
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/714"
+      ]
+    },
+    {
+      "key": "H052-044",
+      "title": "H052-044 — Repository goal artifact schema design",
+      "labels": [
+        "phase:plan",
+        "risk:high",
+        "role:planner",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-003"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-044.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2548,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 716,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/716",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-003",
+          "github_issue": 675,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/675",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        675
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/675"
+      ]
+    },
+    {
+      "key": "H052-045",
+      "title": "H052-045 — Success criteria evaluator contract",
+      "labels": [
+        "phase:plan",
+        "risk:high",
+        "role:planner",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-044"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-045.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2582,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 717,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/717",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-044",
+          "github_issue": 716,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/716",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        716
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/716"
+      ]
+    },
+    {
+      "key": "H052-046",
+      "title": "H052-046 — Goal check CLI dry-run surface",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:cli"
+      ],
+      "depends_on": [
+        "H052-045"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-046.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2485,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 718,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/718",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-045",
+          "github_issue": 717,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/717",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        717
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/717"
+      ]
+    },
+    {
+      "key": "H052-047",
+      "title": "H052-047 — Goal check evaluator tests",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H052-046"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-047.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2428,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 719,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/719",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-046",
+          "github_issue": 718,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/718",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        718
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/718"
+      ]
+    },
+    {
+      "key": "H052-048",
+      "title": "H052-048 — Roadmap completion audit contract",
+      "labels": [
+        "phase:plan",
+        "risk:high",
+        "role:planner",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-044",
+        "H052-035"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-048.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 70,
+        "char_count": 2634,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 720,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/720",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-044",
+          "github_issue": 716,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/716",
+          "status": "resolved"
+        },
+        {
+          "key": "H052-035",
+          "github_issue": 707,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/707",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        716,
+        707
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/716",
+        "https://github.com/rozmiarD/signposter/issues/707"
+      ]
+    },
+    {
+      "key": "H052-049",
+      "title": "H052-049 — Completed DAG audit detector",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-048"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-049.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2625,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 721,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/721",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-048",
+          "github_issue": 720,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/720",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        720
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/720"
+      ]
+    },
+    {
+      "key": "H052-050",
+      "title": "H052-050 — Next-roadmap bootstrap preflight status",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-049"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-050.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2650,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 722,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/722",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-049",
+          "github_issue": 721,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/721",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        721
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/721"
+      ]
+    },
+    {
+      "key": "H052-051",
+      "title": "H052-051 — Orchestrator continue-or-stop decision with repo goal",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:dispatcher"
+      ],
+      "depends_on": [
+        "H052-047",
+        "H052-050"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-051.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 70,
+        "char_count": 2699,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 723,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/723",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-047",
+          "github_issue": 719,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/719",
+          "status": "resolved"
+        },
+        {
+          "key": "H052-050",
+          "github_issue": 722,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/722",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        719,
+        722
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/719",
+        "https://github.com/rozmiarD/signposter/issues/722"
+      ]
+    },
+    {
+      "key": "H052-052",
+      "title": "H052-052 — Document core loop and stop exception",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:docs"
+      ],
+      "depends_on": [
+        "H052-051"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-052.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2595,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 724,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/724",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-051",
+          "github_issue": 723,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/723",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        723
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/723"
+      ]
+    },
+    {
+      "key": "H052-053",
+      "title": "H052-053 — Side-task priority semantics audit",
+      "labels": [
+        "phase:plan",
+        "risk:medium",
+        "role:planner",
+        "area:scheduler"
+      ],
+      "depends_on": [
+        "H052-002"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-053.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2575,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 725,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/725",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-002",
+          "github_issue": 674,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/674",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        674
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/674"
+      ]
+    },
+    {
+      "key": "H052-054",
+      "title": "H052-054 — ASAP side-task metadata schema",
+      "labels": [
+        "phase:plan",
+        "risk:medium",
+        "role:planner",
+        "area:scheduler"
+      ],
+      "depends_on": [
+        "H052-053"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-054.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2460,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 726,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/726",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-053",
+          "github_issue": 725,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/725",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        725
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/725"
+      ]
+    },
+    {
+      "key": "H052-055",
+      "title": "H052-055 — Planner side-task-plan ASAP dry-run",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-054"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-055.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2515,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 727,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/727",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-054",
+          "github_issue": 726,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/726",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        726
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/726"
+      ]
+    },
+    {
+      "key": "H052-056",
+      "title": "H052-056 — Scheduler ASAP promotion after current task",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:scheduler"
+      ],
+      "depends_on": [
+        "H052-055"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-056.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2622,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 728,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/728",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-055",
+          "github_issue": 727,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/727",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        727
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/727"
+      ]
+    },
+    {
+      "key": "H052-057",
+      "title": "H052-057 — ASAP return-to regression tests",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H052-056"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-057.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2475,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 729,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/729",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-056",
+          "github_issue": 728,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/728",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        728
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/728"
+      ]
+    },
+    {
+      "key": "H052-058",
+      "title": "H052-058 — ASAP status visibility in planner and control-plane",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:dispatcher"
+      ],
+      "depends_on": [
+        "H052-057"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-058.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2578,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 730,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/730",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-057",
+          "github_issue": 729,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/729",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        729
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/729"
+      ]
+    },
+    {
+      "key": "H052-059",
+      "title": "H052-059 — Cross-repository delegation threat model",
+      "labels": [
+        "phase:plan",
+        "risk:high",
+        "role:planner",
+        "area:docs"
+      ],
+      "depends_on": [
+        "H052-034",
+        "H052-052"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-059.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 70,
+        "char_count": 2655,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 731,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/731",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-034",
+          "github_issue": 706,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/706",
+          "status": "resolved"
+        },
+        {
+          "key": "H052-052",
+          "github_issue": 724,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/724",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        706,
+        724
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/706",
+        "https://github.com/rozmiarD/signposter/issues/724"
+      ]
+    },
+    {
+      "key": "H052-060",
+      "title": "H052-060 — Cross-repo task metadata design",
+      "labels": [
+        "phase:plan",
+        "risk:high",
+        "role:planner",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-059"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-060.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2525,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 732,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/732",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-059",
+          "github_issue": 731,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/731",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        731
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/731"
+      ]
+    },
+    {
+      "key": "H052-061",
+      "title": "H052-061 — Multi-repo manifest validation dry-run",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-060"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-061.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2473,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 733,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/733",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-060",
+          "github_issue": 732,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/732",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        732
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/732"
+      ]
+    },
+    {
+      "key": "H052-062",
+      "title": "H052-062 — Cross-repo artifact home-target identity checks",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-061",
+        "H052-033"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-062.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 70,
+        "char_count": 2671,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 734,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/734",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-061",
+          "github_issue": 733,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/733",
+          "status": "resolved"
+        },
+        {
+          "key": "H052-033",
+          "github_issue": 705,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/705",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        733,
+        705
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/733",
+        "https://github.com/rozmiarD/signposter/issues/705"
+      ]
+    },
+    {
+      "key": "H052-063",
+      "title": "H052-063 — Cross-repo scheduler read-only selection prototype",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:scheduler"
+      ],
+      "depends_on": [
+        "H052-061"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-063.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2569,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 735,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/735",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-061",
+          "github_issue": 733,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/733",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        733
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/733"
+      ]
+    },
+    {
+      "key": "H052-064",
+      "title": "H052-064 — Cross-repo side-task apply guard tests",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H052-063"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-064.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2612,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 736,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/736",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-063",
+          "github_issue": 735,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/735",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        735
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/735"
+      ]
+    },
+    {
+      "key": "H052-065",
+      "title": "H052-065 — Cross-repo operator runbook",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:docs"
+      ],
+      "depends_on": [
+        "H052-064"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-065.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2467,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 737,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/737",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-064",
+          "github_issue": 736,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/736",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        736
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/736"
+      ]
+    },
+    {
+      "key": "H052-066",
+      "title": "H052-066 — Roadmap depth mode design",
+      "labels": [
+        "phase:plan",
+        "risk:medium",
+        "role:planner",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-003",
+        "H052-015"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-066.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 70,
+        "char_count": 2633,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 738,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/738",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-003",
+          "github_issue": 675,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/675",
+          "status": "resolved"
+        },
+        {
+          "key": "H052-015",
+          "github_issue": 687,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/687",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        675,
+        687
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/675",
+        "https://github.com/rozmiarD/signposter/issues/687"
+      ]
+    },
+    {
+      "key": "H052-067",
+      "title": "H052-067 — Roadmap depth manifest metadata",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-066"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-067.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2470,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 739,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/739",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-066",
+          "github_issue": 738,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/738",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        738
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/738"
+      ]
+    },
+    {
+      "key": "H052-068",
+      "title": "H052-068 — Issue body generation respects roadmap depth",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-067",
+        "H052-018"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-068.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 70,
+        "char_count": 2623,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 740,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/740",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-067",
+          "github_issue": 739,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/739",
+          "status": "resolved"
+        },
+        {
+          "key": "H052-018",
+          "github_issue": 690,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/690",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        739,
+        690
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/739",
+        "https://github.com/rozmiarD/signposter/issues/690"
+      ]
+    },
+    {
+      "key": "H052-069",
+      "title": "H052-069 — Roadmap depth dry-run tests",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H052-068"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-069.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2426,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 741,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/741",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-068",
+          "github_issue": 740,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/740",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        740
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/740"
+      ]
+    },
+    {
+      "key": "H052-070",
+      "title": "H052-070 — Roadmap completion validation gate",
+      "labels": [
+        "phase:build",
+        "risk:high",
+        "role:worker",
+        "area:tests"
+      ],
+      "depends_on": [
+        "H052-043",
+        "H052-052",
+        "H052-058",
+        "H052-065",
+        "H052-069"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-070.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 83,
+        "char_count": 2752,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 742,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/742",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-043",
+          "github_issue": 715,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/715",
+          "status": "resolved"
+        },
+        {
+          "key": "H052-052",
+          "github_issue": 724,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/724",
+          "status": "resolved"
+        },
+        {
+          "key": "H052-058",
+          "github_issue": 730,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/730",
+          "status": "resolved"
+        },
+        {
+          "key": "H052-065",
+          "github_issue": 737,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/737",
+          "status": "resolved"
+        },
+        {
+          "key": "H052-069",
+          "github_issue": 741,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/741",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        715,
+        724,
+        730,
+        737,
+        741
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/715",
+        "https://github.com/rozmiarD/signposter/issues/724",
+        "https://github.com/rozmiarD/signposter/issues/730",
+        "https://github.com/rozmiarD/signposter/issues/737",
+        "https://github.com/rozmiarD/signposter/issues/741"
+      ]
+    },
+    {
+      "key": "H052-071",
+      "title": "H052-071 — Final H052 hardening audit",
+      "labels": [
+        "phase:review",
+        "risk:high",
+        "role:reviewer",
+        "area:docs"
+      ],
+      "depends_on": [
+        "H052-070"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-071.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 66,
+        "char_count": 2667,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 743,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/743",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-070",
+          "github_issue": 742,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/742",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        742
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/742"
+      ]
+    },
+    {
+      "key": "H052-072",
+      "title": "H052-072 — H052 final audit and H053 bootstrap plan",
+      "labels": [
+        "phase:plan",
+        "risk:high",
+        "role:planner",
+        "area:core"
+      ],
+      "depends_on": [
+        "H052-071"
+      ],
+      "body_file": "/tmp/signposter-h052-bodies/H052-072.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 67,
+        "char_count": 2713,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 744,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/744",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [
+        {
+          "key": "H052-071",
+          "github_issue": 743,
+          "github_url": "https://github.com/rozmiarD/signposter/issues/743",
+          "status": "resolved"
+        }
+      ],
+      "github_depends_on": [
+        743
+      ],
+      "github_dependency_urls": [
+        "https://github.com/rozmiarD/signposter/issues/743"
+      ]
+    },
+    {
+      "key": "H052-S001",
+      "title": "H052-S001 — Transition to GovEngine roadmap execution",
+      "labels": [
+        "phase:build",
+        "risk:medium",
+        "role:worker",
+        "area:scheduler"
+      ],
+      "depends_on": [],
+      "body_file": "/tmp/signposter-h052-bodies/H052-S001.md",
+      "body_size": {
+        "status": "pass",
+        "line_count": 76,
+        "char_count": 3959,
+        "warnings": [],
+        "errors": []
+      },
+      "github_issue": 746,
+      "github_url": "https://github.com/rozmiarD/signposter/issues/746",
+      "mainline": null,
+      "parent": null,
+      "return_to": null,
+      "side_task": true,
+      "dependency_metadata": [],
+      "github_depends_on": [],
+      "github_dependency_urls": []
+    }
+  ],
+  "operator_notes": [
+    "Generated from live GitHub issues for test-last-know-working.",
+    "Pass this manifest explicitly via --manifest docs/roadmaps/h052-seed-manifest.json.",
+    "Older H050/H051 manifests are retired and must be ignored by the operator loop."
+  ],
+  "issue_key_map": {
+    "H052-001": 673,
+    "H052-002": 674,
+    "H052-003": 675,
+    "H052-004": 676,
+    "H052-005": 677,
+    "H052-006": 678,
+    "H052-007": 679,
+    "H052-008": 680,
+    "H052-009": 681,
+    "H052-010": 682,
+    "H052-011": 683,
+    "H052-012": 684,
+    "H052-013": 685,
+    "H052-014": 686,
+    "H052-015": 687,
+    "H052-016": 688,
+    "H052-017": 689,
+    "H052-018": 690,
+    "H052-019": 691,
+    "H052-020": 692,
+    "H052-021": 693,
+    "H052-022": 694,
+    "H052-023": 695,
+    "H052-024": 696,
+    "H052-025": 697,
+    "H052-026": 698,
+    "H052-027": 699,
+    "H052-028": 700,
+    "H052-029": 701,
+    "H052-030": 702,
+    "H052-031": 703,
+    "H052-032": 704,
+    "H052-033": 705,
+    "H052-034": 706,
+    "H052-035": 707,
+    "H052-036": 708,
+    "H052-037": 709,
+    "H052-038": 710,
+    "H052-039": 711,
+    "H052-040": 712,
+    "H052-041": 713,
+    "H052-042": 714,
+    "H052-043": 715,
+    "H052-044": 716,
+    "H052-045": 717,
+    "H052-046": 718,
+    "H052-047": 719,
+    "H052-048": 720,
+    "H052-049": 721,
+    "H052-050": 722,
+    "H052-051": 723,
+    "H052-052": 724,
+    "H052-053": 725,
+    "H052-054": 726,
+    "H052-055": 727,
+    "H052-056": 728,
+    "H052-057": 729,
+    "H052-058": 730,
+    "H052-059": 731,
+    "H052-060": 732,
+    "H052-061": 733,
+    "H052-062": 734,
+    "H052-063": 735,
+    "H052-064": 736,
+    "H052-065": 737,
+    "H052-066": 738,
+    "H052-067": 739,
+    "H052-068": 740,
+    "H052-069": 741,
+    "H052-070": 742,
+    "H052-071": 743,
+    "H052-072": 744,
+    "H052-S001": 746
+  }
+}
