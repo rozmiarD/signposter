@@ -194,9 +194,10 @@ pushing:
 .venv/bin/python -m pytest tests/ -q
 ```
 
-Inside an isolated worktree, prefer:
+Inside an isolated worktree, reuse the main clone virtualenv:
 
 ```bash
-PYTHONPATH="$PWD/src" /home/probo/projects/signposter/.venv/bin/ruff check .
-PYTHONPATH="$PWD/src" /home/probo/projects/signposter/.venv/bin/python -m pytest tests/ -q
+MAIN_REPO=~/projects/signposter
+PYTHONPATH="$PWD/src" "$MAIN_REPO/.venv/bin/ruff" check .
+PYTHONPATH="$PWD/src" "$MAIN_REPO/.venv/bin/python" -m pytest tests/ -q
 ```

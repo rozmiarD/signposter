@@ -33,7 +33,7 @@ git status --short --branch
 signposter lifecycle status --repo $REPO --issue $ISSUE
 signposter lifecycle next --repo $REPO --issue $ISSUE
 signposter orchestrator next --repo $REPO --issue $ISSUE
-signposter planner run --manifest /tmp/signposter-h049-manifest.json --sync-github --dry-run
+signposter planner run --manifest configs/planner.example-seed-manifest.json --sync-github --dry-run
 ```
 
 If a PR exists, inspect the PR and CI state before deciding what to do next.

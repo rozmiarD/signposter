@@ -142,11 +142,12 @@ Manual worker summaries should include:
 Run targeted validation first, then full validation before push.
 
 ```bash
-PYTHONPATH="$PWD/src" /home/probo/projects/signposter/.venv/bin/ruff check <changed-files>
-PYTHONPATH="$PWD/src" /home/probo/projects/signposter/.venv/bin/python -m pytest <targeted-tests> -q
+MAIN_REPO=~/projects/signposter
+PYTHONPATH="$PWD/src" "$MAIN_REPO/.venv/bin/ruff" check <changed-files>
+PYTHONPATH="$PWD/src" "$MAIN_REPO/.venv/bin/python" -m pytest <targeted-tests> -q
 
-PYTHONPATH="$PWD/src" /home/probo/projects/signposter/.venv/bin/ruff check .
-PYTHONPATH="$PWD/src" /home/probo/projects/signposter/.venv/bin/python -m pytest tests/ -q
+PYTHONPATH="$PWD/src" "$MAIN_REPO/.venv/bin/ruff" check .
+PYTHONPATH="$PWD/src" "$MAIN_REPO/.venv/bin/python" -m pytest tests/ -q
 ```
 
 For documentation-only changes, `git diff --check -- <doc-file>` is the targeted
