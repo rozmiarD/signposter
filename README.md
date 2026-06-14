@@ -90,43 +90,43 @@ signposter --help
 signposter doctor
 signposter backend status
 signposter roles status
-signposter planner run --manifest docs/roadmaps/h050-seed-manifest.json --sync-github --dry-run
-signposter lifecycle status --repo ExatronOmega/signposter --issue <issue>
-signposter control-plane status --repo ExatronOmega/signposter --manifest docs/roadmaps/h050-seed-manifest.json --sync-github
+signposter planner run --manifest configs/planner.example-seed-manifest.json --sync-github --dry-run
+signposter lifecycle status --repo rozmiarD/signposter --issue <issue>
+signposter control-plane status --repo rozmiarD/signposter --manifest configs/planner.example-seed-manifest.json --sync-github
 ```
 
 Issue execution:
 
 ```bash
-signposter run --repo ExatronOmega/signposter --issue <issue> --dry-run
-signposter worktree plan --repo ExatronOmega/signposter --issue <issue>
-signposter worktree apply --repo ExatronOmega/signposter --issue <issue> --apply
-signposter run --repo ExatronOmega/signposter --issue <issue> --claim --write-prompt
-signposter run --repo ExatronOmega/signposter --issue <issue> --execute --worktree
+signposter run --repo rozmiarD/signposter --issue <issue> --dry-run
+signposter worktree plan --repo rozmiarD/signposter --issue <issue>
+signposter worktree apply --repo rozmiarD/signposter --issue <issue> --apply
+signposter run --repo rozmiarD/signposter --issue <issue> --claim --write-prompt
+signposter run --repo rozmiarD/signposter --issue <issue> --execute --worktree
 ```
 
 Evidence and completion:
 
 ```bash
-signposter artifact write-worker-summary --repo ExatronOmega/signposter --issue <issue> --agent human/operator --apply
-signposter report --repo ExatronOmega/signposter --issue <issue> --summary artifacts/runs/issue-<issue>-worker.summary.md --apply
-signposter gate --repo ExatronOmega/signposter --issue <issue> --dry-run
-signposter complete --repo ExatronOmega/signposter --issue <issue> --apply
+signposter artifact write-worker-summary --repo rozmiarD/signposter --issue <issue> --agent human/operator --apply
+signposter report --repo rozmiarD/signposter --issue <issue> --summary artifacts/runs/issue-<issue>-worker.summary.md --apply
+signposter gate --repo rozmiarD/signposter --issue <issue> --dry-run
+signposter complete --repo rozmiarD/signposter --issue <issue> --apply
 ```
 
 Review, merge, integration, and cleanup:
 
 ```bash
-signposter review write-prompt --repo ExatronOmega/signposter --pr <pr>
-signposter review execute --repo ExatronOmega/signposter --pr <pr>
-signposter review gate --repo ExatronOmega/signposter --pr <pr>
-signposter review submit --repo ExatronOmega/signposter --pr <pr> --apply
-signposter merge plan --repo ExatronOmega/signposter --pr <pr>
-signposter merge apply --repo ExatronOmega/signposter --pr <pr> --apply
-signposter integration plan --repo ExatronOmega/signposter --pr <pr>
-signposter integration apply --repo ExatronOmega/signposter --pr <pr> --apply
-signposter cleanup plan --repo ExatronOmega/signposter --pr <pr>
-signposter cleanup apply --repo ExatronOmega/signposter --pr <pr> --apply
+signposter review write-prompt --repo rozmiarD/signposter --pr <pr>
+signposter review execute --repo rozmiarD/signposter --pr <pr>
+signposter review gate --repo rozmiarD/signposter --pr <pr>
+signposter review submit --repo rozmiarD/signposter --pr <pr> --apply
+signposter merge plan --repo rozmiarD/signposter --pr <pr>
+signposter merge apply --repo rozmiarD/signposter --pr <pr> --apply
+signposter integration plan --repo rozmiarD/signposter --pr <pr>
+signposter integration apply --repo rozmiarD/signposter --pr <pr> --apply
+signposter cleanup plan --repo rozmiarD/signposter --pr <pr>
+signposter cleanup apply --repo rozmiarD/signposter --pr <pr> --apply
 ```
 
 Use explicit risk or scope override flags only when the corresponding dry-run
@@ -161,6 +161,20 @@ Important modules live under `src/signposter/`:
   selection metadata.
 
 Tests live under `tests/` and should be updated with each behavior change.
+
+## Documentation
+
+Public operator docs live under `docs/`:
+
+- `architecture.md` — control-plane layers and module boundaries
+- `workflow.md` — lifecycle overview and safety boundaries
+- `operator-lifecycle-runbook.md` — step-by-step operator flow
+- `artifacts-reference.md` — worker/reviewer artifact fields
+- `troubleshooting.md` — recovery checklist
+
+Example planner inputs live under `configs/planner.example-plan.json` and
+`configs/planner.example-seed-manifest.json`. Operator-internal audits and
+roadmaps stay local only and are not published from this repository.
 
 ## Development Setup
 

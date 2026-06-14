@@ -1,36 +1,23 @@
-# State Machine (Skeleton)
+# Lifecycle State Model
 
-**Status:** Structural definition only. No implementation.
+**Status:** Implemented via GitHub labels and `lifecycle.py`.
 
-## Core Entities
+Signposter does not use a separate persistence-backed state machine. Issue
+lifecycle is expressed through workflow labels and deterministic control-plane
+transitions.
 
-- **Task**: Smallest unit of work.
-- **Job**: Collection of related tasks.
-- **Run**: An execution attempt of a Job/Task.
+## Issue workflow labels
 
-## Planned States / Phases
+Primary states are documented in `docs/workflow.md`:
 
-Possible phases (subject to change):
-- `queued`
-- `planning`
-- `review`
-- `executing`
-- `gate-evaluation`
-- `blocked`
-- `completed`
-- `failed`
-- `cancelled`
+- `state:ready` → `state:active` → `state:done` → `state:merged`
+- `state:blocked` and `state:failed` stop progress until cleared
 
-## Transitions
+`state:done` does not close GitHub issues. Integration owns closure after merge.
 
-Transitions will be controlled by:
-- Explicit gate evaluations
-- Worker outcomes
-- Scheduler timeouts
-- Manual intervention
+## Planner vs scheduler scope
 
-## Persistence
+- **Planner** (manifest-scoped): dependency DAG and roadmap advancement
+- **Scheduler** (repository-scoped): next eligible open issue from GitHub labels
 
-The `state` package will define the contracts for storing and retrieving current state and history.
-
-This document will be significantly expanded once the state machine is designed.
+See `docs/architecture.md` for module boundaries and safety invariants.

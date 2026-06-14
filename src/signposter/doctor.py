@@ -356,8 +356,9 @@ def check_docs_exist() -> CheckResult:
     required = [
         "architecture.md",
         "workflow.md",
-        "labels.md",
-        "state-machine.md",
+        "troubleshooting.md",
+        "artifacts-reference.md",
+        "operator-lifecycle-runbook.md",
     ]
 
     missing = [f for f in required if not (docs_dir / f).exists()]

@@ -39,7 +39,7 @@ planned bridge or the current surface is planning-only.
 ## Common Variables
 
 ```bash
-REPO=ExatronOmega/signposter
+REPO=rozmiarD/signposter
 ISSUE=284
 PR=368
 WORKTREE=../signposter-work/$ISSUE
@@ -54,7 +54,7 @@ Use the manifest-scoped planner to identify the next roadmap task.
 
 ```bash
 signposter planner run \
-  --manifest /tmp/signposter-h049-manifest.json \
+  --manifest configs/planner.example-seed-manifest.json \
   --sync-github \
   --dry-run
 ```
@@ -63,7 +63,7 @@ If a completed dependency can promote the next task, dry-run first:
 
 ```bash
 signposter planner advance \
-  --manifest /tmp/signposter-h049-manifest.json \
+  --manifest configs/planner.example-seed-manifest.json \
   --issue $ISSUE \
   --sync-github \
   --dry-run
@@ -73,7 +73,7 @@ Apply only when the plan lists the exact label mutation expected:
 
 ```bash
 signposter planner advance \
-  --manifest /tmp/signposter-h049-manifest.json \
+  --manifest configs/planner.example-seed-manifest.json \
   --issue $ISSUE \
   --sync-github \
   --apply

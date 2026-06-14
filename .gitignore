@@ -166,3 +166,9 @@ local/
 .local/
 TODO*
 *.local.md
+
+# Operator-internal documentation (kept locally, not published)
+docs/audits/
+docs/roadmaps/
+docs/architecture-debt.md
+docs/operator-log-template.md

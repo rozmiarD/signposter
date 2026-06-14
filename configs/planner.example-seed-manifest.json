@@ -1,0 +1,7 @@
+{
+  "version": "planner.seed-manifest.v0.1",
+  "plan": "configs/planner.example-plan.json",
+  "repo": "rozmiarD/signposter",
+  "issues": [],
+  "issue_key_map": {}
+}

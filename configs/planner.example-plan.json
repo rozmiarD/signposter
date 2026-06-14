@@ -1,0 +1,38 @@
+{
+  "version": "planner.v0.1",
+  "goal": "Example supervised roadmap for Signposter operator docs",
+  "mode": "supervised",
+  "status": "draft",
+  "mutation_policy": "local draft only; no GitHub mutation; no backend execution",
+  "required_capabilities": [
+    "read-only lifecycle inspection",
+    "issue and PR state summarization",
+    "gate and CI status visibility"
+  ],
+  "issues": [
+    {
+      "key": "EX-001",
+      "title": "Define example planner contract",
+      "body": "Document the minimal planner plan fields for operators.",
+      "area": "docs",
+      "risk": "low",
+      "depends_on": [],
+      "acceptance": [
+        "Example plan validates with signposter planner validate"
+      ],
+      "allowed_mutations": []
+    },
+    {
+      "key": "EX-002",
+      "title": "Add example seed manifest",
+      "body": "Provide a public seed-manifest example under configs/.",
+      "area": "docs",
+      "risk": "low",
+      "depends_on": ["EX-001"],
+      "acceptance": [
+        "README references configs/planner.example-seed-manifest.json"
+      ],
+      "allowed_mutations": []
+    }
+  ]
+}

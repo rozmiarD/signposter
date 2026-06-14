@@ -24,7 +24,7 @@ Start from repository root unless a command explicitly targets the isolated
 worktree.
 
 ```bash
-REPO=ExatronOmega/signposter
+REPO=rozmiarD/signposter
 ISSUE=286
 PR=370
 WORKTREE=../signposter-work/$ISSUE

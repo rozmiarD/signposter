@@ -1,66 +1,25 @@
-# Label System (Skeleton)
+# Label System
 
-**Status:** Example definitions only.
+**Status:** Implemented via GitHub workflow labels.
 
-Labels are the primary signaling mechanism between GitHub and Signposter.
+Signposter routes work using GitHub issue labels. Canonical structural
+definitions live in `configs/labels.example.yaml`.
 
-## Workflow Labels (Bootstrap Phase)
+## Workflow state labels
 
-These labels were created as part of initial GitHub preparation.
-They use neutral terminology and are intended to support future dispatcher logic.
-
-### Phase Labels
-- `phase:plan`
-- `phase:build`
-- `phase:review`
-- `phase:merge`
-
-### State Labels
 - `state:ready`
 - `state:active`
 - `state:blocked`
 - `state:failed`
 - `state:done`
+- `state:merged`
 
-### Risk Labels
-- `risk:low`
-- `risk:medium`
-- `risk:high`
+## Phase, risk, role, area, and gate labels
 
-### Role Labels
-- `role:planner`
-- `role:worker`
-- `role:reviewer`
-- `role:gatekeeper`
+Planner, scheduler, lifecycle, and gate surfaces use the `phase:*`, `risk:*`,
+`role:*`, `area:*`, and `gate:*` vocabulary described in `configs/labels.example.yaml`
+and summarized in `docs/workflow.md`.
 
-### Area Labels
-- `area:docs`
-- `area:tests`
-- `area:core`
-- `area:github`
-- `area:scheduler`
-- `area:dispatcher`
-- `area:runner`
-- `area:config`
-- `area:ci`
-
-### Gate Labels
-- `gate:ci`
-- `gate:review`
-- `gate:human`
-
-## Legacy / Example Labels
-
-- **Lifecycle / Phase labels**: `needs-review`, `ready-for-dispatch`, `in-progress`, `blocked`
-- **Area labels** (legacy examples): `area/backend`, `area/infrastructure`, `area/documentation`
-- **Risk / Gate labels** (legacy examples): `high-risk`, `requires-infra-review`
-
-## Rules (to be implemented later)
-
-- Labels drive routing decisions.
-- Certain label combinations can trigger specific gates.
-- Phase labels should be kept in sync with internal state machine.
-
-See `configs/labels.example.yaml` for the current structural definition.
-
-Future work must keep label semantics clear and non-overloaded.
+Legacy examples such as `needs-review` or `ready-for-dispatch` may still appear
+on older issues. New roadmaps should prefer the `state:*` and structured label
+vocabulary above.

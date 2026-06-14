@@ -168,8 +168,6 @@ structured fields and bounded summaries over noisy raw logs.
 
 ## Current Architectural Debt
 
-- Some README/runbook text still describes older bootstrap or OpenClaw-first
-  behavior.
 - Terminal workflow state ownership is interpreted in several modules and should
   remain audited as automation expands.
 - Linkage helpers for issue/PR detection are duplicated across lifecycle,
