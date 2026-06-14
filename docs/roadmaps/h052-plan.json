@@ -21,24 +21,26 @@
       "area": "core",
       "depends_on": [],
       "acceptance": [
-        "H052-001: scoped behavior or audit result is delivered with evidence.",
-        "H052-001: output is deterministic and operator-readable.",
-        "H052-001: safety semantics remain unchanged unless explicitly tested.",
-        "H052-001: validation command succeeds."
+        "H052-001: Repository and GitHub state grounding audit is delivered with concrete evidence, not only a placeholder.",
+        "H052-001: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-001: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-001: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-002",
@@ -52,24 +54,26 @@
         "H052-001"
       ],
       "acceptance": [
-        "H052-002: scoped behavior or audit result is delivered with evidence.",
-        "H052-002: output is deterministic and operator-readable.",
-        "H052-002: safety semantics remain unchanged unless explicitly tested.",
-        "H052-002: validation command succeeds."
+        "H052-002: TODO reconciliation and non-goal classification is delivered with concrete evidence, not only a placeholder.",
+        "H052-002: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-002: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-002: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-003",
@@ -83,24 +87,26 @@
         "H052-002"
       ],
       "acceptance": [
-        "H052-003: scoped behavior or audit result is delivered with evidence.",
-        "H052-003: output is deterministic and operator-readable.",
-        "H052-003: safety semantics remain unchanged unless explicitly tested.",
-        "H052-003: validation command succeeds."
+        "H052-003: H052 roadmap scope and success criteria artifact is delivered with concrete evidence, not only a placeholder.",
+        "H052-003: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-003: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-003: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-004",
@@ -114,24 +120,26 @@
         "H052-001"
       ],
       "acceptance": [
-        "H052-004: scoped behavior or audit result is delivered with evidence.",
-        "H052-004: output is deterministic and operator-readable.",
-        "H052-004: safety semantics remain unchanged unless explicitly tested.",
-        "H052-004: validation command succeeds."
+        "H052-004: Seed manifest and label compatibility smoke is delivered with concrete evidence, not only a placeholder.",
+        "H052-004: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-004: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-004: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-005",
@@ -145,24 +153,26 @@
         "H052-001"
       ],
       "acceptance": [
-        "H052-005: scoped behavior or audit result is delivered with evidence.",
-        "H052-005: output is deterministic and operator-readable.",
-        "H052-005: safety semantics remain unchanged unless explicitly tested.",
-        "H052-005: validation command succeeds."
+        "H052-005: Existing validation failures recovery audit is delivered with concrete evidence, not only a placeholder.",
+        "H052-005: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-005: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-005: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-006",
@@ -176,24 +186,26 @@
         "H052-002"
       ],
       "acceptance": [
-        "H052-006: scoped behavior or audit result is delivered with evidence.",
-        "H052-006: output is deterministic and operator-readable.",
-        "H052-006: safety semantics remain unchanged unless explicitly tested.",
-        "H052-006: validation command succeeds."
+        "H052-006: GitHub-facing text surface inventory beyond report is delivered with concrete evidence, not only a placeholder.",
+        "H052-006: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-006: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-006: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-007",
@@ -207,24 +219,26 @@
         "H052-006"
       ],
       "acceptance": [
-        "H052-007: scoped behavior or audit result is delivered with evidence.",
-        "H052-007: output is deterministic and operator-readable.",
-        "H052-007: safety semantics remain unchanged unless explicitly tested.",
-        "H052-007: validation command succeeds."
+        "H052-007: Reviewer comment compact format design is delivered with concrete evidence, not only a placeholder.",
+        "H052-007: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-007: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-007: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-008",
@@ -238,24 +252,26 @@
         "H052-007"
       ],
       "acceptance": [
-        "H052-008: scoped behavior or audit result is delivered with evidence.",
-        "H052-008: output is deterministic and operator-readable.",
-        "H052-008: safety semantics remain unchanged unless explicitly tested.",
-        "H052-008: validation command succeeds."
+        "H052-008: Reviewer public summary formatter is delivered with concrete evidence, not only a placeholder.",
+        "H052-008: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-008: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-008: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-009",
@@ -269,24 +285,26 @@
         "H052-008"
       ],
       "acceptance": [
-        "H052-009: scoped behavior or audit result is delivered with evidence.",
-        "H052-009: output is deterministic and operator-readable.",
-        "H052-009: safety semantics remain unchanged unless explicitly tested.",
-        "H052-009: validation command succeeds."
+        "H052-009: Reviewer comment local-path and raw-log regression tests is delivered with concrete evidence, not only a placeholder.",
+        "H052-009: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-009: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-009: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-010",
@@ -300,24 +318,26 @@
         "H052-006"
       ],
       "acceptance": [
-        "H052-010: scoped behavior or audit result is delivered with evidence.",
-        "H052-010: output is deterministic and operator-readable.",
-        "H052-010: safety semantics remain unchanged unless explicitly tested.",
-        "H052-010: validation command succeeds."
+        "H052-010: Transition comment safety audit is delivered with concrete evidence, not only a placeholder.",
+        "H052-010: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-010: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-010: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-011",
@@ -331,24 +351,26 @@
         "H052-010"
       ],
       "acceptance": [
-        "H052-011: scoped behavior or audit result is delivered with evidence.",
-        "H052-011: output is deterministic and operator-readable.",
-        "H052-011: safety semantics remain unchanged unless explicitly tested.",
-        "H052-011: validation command succeeds."
+        "H052-011: Transition comment compactness tests is delivered with concrete evidence, not only a placeholder.",
+        "H052-011: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-011: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-011: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-012",
@@ -362,24 +384,26 @@
         "H052-006"
       ],
       "acceptance": [
-        "H052-012: scoped behavior or audit result is delivered with evidence.",
-        "H052-012: output is deterministic and operator-readable.",
-        "H052-012: safety semantics remain unchanged unless explicitly tested.",
-        "H052-012: validation command succeeds."
+        "H052-012: Gate output public-versus-local evidence audit is delivered with concrete evidence, not only a placeholder.",
+        "H052-012: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-012: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-012: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-013",
@@ -394,24 +418,26 @@
         "H052-012"
       ],
       "acceptance": [
-        "H052-013: scoped behavior or audit result is delivered with evidence.",
-        "H052-013: output is deterministic and operator-readable.",
-        "H052-013: safety semantics remain unchanged unless explicitly tested.",
-        "H052-013: validation command succeeds."
+        "H052-013: Shared public summary contract for report and gate surfaces is delivered with concrete evidence, not only a placeholder.",
+        "H052-013: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-013: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-013: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-014",
@@ -427,24 +453,26 @@
         "H052-013"
       ],
       "acceptance": [
-        "H052-014: scoped behavior or audit result is delivered with evidence.",
-        "H052-014: output is deterministic and operator-readable.",
-        "H052-014: safety semantics remain unchanged unless explicitly tested.",
-        "H052-014: validation command succeeds."
+        "H052-014: Public comment regression corpus is delivered with concrete evidence, not only a placeholder.",
+        "H052-014: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-014: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-014: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-015",
@@ -458,24 +486,26 @@
         "H052-002"
       ],
       "acceptance": [
-        "H052-015: scoped behavior or audit result is delivered with evidence.",
-        "H052-015: output is deterministic and operator-readable.",
-        "H052-015: safety semantics remain unchanged unless explicitly tested.",
-        "H052-015: validation command succeeds."
+        "H052-015: Planner issue body boilerplate measurement audit is delivered with concrete evidence, not only a placeholder.",
+        "H052-015: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-015: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-015: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-016",
@@ -489,24 +519,26 @@
         "H052-015"
       ],
       "acceptance": [
-        "H052-016: scoped behavior or audit result is delivered with evidence.",
-        "H052-016: output is deterministic and operator-readable.",
-        "H052-016: safety semantics remain unchanged unless explicitly tested.",
-        "H052-016: validation command succeeds."
+        "H052-016: Compact planner issue policy block design is delivered with concrete evidence, not only a placeholder.",
+        "H052-016: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-016: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-016: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-017",
@@ -520,24 +552,26 @@
         "H052-016"
       ],
       "acceptance": [
-        "H052-017: scoped behavior or audit result is delivered with evidence.",
-        "H052-017: output is deterministic and operator-readable.",
-        "H052-017: safety semantics remain unchanged unless explicitly tested.",
-        "H052-017: validation command succeeds."
+        "H052-017: Compact planner issue body renderer is delivered with concrete evidence, not only a placeholder.",
+        "H052-017: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-017: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-017: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-018",
@@ -551,24 +585,26 @@
         "H052-017"
       ],
       "acceptance": [
-        "H052-018: scoped behavior or audit result is delivered with evidence.",
-        "H052-018: output is deterministic and operator-readable.",
-        "H052-018: safety semantics remain unchanged unless explicitly tested.",
-        "H052-018: validation command succeeds."
+        "H052-018: Planner issue body compactness regression tests is delivered with concrete evidence, not only a placeholder.",
+        "H052-018: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-018: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-018: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-019",
@@ -582,24 +618,26 @@
         "H052-015"
       ],
       "acceptance": [
-        "H052-019: scoped behavior or audit result is delivered with evidence.",
-        "H052-019: output is deterministic and operator-readable.",
-        "H052-019: safety semantics remain unchanged unless explicitly tested.",
-        "H052-019: validation command succeeds."
+        "H052-019: Worker prompt scaffolding duplication audit is delivered with concrete evidence, not only a placeholder.",
+        "H052-019: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-019: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-019: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-020",
@@ -613,24 +651,26 @@
         "H052-019"
       ],
       "acceptance": [
-        "H052-020: scoped behavior or audit result is delivered with evidence.",
-        "H052-020: output is deterministic and operator-readable.",
-        "H052-020: safety semantics remain unchanged unless explicitly tested.",
-        "H052-020: validation command succeeds."
+        "H052-020: Shared prompt fragment registry design is delivered with concrete evidence, not only a placeholder.",
+        "H052-020: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-020: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-020: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-021",
@@ -644,24 +684,26 @@
         "H052-020"
       ],
       "acceptance": [
-        "H052-021: scoped behavior or audit result is delivered with evidence.",
-        "H052-021: output is deterministic and operator-readable.",
-        "H052-021: safety semantics remain unchanged unless explicitly tested.",
-        "H052-021: validation command succeeds."
+        "H052-021: Worker prompt fragment extraction is delivered with concrete evidence, not only a placeholder.",
+        "H052-021: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-021: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-021: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-022",
@@ -675,24 +717,26 @@
         "H052-020"
       ],
       "acceptance": [
-        "H052-022: scoped behavior or audit result is delivered with evidence.",
-        "H052-022: output is deterministic and operator-readable.",
-        "H052-022: safety semantics remain unchanged unless explicitly tested.",
-        "H052-022: validation command succeeds."
+        "H052-022: Reviewer prompt fragment extraction is delivered with concrete evidence, not only a placeholder.",
+        "H052-022: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-022: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-022: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-023",
@@ -706,24 +750,26 @@
         "H052-019"
       ],
       "acceptance": [
-        "H052-023: scoped behavior or audit result is delivered with evidence.",
-        "H052-023: output is deterministic and operator-readable.",
-        "H052-023: safety semantics remain unchanged unless explicitly tested.",
-        "H052-023: validation command succeeds."
+        "H052-023: Prompt budget report conditionality design is delivered with concrete evidence, not only a placeholder.",
+        "H052-023: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-023: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-023: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-024",
@@ -739,24 +785,26 @@
         "H052-023"
       ],
       "acceptance": [
-        "H052-024: scoped behavior or audit result is delivered with evidence.",
-        "H052-024: output is deterministic and operator-readable.",
-        "H052-024: safety semantics remain unchanged unless explicitly tested.",
-        "H052-024: validation command succeeds."
+        "H052-024: Prompt token measurement smoke is delivered with concrete evidence, not only a placeholder.",
+        "H052-024: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-024: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-024: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-025",
@@ -770,24 +818,26 @@
         "H052-001"
       ],
       "acceptance": [
-        "H052-025: scoped behavior or audit result is delivered with evidence.",
-        "H052-025: output is deterministic and operator-readable.",
-        "H052-025: safety semantics remain unchanged unless explicitly tested.",
-        "H052-025: validation command succeeds."
+        "H052-025: Artifact storage current-state audit is delivered with concrete evidence, not only a placeholder.",
+        "H052-025: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-025: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-025: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-026",
@@ -801,24 +851,26 @@
         "H052-025"
       ],
       "acceptance": [
-        "H052-026: scoped behavior or audit result is delivered with evidence.",
-        "H052-026: output is deterministic and operator-readable.",
-        "H052-026: safety semantics remain unchanged unless explicitly tested.",
-        "H052-026: validation command succeeds."
+        "H052-026: Artifact root configuration contract is delivered with concrete evidence, not only a placeholder.",
+        "H052-026: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-026: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-026: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-027",
@@ -832,24 +884,26 @@
         "H052-026"
       ],
       "acceptance": [
-        "H052-027: scoped behavior or audit result is delivered with evidence.",
-        "H052-027: output is deterministic and operator-readable.",
-        "H052-027: safety semantics remain unchanged unless explicitly tested.",
-        "H052-027: validation command succeeds."
+        "H052-027: External artifact root resolver is delivered with concrete evidence, not only a placeholder.",
+        "H052-027: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-027: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-027: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-028",
@@ -863,24 +917,26 @@
         "H052-026"
       ],
       "acceptance": [
-        "H052-028: scoped behavior or audit result is delivered with evidence.",
-        "H052-028: output is deterministic and operator-readable.",
-        "H052-028: safety semantics remain unchanged unless explicitly tested.",
-        "H052-028: validation command succeeds."
+        "H052-028: Repository-local fallback artifact policy is delivered with concrete evidence, not only a placeholder.",
+        "H052-028: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-028: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-028: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-029",
@@ -894,24 +950,26 @@
         "H052-028"
       ],
       "acceptance": [
-        "H052-029: scoped behavior or audit result is delivered with evidence.",
-        "H052-029: output is deterministic and operator-readable.",
-        "H052-029: safety semantics remain unchanged unless explicitly tested.",
-        "H052-029: validation command succeeds."
+        "H052-029: Artifact fallback gitignore preflight plan is delivered with concrete evidence, not only a placeholder.",
+        "H052-029: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-029: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-029: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-030",
@@ -925,24 +983,26 @@
         "H052-027"
       ],
       "acceptance": [
-        "H052-030: scoped behavior or audit result is delivered with evidence.",
-        "H052-030: output is deterministic and operator-readable.",
-        "H052-030: safety semantics remain unchanged unless explicitly tested.",
-        "H052-030: validation command succeeds."
+        "H052-030: Runner artifact writer uses artifact root is delivered with concrete evidence, not only a placeholder.",
+        "H052-030: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-030: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-030: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-031",
@@ -956,24 +1016,26 @@
         "H052-027"
       ],
       "acceptance": [
-        "H052-031: scoped behavior or audit result is delivered with evidence.",
-        "H052-031: output is deterministic and operator-readable.",
-        "H052-031: safety semantics remain unchanged unless explicitly tested.",
-        "H052-031: validation command succeeds."
+        "H052-031: Reviewer and gate artifact writers use artifact root is delivered with concrete evidence, not only a placeholder.",
+        "H052-031: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-031: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-031: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-032",
@@ -988,24 +1050,26 @@
         "H052-031"
       ],
       "acceptance": [
-        "H052-032: scoped behavior or audit result is delivered with evidence.",
-        "H052-032: output is deterministic and operator-readable.",
-        "H052-032: safety semantics remain unchanged unless explicitly tested.",
-        "H052-032: validation command succeeds."
+        "H052-032: Artifact path redaction regression suite is delivered with concrete evidence, not only a placeholder.",
+        "H052-032: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-032: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-032: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-033",
@@ -1021,24 +1085,26 @@
         "H052-031"
       ],
       "acceptance": [
-        "H052-033: scoped behavior or audit result is delivered with evidence.",
-        "H052-033: output is deterministic and operator-readable.",
-        "H052-033: safety semantics remain unchanged unless explicitly tested.",
-        "H052-033: validation command succeeds."
+        "H052-033: Foreign repository artifact locality fixture is delivered with concrete evidence, not only a placeholder.",
+        "H052-033: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-033: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-033: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-034",
@@ -1052,24 +1118,26 @@
         "H052-033"
       ],
       "acceptance": [
-        "H052-034: scoped behavior or audit result is delivered with evidence.",
-        "H052-034: output is deterministic and operator-readable.",
-        "H052-034: safety semantics remain unchanged unless explicitly tested.",
-        "H052-034: validation command succeeds."
+        "H052-034: Artifact storage operator runbook update is delivered with concrete evidence, not only a placeholder.",
+        "H052-034: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-034: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-034: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-035",
@@ -1083,24 +1151,26 @@
         "H052-002"
       ],
       "acceptance": [
-        "H052-035: scoped behavior or audit result is delivered with evidence.",
-        "H052-035: output is deterministic and operator-readable.",
-        "H052-035: safety semantics remain unchanged unless explicitly tested.",
-        "H052-035: validation command succeeds."
+        "H052-035: Lifecycle and orchestrator action contract audit is delivered with concrete evidence, not only a placeholder.",
+        "H052-035: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-035: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-035: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-036",
@@ -1114,24 +1184,26 @@
         "H052-035"
       ],
       "acceptance": [
-        "H052-036: scoped behavior or audit result is delivered with evidence.",
-        "H052-036: output is deterministic and operator-readable.",
-        "H052-036: safety semantics remain unchanged unless explicitly tested.",
-        "H052-036: validation command succeeds."
+        "H052-036: Lifecycle next stop and recovery schema is delivered with concrete evidence, not only a placeholder.",
+        "H052-036: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-036: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-036: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-037",
@@ -1145,24 +1217,26 @@
         "H052-036"
       ],
       "acceptance": [
-        "H052-037: scoped behavior or audit result is delivered with evidence.",
-        "H052-037: output is deterministic and operator-readable.",
-        "H052-037: safety semantics remain unchanged unless explicitly tested.",
-        "H052-037: validation command succeeds."
+        "H052-037: Orchestrator compact summary fields is delivered with concrete evidence, not only a placeholder.",
+        "H052-037: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-037: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-037: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-038",
@@ -1176,24 +1250,26 @@
         "H052-037"
       ],
       "acceptance": [
-        "H052-038: scoped behavior or audit result is delivered with evidence.",
-        "H052-038: output is deterministic and operator-readable.",
-        "H052-038: safety semantics remain unchanged unless explicitly tested.",
-        "H052-038: validation command succeeds."
+        "H052-038: Control-plane status agreement check is delivered with concrete evidence, not only a placeholder.",
+        "H052-038: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-038: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-038: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-039",
@@ -1208,24 +1284,26 @@
         "H052-035"
       ],
       "acceptance": [
-        "H052-039: scoped behavior or audit result is delivered with evidence.",
-        "H052-039: output is deterministic and operator-readable.",
-        "H052-039: safety semantics remain unchanged unless explicitly tested.",
-        "H052-039: validation command succeeds."
+        "H052-039: Lifecycle root and artifact path normalization preflight is delivered with concrete evidence, not only a placeholder.",
+        "H052-039: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-039: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-039: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-040",
@@ -1240,24 +1318,26 @@
         "H052-039"
       ],
       "acceptance": [
-        "H052-040: scoped behavior or audit result is delivered with evidence.",
-        "H052-040: output is deterministic and operator-readable.",
-        "H052-040: safety semantics remain unchanged unless explicitly tested.",
-        "H052-040: validation command succeeds."
+        "H052-040: Resume snapshot command contract is delivered with concrete evidence, not only a placeholder.",
+        "H052-040: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-040: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-040: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-041",
@@ -1271,24 +1351,26 @@
         "H052-036"
       ],
       "acceptance": [
-        "H052-041: scoped behavior or audit result is delivered with evidence.",
-        "H052-041: output is deterministic and operator-readable.",
-        "H052-041: safety semantics remain unchanged unless explicitly tested.",
-        "H052-041: validation command succeeds."
+        "H052-041: Takeover decision table structured output is delivered with concrete evidence, not only a placeholder.",
+        "H052-041: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-041: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-041: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-042",
@@ -1303,24 +1385,26 @@
         "H052-041"
       ],
       "acceptance": [
-        "H052-042: scoped behavior or audit result is delivered with evidence.",
-        "H052-042: output is deterministic and operator-readable.",
-        "H052-042: safety semantics remain unchanged unless explicitly tested.",
-        "H052-042: validation command succeeds."
+        "H052-042: Orchestrator loop stop reason regression tests is delivered with concrete evidence, not only a placeholder.",
+        "H052-042: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-042: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-042: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-043",
@@ -1334,24 +1418,26 @@
         "H052-042"
       ],
       "acceptance": [
-        "H052-043: scoped behavior or audit result is delivered with evidence.",
-        "H052-043: output is deterministic and operator-readable.",
-        "H052-043: safety semantics remain unchanged unless explicitly tested.",
-        "H052-043: validation command succeeds."
+        "H052-043: Full lifecycle happy-path smoke refresh is delivered with concrete evidence, not only a placeholder.",
+        "H052-043: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-043: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-043: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-044",
@@ -1365,24 +1451,26 @@
         "H052-003"
       ],
       "acceptance": [
-        "H052-044: scoped behavior or audit result is delivered with evidence.",
-        "H052-044: output is deterministic and operator-readable.",
-        "H052-044: safety semantics remain unchanged unless explicitly tested.",
-        "H052-044: validation command succeeds."
+        "H052-044: Repository goal artifact schema design is delivered with concrete evidence, not only a placeholder.",
+        "H052-044: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-044: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-044: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-045",
@@ -1396,24 +1484,26 @@
         "H052-044"
       ],
       "acceptance": [
-        "H052-045: scoped behavior or audit result is delivered with evidence.",
-        "H052-045: output is deterministic and operator-readable.",
-        "H052-045: safety semantics remain unchanged unless explicitly tested.",
-        "H052-045: validation command succeeds."
+        "H052-045: Success criteria evaluator contract is delivered with concrete evidence, not only a placeholder.",
+        "H052-045: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-045: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-045: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-046",
@@ -1427,24 +1517,26 @@
         "H052-045"
       ],
       "acceptance": [
-        "H052-046: scoped behavior or audit result is delivered with evidence.",
-        "H052-046: output is deterministic and operator-readable.",
-        "H052-046: safety semantics remain unchanged unless explicitly tested.",
-        "H052-046: validation command succeeds."
+        "H052-046: Goal check CLI dry-run surface is delivered with concrete evidence, not only a placeholder.",
+        "H052-046: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-046: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-046: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-047",
@@ -1458,24 +1550,26 @@
         "H052-046"
       ],
       "acceptance": [
-        "H052-047: scoped behavior or audit result is delivered with evidence.",
-        "H052-047: output is deterministic and operator-readable.",
-        "H052-047: safety semantics remain unchanged unless explicitly tested.",
-        "H052-047: validation command succeeds."
+        "H052-047: Goal check evaluator tests is delivered with concrete evidence, not only a placeholder.",
+        "H052-047: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-047: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-047: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-048",
@@ -1490,24 +1584,26 @@
         "H052-035"
       ],
       "acceptance": [
-        "H052-048: scoped behavior or audit result is delivered with evidence.",
-        "H052-048: output is deterministic and operator-readable.",
-        "H052-048: safety semantics remain unchanged unless explicitly tested.",
-        "H052-048: validation command succeeds."
+        "H052-048: Roadmap completion audit contract is delivered with concrete evidence, not only a placeholder.",
+        "H052-048: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-048: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-048: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-049",
@@ -1521,24 +1617,26 @@
         "H052-048"
       ],
       "acceptance": [
-        "H052-049: scoped behavior or audit result is delivered with evidence.",
-        "H052-049: output is deterministic and operator-readable.",
-        "H052-049: safety semantics remain unchanged unless explicitly tested.",
-        "H052-049: validation command succeeds."
+        "H052-049: Completed DAG audit detector is delivered with concrete evidence, not only a placeholder.",
+        "H052-049: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-049: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-049: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-050",
@@ -1552,24 +1650,26 @@
         "H052-049"
       ],
       "acceptance": [
-        "H052-050: scoped behavior or audit result is delivered with evidence.",
-        "H052-050: output is deterministic and operator-readable.",
-        "H052-050: safety semantics remain unchanged unless explicitly tested.",
-        "H052-050: validation command succeeds."
+        "H052-050: Next-roadmap bootstrap preflight status is delivered with concrete evidence, not only a placeholder.",
+        "H052-050: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-050: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-050: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-051",
@@ -1584,24 +1684,26 @@
         "H052-050"
       ],
       "acceptance": [
-        "H052-051: scoped behavior or audit result is delivered with evidence.",
-        "H052-051: output is deterministic and operator-readable.",
-        "H052-051: safety semantics remain unchanged unless explicitly tested.",
-        "H052-051: validation command succeeds."
+        "H052-051: Orchestrator continue-or-stop decision with repo goal is delivered with concrete evidence, not only a placeholder.",
+        "H052-051: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-051: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-051: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-052",
@@ -1615,24 +1717,26 @@
         "H052-051"
       ],
       "acceptance": [
-        "H052-052: scoped behavior or audit result is delivered with evidence.",
-        "H052-052: output is deterministic and operator-readable.",
-        "H052-052: safety semantics remain unchanged unless explicitly tested.",
-        "H052-052: validation command succeeds."
+        "H052-052: Document core loop and stop exception is delivered with concrete evidence, not only a placeholder.",
+        "H052-052: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-052: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-052: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-053",
@@ -1646,24 +1750,26 @@
         "H052-002"
       ],
       "acceptance": [
-        "H052-053: scoped behavior or audit result is delivered with evidence.",
-        "H052-053: output is deterministic and operator-readable.",
-        "H052-053: safety semantics remain unchanged unless explicitly tested.",
-        "H052-053: validation command succeeds."
+        "H052-053: Side-task priority semantics audit is delivered with concrete evidence, not only a placeholder.",
+        "H052-053: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-053: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-053: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-054",
@@ -1677,24 +1783,26 @@
         "H052-053"
       ],
       "acceptance": [
-        "H052-054: scoped behavior or audit result is delivered with evidence.",
-        "H052-054: output is deterministic and operator-readable.",
-        "H052-054: safety semantics remain unchanged unless explicitly tested.",
-        "H052-054: validation command succeeds."
+        "H052-054: ASAP side-task metadata schema is delivered with concrete evidence, not only a placeholder.",
+        "H052-054: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-054: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-054: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-055",
@@ -1708,24 +1816,26 @@
         "H052-054"
       ],
       "acceptance": [
-        "H052-055: scoped behavior or audit result is delivered with evidence.",
-        "H052-055: output is deterministic and operator-readable.",
-        "H052-055: safety semantics remain unchanged unless explicitly tested.",
-        "H052-055: validation command succeeds."
+        "H052-055: Planner side-task-plan ASAP dry-run is delivered with concrete evidence, not only a placeholder.",
+        "H052-055: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-055: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-055: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-056",
@@ -1739,24 +1849,26 @@
         "H052-055"
       ],
       "acceptance": [
-        "H052-056: scoped behavior or audit result is delivered with evidence.",
-        "H052-056: output is deterministic and operator-readable.",
-        "H052-056: safety semantics remain unchanged unless explicitly tested.",
-        "H052-056: validation command succeeds."
+        "H052-056: Scheduler ASAP promotion after current task is delivered with concrete evidence, not only a placeholder.",
+        "H052-056: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-056: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-056: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-057",
@@ -1770,24 +1882,26 @@
         "H052-056"
       ],
       "acceptance": [
-        "H052-057: scoped behavior or audit result is delivered with evidence.",
-        "H052-057: output is deterministic and operator-readable.",
-        "H052-057: safety semantics remain unchanged unless explicitly tested.",
-        "H052-057: validation command succeeds."
+        "H052-057: ASAP return-to regression tests is delivered with concrete evidence, not only a placeholder.",
+        "H052-057: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-057: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-057: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-058",
@@ -1801,24 +1915,26 @@
         "H052-057"
       ],
       "acceptance": [
-        "H052-058: scoped behavior or audit result is delivered with evidence.",
-        "H052-058: output is deterministic and operator-readable.",
-        "H052-058: safety semantics remain unchanged unless explicitly tested.",
-        "H052-058: validation command succeeds."
+        "H052-058: ASAP status visibility in planner and control-plane is delivered with concrete evidence, not only a placeholder.",
+        "H052-058: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-058: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-058: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-059",
@@ -1833,24 +1949,26 @@
         "H052-052"
       ],
       "acceptance": [
-        "H052-059: scoped behavior or audit result is delivered with evidence.",
-        "H052-059: output is deterministic and operator-readable.",
-        "H052-059: safety semantics remain unchanged unless explicitly tested.",
-        "H052-059: validation command succeeds."
+        "H052-059: Cross-repository delegation threat model is delivered with concrete evidence, not only a placeholder.",
+        "H052-059: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-059: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-059: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-060",
@@ -1864,24 +1982,26 @@
         "H052-059"
       ],
       "acceptance": [
-        "H052-060: scoped behavior or audit result is delivered with evidence.",
-        "H052-060: output is deterministic and operator-readable.",
-        "H052-060: safety semantics remain unchanged unless explicitly tested.",
-        "H052-060: validation command succeeds."
+        "H052-060: Cross-repo task metadata design is delivered with concrete evidence, not only a placeholder.",
+        "H052-060: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-060: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-060: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-061",
@@ -1895,24 +2015,26 @@
         "H052-060"
       ],
       "acceptance": [
-        "H052-061: scoped behavior or audit result is delivered with evidence.",
-        "H052-061: output is deterministic and operator-readable.",
-        "H052-061: safety semantics remain unchanged unless explicitly tested.",
-        "H052-061: validation command succeeds."
+        "H052-061: Multi-repo manifest validation dry-run is delivered with concrete evidence, not only a placeholder.",
+        "H052-061: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-061: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-061: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-062",
@@ -1927,24 +2049,26 @@
         "H052-033"
       ],
       "acceptance": [
-        "H052-062: scoped behavior or audit result is delivered with evidence.",
-        "H052-062: output is deterministic and operator-readable.",
-        "H052-062: safety semantics remain unchanged unless explicitly tested.",
-        "H052-062: validation command succeeds."
+        "H052-062: Cross-repo artifact home-target identity checks is delivered with concrete evidence, not only a placeholder.",
+        "H052-062: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-062: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-062: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-063",
@@ -1958,24 +2082,26 @@
         "H052-061"
       ],
       "acceptance": [
-        "H052-063: scoped behavior or audit result is delivered with evidence.",
-        "H052-063: output is deterministic and operator-readable.",
-        "H052-063: safety semantics remain unchanged unless explicitly tested.",
-        "H052-063: validation command succeeds."
+        "H052-063: Cross-repo scheduler read-only selection prototype is delivered with concrete evidence, not only a placeholder.",
+        "H052-063: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-063: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-063: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-064",
@@ -1989,24 +2115,26 @@
         "H052-063"
       ],
       "acceptance": [
-        "H052-064: scoped behavior or audit result is delivered with evidence.",
-        "H052-064: output is deterministic and operator-readable.",
-        "H052-064: safety semantics remain unchanged unless explicitly tested.",
-        "H052-064: validation command succeeds."
+        "H052-064: Cross-repo side-task apply guard tests is delivered with concrete evidence, not only a placeholder.",
+        "H052-064: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-064: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-064: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-065",
@@ -2020,24 +2148,26 @@
         "H052-064"
       ],
       "acceptance": [
-        "H052-065: scoped behavior or audit result is delivered with evidence.",
-        "H052-065: output is deterministic and operator-readable.",
-        "H052-065: safety semantics remain unchanged unless explicitly tested.",
-        "H052-065: validation command succeeds."
+        "H052-065: Cross-repo operator runbook is delivered with concrete evidence, not only a placeholder.",
+        "H052-065: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-065: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-065: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-066",
@@ -2052,24 +2182,26 @@
         "H052-015"
       ],
       "acceptance": [
-        "H052-066: scoped behavior or audit result is delivered with evidence.",
-        "H052-066: output is deterministic and operator-readable.",
-        "H052-066: safety semantics remain unchanged unless explicitly tested.",
-        "H052-066: validation command succeeds."
+        "H052-066: Roadmap depth mode design is delivered with concrete evidence, not only a placeholder.",
+        "H052-066: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-066: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-066: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-067",
@@ -2083,24 +2215,26 @@
         "H052-066"
       ],
       "acceptance": [
-        "H052-067: scoped behavior or audit result is delivered with evidence.",
-        "H052-067: output is deterministic and operator-readable.",
-        "H052-067: safety semantics remain unchanged unless explicitly tested.",
-        "H052-067: validation command succeeds."
+        "H052-067: Roadmap depth manifest metadata is delivered with concrete evidence, not only a placeholder.",
+        "H052-067: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-067: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-067: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-068",
@@ -2115,24 +2249,26 @@
         "H052-018"
       ],
       "acceptance": [
-        "H052-068: scoped behavior or audit result is delivered with evidence.",
-        "H052-068: output is deterministic and operator-readable.",
-        "H052-068: safety semantics remain unchanged unless explicitly tested.",
-        "H052-068: validation command succeeds."
+        "H052-068: Issue body generation respects roadmap depth is delivered with concrete evidence, not only a placeholder.",
+        "H052-068: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-068: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-068: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-069",
@@ -2146,24 +2282,26 @@
         "H052-068"
       ],
       "acceptance": [
-        "H052-069: scoped behavior or audit result is delivered with evidence.",
-        "H052-069: output is deterministic and operator-readable.",
-        "H052-069: safety semantics remain unchanged unless explicitly tested.",
-        "H052-069: validation command succeeds."
+        "H052-069: Roadmap depth dry-run tests is delivered with concrete evidence, not only a placeholder.",
+        "H052-069: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-069: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-069: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-070",
@@ -2181,24 +2319,26 @@
         "H052-069"
       ],
       "acceptance": [
-        "H052-070: scoped behavior or audit result is delivered with evidence.",
-        "H052-070: output is deterministic and operator-readable.",
-        "H052-070: safety semantics remain unchanged unless explicitly tested.",
-        "H052-070: validation command succeeds."
+        "H052-070: Roadmap completion validation gate is delivered with concrete evidence, not only a placeholder.",
+        "H052-070: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-070: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-070: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-071",
@@ -2212,24 +2352,26 @@
         "H052-070"
       ],
       "acceptance": [
-        "H052-071: scoped behavior or audit result is delivered with evidence.",
-        "H052-071: output is deterministic and operator-readable.",
-        "H052-071: safety semantics remain unchanged unless explicitly tested.",
-        "H052-071: validation command succeeds."
+        "H052-071: Final H052 hardening audit is delivered with concrete evidence, not only a placeholder.",
+        "H052-071: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-071: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-071: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-072",
@@ -2243,24 +2385,26 @@
         "H052-071"
       ],
       "acceptance": [
-        "H052-072: scoped behavior or audit result is delivered with evidence.",
-        "H052-072: output is deterministic and operator-readable.",
-        "H052-072: safety semantics remain unchanged unless explicitly tested.",
-        "H052-072: validation command succeeds."
+        "H052-072: H052 final audit and H053 bootstrap plan is delivered with concrete evidence, not only a placeholder.",
+        "H052-072: deliverables are satisfied without changing lifecycle semantics outside scope.",
+        "H052-072: targeted validation passes or the blocker is documented with exact evidence.",
+        "H052-072: public output remains bounded and does not expose local filesystem paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
+        "ruff check . fails",
         "targeted pytest fails",
         "full pytest fails",
         "CI fails",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
+        "backend execution is requested without --execute",
         "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "merge or integration plan is not ready",
+        "public output would expose raw logs, secrets, or local filesystem paths"
       ],
       "allowed_mutations": [],
-      "status": "pending",
-      "side_task": true
+      "status": "pending"
     },
     {
       "key": "H052-S001",
@@ -2272,20 +2416,23 @@
       "area": "scheduler",
       "depends_on": [],
       "acceptance": [
-        "H052-S001: scoped behavior or audit result is delivered with evidence.",
-        "H052-S001: output is deterministic and operator-readable.",
-        "H052-S001: safety semantics remain unchanged unless explicitly tested.",
-        "H052-S001: validation command succeeds."
+        "H052-S001: H052 final audit/bootstrap issue is complete before GovEngine lifecycle starts.",
+        "H052-S001: GovEngine target repo and roadmap state are verified.",
+        "H052-S001: first eligible GovEngine task is selected through Signposter status or scheduler evidence.",
+        "H052-S001: dry-run lifecycle/worktree/run commands are recorded before execution.",
+        "H052-S001: no Signposter production code changes are made.",
+        "H052-S001: no GitHub mutation occurs outside guarded Signposter --apply paths.",
+        "ruff check . passes.",
+        "python -m pytest tests/ -q passes."
       ],
       "stop_conditions": [
-        "ruff check fails",
-        "targeted pytest fails",
-        "full pytest fails",
-        "CI fails",
+        "H052 final audit/bootstrap issue is not complete",
+        "GovEngine target repo cannot be verified",
+        "GovEngine roadmap issue graph is missing or inconsistent",
+        "selected GovEngine issue is dependency-blocked",
+        "worker mutation would run directly on a protected base branch",
         "GitHub mutation is requested without --apply",
-        "execution backend is requested without explicit execution permission",
-        "PR body contains auto-close keywords",
-        "merge or integration plan is not ready"
+        "backend execution is requested without --execute"
       ],
       "allowed_mutations": [],
       "status": "pending",

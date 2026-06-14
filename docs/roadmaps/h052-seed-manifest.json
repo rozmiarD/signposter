@@ -11,7 +11,7 @@
       "docs/roadmaps/h050-seed-manifest.json"
     ]
   },
-  "applied_at": "2026-06-14T15:39:20+00:00",
+  "applied_at": "2026-06-14T15:59:52+00:00",
   "issues": [
     {
       "key": "H052-001",
@@ -23,7 +23,7 @@
         "area:core"
       ],
       "depends_on": [],
-      "body_file": "/tmp/signposter-h052-bodies/H052-001.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-001.md",
       "body_size": {
         "status": "pass",
         "line_count": 65,
@@ -36,7 +36,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [],
       "github_depends_on": [],
       "github_dependency_urls": []
@@ -53,7 +53,7 @@
       "depends_on": [
         "H052-001"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-002.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-002.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -66,7 +66,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-001",
@@ -94,7 +94,7 @@
       "depends_on": [
         "H052-002"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-003.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-003.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -107,7 +107,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-002",
@@ -135,7 +135,7 @@
       "depends_on": [
         "H052-001"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-004.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-004.md",
       "body_size": {
         "status": "pass",
         "line_count": 67,
@@ -148,7 +148,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-001",
@@ -176,7 +176,7 @@
       "depends_on": [
         "H052-001"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-005.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-005.md",
       "body_size": {
         "status": "pass",
         "line_count": 67,
@@ -189,7 +189,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-001",
@@ -217,7 +217,7 @@
       "depends_on": [
         "H052-002"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-006.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-006.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -230,7 +230,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-002",
@@ -258,7 +258,7 @@
       "depends_on": [
         "H052-006"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-007.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-007.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -271,7 +271,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-006",
@@ -299,7 +299,7 @@
       "depends_on": [
         "H052-007"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-008.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-008.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -312,7 +312,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-007",
@@ -340,7 +340,7 @@
       "depends_on": [
         "H052-008"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-009.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-009.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -353,7 +353,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-008",
@@ -381,7 +381,7 @@
       "depends_on": [
         "H052-006"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-010.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-010.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -394,7 +394,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-006",
@@ -422,7 +422,7 @@
       "depends_on": [
         "H052-010"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-011.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-011.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -435,7 +435,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-010",
@@ -463,7 +463,7 @@
       "depends_on": [
         "H052-006"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-012.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-012.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -476,7 +476,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-006",
@@ -505,7 +505,7 @@
         "H052-008",
         "H052-012"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-013.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-013.md",
       "body_size": {
         "status": "pass",
         "line_count": 70,
@@ -518,7 +518,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-008",
@@ -556,7 +556,7 @@
         "H052-011",
         "H052-013"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-014.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-014.md",
       "body_size": {
         "status": "pass",
         "line_count": 74,
@@ -569,7 +569,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-009",
@@ -613,7 +613,7 @@
       "depends_on": [
         "H052-002"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-015.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-015.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -626,7 +626,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-002",
@@ -654,7 +654,7 @@
       "depends_on": [
         "H052-015"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-016.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-016.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -667,7 +667,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-015",
@@ -695,7 +695,7 @@
       "depends_on": [
         "H052-016"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-017.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-017.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -708,7 +708,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-016",
@@ -736,7 +736,7 @@
       "depends_on": [
         "H052-017"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-018.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-018.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -749,7 +749,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-017",
@@ -777,7 +777,7 @@
       "depends_on": [
         "H052-015"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-019.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-019.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -790,7 +790,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-015",
@@ -818,7 +818,7 @@
       "depends_on": [
         "H052-019"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-020.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-020.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -831,7 +831,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-019",
@@ -859,7 +859,7 @@
       "depends_on": [
         "H052-020"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-021.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-021.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -872,7 +872,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-020",
@@ -900,7 +900,7 @@
       "depends_on": [
         "H052-020"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-022.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-022.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -913,7 +913,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-020",
@@ -941,7 +941,7 @@
       "depends_on": [
         "H052-019"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-023.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-023.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -954,7 +954,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-019",
@@ -984,7 +984,7 @@
         "H052-022",
         "H052-023"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-024.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-024.md",
       "body_size": {
         "status": "pass",
         "line_count": 74,
@@ -997,7 +997,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-021",
@@ -1041,7 +1041,7 @@
       "depends_on": [
         "H052-001"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-025.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-025.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -1054,7 +1054,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-001",
@@ -1082,7 +1082,7 @@
       "depends_on": [
         "H052-025"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-026.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-026.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -1095,7 +1095,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-025",
@@ -1123,7 +1123,7 @@
       "depends_on": [
         "H052-026"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-027.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-027.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -1136,7 +1136,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-026",
@@ -1164,7 +1164,7 @@
       "depends_on": [
         "H052-026"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-028.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-028.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -1177,7 +1177,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-026",
@@ -1205,7 +1205,7 @@
       "depends_on": [
         "H052-028"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-029.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-029.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -1218,7 +1218,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-028",
@@ -1246,7 +1246,7 @@
       "depends_on": [
         "H052-027"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-030.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-030.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -1259,7 +1259,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-027",
@@ -1287,7 +1287,7 @@
       "depends_on": [
         "H052-027"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-031.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-031.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -1300,7 +1300,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-027",
@@ -1329,7 +1329,7 @@
         "H052-030",
         "H052-031"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-032.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-032.md",
       "body_size": {
         "status": "pass",
         "line_count": 70,
@@ -1342,7 +1342,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-030",
@@ -1380,7 +1380,7 @@
         "H052-030",
         "H052-031"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-033.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-033.md",
       "body_size": {
         "status": "pass",
         "line_count": 74,
@@ -1393,7 +1393,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-029",
@@ -1437,7 +1437,7 @@
       "depends_on": [
         "H052-033"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-034.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-034.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -1450,7 +1450,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-033",
@@ -1478,7 +1478,7 @@
       "depends_on": [
         "H052-002"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-035.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-035.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -1491,7 +1491,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-002",
@@ -1519,7 +1519,7 @@
       "depends_on": [
         "H052-035"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-036.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-036.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -1532,7 +1532,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-035",
@@ -1560,7 +1560,7 @@
       "depends_on": [
         "H052-036"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-037.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-037.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -1573,7 +1573,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-036",
@@ -1601,7 +1601,7 @@
       "depends_on": [
         "H052-037"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-038.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-038.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -1614,7 +1614,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-037",
@@ -1643,7 +1643,7 @@
         "H052-025",
         "H052-035"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-039.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-039.md",
       "body_size": {
         "status": "pass",
         "line_count": 70,
@@ -1656,7 +1656,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-025",
@@ -1693,7 +1693,7 @@
         "H052-038",
         "H052-039"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-040.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-040.md",
       "body_size": {
         "status": "pass",
         "line_count": 70,
@@ -1706,7 +1706,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-038",
@@ -1742,7 +1742,7 @@
       "depends_on": [
         "H052-036"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-041.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-041.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -1755,7 +1755,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-036",
@@ -1784,7 +1784,7 @@
         "H052-037",
         "H052-041"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-042.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-042.md",
       "body_size": {
         "status": "pass",
         "line_count": 70,
@@ -1797,7 +1797,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-037",
@@ -1833,7 +1833,7 @@
       "depends_on": [
         "H052-042"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-043.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-043.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -1846,7 +1846,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-042",
@@ -1874,7 +1874,7 @@
       "depends_on": [
         "H052-003"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-044.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-044.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -1887,7 +1887,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-003",
@@ -1915,7 +1915,7 @@
       "depends_on": [
         "H052-044"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-045.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-045.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -1928,7 +1928,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-044",
@@ -1956,7 +1956,7 @@
       "depends_on": [
         "H052-045"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-046.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-046.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -1969,7 +1969,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-045",
@@ -1997,7 +1997,7 @@
       "depends_on": [
         "H052-046"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-047.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-047.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -2010,7 +2010,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-046",
@@ -2039,7 +2039,7 @@
         "H052-044",
         "H052-035"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-048.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-048.md",
       "body_size": {
         "status": "pass",
         "line_count": 70,
@@ -2052,7 +2052,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-044",
@@ -2088,7 +2088,7 @@
       "depends_on": [
         "H052-048"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-049.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-049.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -2101,7 +2101,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-048",
@@ -2129,7 +2129,7 @@
       "depends_on": [
         "H052-049"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-050.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-050.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -2142,7 +2142,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-049",
@@ -2171,7 +2171,7 @@
         "H052-047",
         "H052-050"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-051.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-051.md",
       "body_size": {
         "status": "pass",
         "line_count": 70,
@@ -2184,7 +2184,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-047",
@@ -2220,7 +2220,7 @@
       "depends_on": [
         "H052-051"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-052.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-052.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -2233,7 +2233,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-051",
@@ -2261,7 +2261,7 @@
       "depends_on": [
         "H052-002"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-053.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-053.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -2274,7 +2274,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-002",
@@ -2302,7 +2302,7 @@
       "depends_on": [
         "H052-053"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-054.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-054.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -2315,7 +2315,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-053",
@@ -2343,7 +2343,7 @@
       "depends_on": [
         "H052-054"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-055.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-055.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -2356,7 +2356,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-054",
@@ -2384,7 +2384,7 @@
       "depends_on": [
         "H052-055"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-056.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-056.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -2397,7 +2397,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-055",
@@ -2425,7 +2425,7 @@
       "depends_on": [
         "H052-056"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-057.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-057.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -2438,7 +2438,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-056",
@@ -2466,7 +2466,7 @@
       "depends_on": [
         "H052-057"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-058.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-058.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -2479,7 +2479,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-057",
@@ -2508,7 +2508,7 @@
         "H052-034",
         "H052-052"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-059.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-059.md",
       "body_size": {
         "status": "pass",
         "line_count": 70,
@@ -2521,7 +2521,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-034",
@@ -2557,7 +2557,7 @@
       "depends_on": [
         "H052-059"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-060.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-060.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -2570,7 +2570,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-059",
@@ -2598,7 +2598,7 @@
       "depends_on": [
         "H052-060"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-061.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-061.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -2611,7 +2611,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-060",
@@ -2640,7 +2640,7 @@
         "H052-061",
         "H052-033"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-062.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-062.md",
       "body_size": {
         "status": "pass",
         "line_count": 70,
@@ -2653,7 +2653,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-061",
@@ -2689,7 +2689,7 @@
       "depends_on": [
         "H052-061"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-063.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-063.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -2702,7 +2702,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-061",
@@ -2730,7 +2730,7 @@
       "depends_on": [
         "H052-063"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-064.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-064.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -2743,7 +2743,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-063",
@@ -2771,7 +2771,7 @@
       "depends_on": [
         "H052-064"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-065.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-065.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -2784,7 +2784,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-064",
@@ -2813,7 +2813,7 @@
         "H052-003",
         "H052-015"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-066.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-066.md",
       "body_size": {
         "status": "pass",
         "line_count": 70,
@@ -2826,7 +2826,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-003",
@@ -2862,7 +2862,7 @@
       "depends_on": [
         "H052-066"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-067.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-067.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -2875,7 +2875,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-066",
@@ -2904,7 +2904,7 @@
         "H052-067",
         "H052-018"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-068.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-068.md",
       "body_size": {
         "status": "pass",
         "line_count": 70,
@@ -2917,7 +2917,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-067",
@@ -2953,7 +2953,7 @@
       "depends_on": [
         "H052-068"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-069.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-069.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -2966,7 +2966,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-068",
@@ -2998,7 +2998,7 @@
         "H052-065",
         "H052-069"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-070.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-070.md",
       "body_size": {
         "status": "pass",
         "line_count": 83,
@@ -3011,7 +3011,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-043",
@@ -3071,7 +3071,7 @@
       "depends_on": [
         "H052-070"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-071.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-071.md",
       "body_size": {
         "status": "pass",
         "line_count": 66,
@@ -3084,7 +3084,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-070",
@@ -3112,7 +3112,7 @@
       "depends_on": [
         "H052-071"
       ],
-      "body_file": "/tmp/signposter-h052-bodies/H052-072.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-072.md",
       "body_size": {
         "status": "pass",
         "line_count": 67,
@@ -3125,7 +3125,7 @@
       "mainline": null,
       "parent": null,
       "return_to": null,
-      "side_task": true,
+      "side_task": false,
       "dependency_metadata": [
         {
           "key": "H052-071",
@@ -3151,7 +3151,7 @@
         "area:scheduler"
       ],
       "depends_on": [],
-      "body_file": "/tmp/signposter-h052-bodies/H052-S001.md",
+      "body_file": "local/roadmaps/h052-bodies/H052-S001.md",
       "body_size": {
         "status": "pass",
         "line_count": 76,

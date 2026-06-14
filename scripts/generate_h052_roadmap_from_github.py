@@ -30,7 +30,8 @@ STANDARD_STOP_CONDITIONS = [
     "merge or integration plan is not ready",
 ]
 
-KEY_RE = re.compile(r"^(H052-(?:\d{3}|S\d{3}))(?:\s+—\s+|\s+-\s+)(.+)$")
+BODY_DIR = REPO_ROOT / "local" / "roadmaps" / "h052-bodies"
+BODY_FILE_PREFIX = "local/roadmaps/h052-bodies"
 
 
 def fetch_issues() -> list[dict]:
@@ -95,20 +96,33 @@ def parse_dependencies(body: str) -> list[str]:
     return deps
 
 
-def parse_acceptance(body: str, key: str) -> list[str]:
+KEY_RE = re.compile(r"^(H052-(?:\d{3}|S\d{3}))(?:\s+—\s+|\s+-\s+)(.+)$")
+
+
+def parse_section_bullets(body: str, section_name: str, *, until: tuple[str, ...]) -> list[str]:
     lines: list[str] = []
     in_section = False
     for line in body.splitlines():
         stripped = line.strip()
-        if stripped == "Acceptance:":
+        if stripped == section_name:
             in_section = True
             continue
-        if in_section and stripped.startswith("Stop conditions:"):
+        if in_section and any(stripped.startswith(prefix) for prefix in until):
             break
         if in_section and stripped.startswith("* "):
             lines.append(stripped[2:].strip())
-    if lines:
-        return lines
+    return lines
+
+
+def parse_acceptance(body: str, key: str) -> list[str]:
+    for section_name in ("Acceptance criteria:", "Acceptance:"):
+        lines = parse_section_bullets(
+            body,
+            section_name,
+            until=("Validation:", "Implementation notes:", "Signposter metadata:", "Stop conditions:"),
+        )
+        if lines:
+            return lines
     return [
         f"{key}: scoped behavior or audit result is delivered with evidence.",
         f"{key}: output is deterministic and operator-readable.",
@@ -117,14 +131,37 @@ def parse_acceptance(body: str, key: str) -> list[str]:
     ]
 
 
-def parse_side_task(body: str) -> tuple[bool, int | None]:
+def parse_stop_conditions(body: str) -> list[str]:
+    lines = parse_section_bullets(
+        body,
+        "Stop conditions:",
+        until=("Report back:", "Lifecycle boundary:", "Signposter metadata:"),
+    )
+    return lines or list(STANDARD_STOP_CONDITIONS)
+
+
+def parse_side_task(key: str, body: str) -> tuple[bool, int | None]:
     return_to = None
     for line in body.splitlines():
         match = re.search(r"return[_ ]to:\s*#?(\d+)", line, re.IGNORECASE)
         if match:
             return_to = int(match.group(1))
-    side_task = "side-task" in body.lower() or "-S" in body
+    side_task = key.endswith("-S001")
+    if not side_task:
+        metadata = parse_section_bullets(
+            body,
+            "Signposter metadata:",
+            until=("Lifecycle boundary:", "Stop conditions:", "Report back:"),
+        )
+        side_task = any("side-task" in item.lower() for item in metadata)
     return side_task, return_to
+
+
+def write_issue_bodies(plan_issues: list[dict]) -> None:
+    BODY_DIR.mkdir(parents=True, exist_ok=True)
+    for issue in plan_issues:
+        path = BODY_DIR / f"{issue['key']}.md"
+        path.write_text(issue["body"], encoding="utf-8")
 
 
 def sort_key(key: str) -> tuple[int, str]:
@@ -152,9 +189,7 @@ def build_plan_issues(github_issues: list[dict]) -> list[dict]:
         role = label_value(labels, "role:") or "worker"
         area = label_value(labels, "area:") or "core"
         depends_on = parse_dependencies(item.get("body", ""))
-        side_task, return_to = parse_side_task(item.get("body", ""))
-        if key.endswith("-S001"):
-            side_task = True
+        side_task, return_to = parse_side_task(key, item.get("body", ""))
 
         issue = {
             "key": key,
@@ -166,7 +201,7 @@ def build_plan_issues(github_issues: list[dict]) -> list[dict]:
             "area": area,
             "depends_on": depends_on,
             "acceptance": parse_acceptance(item.get("body", ""), key),
-            "stop_conditions": list(STANDARD_STOP_CONDITIONS),
+            "stop_conditions": parse_stop_conditions(item.get("body", "")),
             "allowed_mutations": [],
             "status": "pending",
         }
@@ -216,7 +251,7 @@ def build_manifest_issues(plan_issues: list[dict], github_by_key: dict[str, dict
                 "title": gh["title"],
                 "labels": manifest_labels,
                 "depends_on": issue["depends_on"],
-                "body_file": f"/tmp/signposter-h052-bodies/{issue['key']}.md",
+                "body_file": f"{BODY_FILE_PREFIX}/{issue['key']}.md",
                 "body_size": body_size(gh.get("body", "")),
                 "github_issue": gh["number"],
                 "github_url": f"https://github.com/{REPO}/issues/{gh['number']}",
@@ -290,6 +325,7 @@ def main() -> int:
 
     plan_path = ROADMAPS / "h052-plan.json"
     manifest_path = ROADMAPS / "h052-seed-manifest.json"
+    write_issue_bodies(plan_issues)
     plan_path.write_text(json.dumps(plan, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
     manifest = refresh_dependency_metadata(
@@ -327,6 +363,7 @@ def main() -> int:
             )
 
     print(f"plan issues: {len(plan_issues)}")
+    print(f"wrote body files under {BODY_DIR}")
     print(f"wrote {plan_path}")
     print(f"wrote {manifest_path}")
     return 0
