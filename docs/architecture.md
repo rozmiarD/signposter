@@ -153,11 +153,11 @@ structured fields and bounded summaries over noisy raw logs.
   control-plane status, next-step planning, and bounded loop behavior.
 - `lifecycle.py`, `transitions.py`: lifecycle status and basic label
   transitions.
-- `worktree.py`, `handoff.py`, `pr.py`, `sync.py`: local branch/worktree and PR
-  planning surfaces.
+- `worktree.py`, `handoff.py`, `pr.py`, `sync.py`, `git_utils.py`: local
+  branch/worktree, checkout sync, and PR planning surfaces.
 - `runner.py`, `execution_backend.py`, `codex_cli_backend.py`,
-  `openclaw_*`, `codex_subagent.py`: backend execution adapters and artifact
-  capture.
+  `openclaw_*`, `codex_subagent.py`, `delegation.py`: backend execution
+  adapters, subagent contracts, and delegation circuit breaking.
 - `role_policy.py`, `role_routing.py`, `role_smoke.py`: role/model/reasoning
   policy and smoke planning.
 - `gate.py`, `review.py`, `merge.py`, `integration.py`, `cleanup.py`: evidence,

@@ -1,6 +1,6 @@
 # Signposter
 
-[![CI: pytest](https://github.com/rozmiarD/signposter/actions/workflows/ci.yml/badge.svg)](https://github.com/rozmiarD/signposter/actions/workflows/ci.yml)
+[![CI](https://github.com/rozmiarD/signposter/actions/workflows/ci.yml/badge.svg)](https://github.com/rozmiarD/signposter/actions/workflows/ci.yml)
 [![Python: 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
 
 **Signposter is a local, safety-first workflow control plane for supervised GitHub issue lifecycles.**
@@ -65,6 +65,7 @@ Read-only status for a target repo (replace with your `owner/repo`):
 
 ```bash
 signposter lifecycle status --repo rozmiarD/signposter --issue <issue>
+signposter control-plane status --repo rozmiarD/signposter --manifest configs/planner.example-seed-manifest.json
 signposter planner run --manifest configs/planner.example-seed-manifest.json --sync-github --dry-run
 ```
 
@@ -107,12 +108,15 @@ Operator-internal audits and roadmaps (`docs/audits/`, `docs/roadmaps/`) are git
 
 This branch is intentionally kept. It captures the last known working configuration that allowed the Codex mechanism to finish in-flight work without interruption — Signposter could run until the roadmap completed rather than stopping on token limits. That behavior was reported to OpenAI and subsequently fixed. The branch retains the H052 roadmap manifests and alignment used during that validation; it is a historical reference, not the active development line. Current work lives on `main`.
 
-Stale worker branches (`work/h038-*`, `work/issue-*`) are abandoned task branches and were not merged.
+Stale worker branches (`work/h038-*`, `work/issue-*`) were abandoned and removed from the remote; they were not merged into `main`.
 
 ## Development and validation
 
+CI runs `ruff`, `mypy`, and `pytest`. Locally:
+
 ```bash
 .venv/bin/ruff check .
+.venv/bin/mypy src/signposter
 .venv/bin/python -m pytest tests/ -q
 ```
 
@@ -121,6 +125,7 @@ Inside an isolated worktree, reuse the main clone virtualenv:
 ```bash
 MAIN_REPO=~/projects/signposter
 PYTHONPATH="$PWD/src" "$MAIN_REPO/.venv/bin/ruff" check .
+PYTHONPATH="$PWD/src" "$MAIN_REPO/.venv/bin/mypy" src/signposter
 PYTHONPATH="$PWD/src" "$MAIN_REPO/.venv/bin/python" -m pytest tests/ -q
 ```
 
@@ -128,6 +133,8 @@ PYTHONPATH="$PWD/src" "$MAIN_REPO/.venv/bin/python" -m pytest tests/ -q
 
 1. `docs/architecture.md` — layers and module boundaries
 2. `docs/workflow.md` — lifecycle and safety boundaries
-3. `docs/operator-lifecycle-runbook.md` — operator flow
-4. `docs/artifacts-reference.md` — worker/reviewer artifact fields
-5. `docs/troubleshooting.md` — recovery checklist
+3. `docs/state-machine.md` — workflow labels and planner vs scheduler scope
+4. `docs/labels.md` — label vocabulary and legacy aliases
+5. `docs/operator-lifecycle-runbook.md` — operator flow
+6. `docs/artifacts-reference.md` — worker/reviewer artifact fields
+7. `docs/troubleshooting.md` — recovery checklist

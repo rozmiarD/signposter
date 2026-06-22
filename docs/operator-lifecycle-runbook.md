@@ -50,6 +50,12 @@ isolated worktree.
 
 ## Planner First
 
+Before a run, optional automation preflight:
+
+```bash
+signposter doctor --automation
+```
+
 Use the manifest-scoped planner to identify the next roadmap task.
 
 ```bash
@@ -144,9 +150,11 @@ Run targeted validation first, then full validation before push.
 ```bash
 MAIN_REPO=~/projects/signposter
 PYTHONPATH="$PWD/src" "$MAIN_REPO/.venv/bin/ruff" check <changed-files>
+PYTHONPATH="$PWD/src" "$MAIN_REPO/.venv/bin/mypy" src/signposter
 PYTHONPATH="$PWD/src" "$MAIN_REPO/.venv/bin/python" -m pytest <targeted-tests> -q
 
 PYTHONPATH="$PWD/src" "$MAIN_REPO/.venv/bin/ruff" check .
+PYTHONPATH="$PWD/src" "$MAIN_REPO/.venv/bin/mypy" src/signposter
 PYTHONPATH="$PWD/src" "$MAIN_REPO/.venv/bin/python" -m pytest tests/ -q
 ```
 

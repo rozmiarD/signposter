@@ -29,6 +29,7 @@ ISSUE=286
 PR=370
 WORKTREE=../signposter-work/$ISSUE
 
+signposter doctor --automation
 git status --short --branch
 signposter lifecycle status --repo $REPO --issue $ISSUE
 signposter lifecycle next --repo $REPO --issue $ISSUE
@@ -67,6 +68,21 @@ ls -lah artifacts/runs/
 | Planner shows dependency complete but dependent task is not ready | Advancement pending | Run `planner advance --dry-run`, then apply only if the mutation is exact |
 
 Do not continue to a later mutation after an earlier critical mutation failed.
+
+## Automation Bug Ledger
+
+When a loop bug should be tracked locally before opening a follow-up issue:
+
+```bash
+signposter artifact record-bug \
+  --summary "Planner advance blocked after merge integration" \
+  --current-issue $ISSUE \
+  --apply
+
+signposter artifact show-bugs
+```
+
+Entries stay local under `artifacts/automation/bug-ledger.json` by default.
 
 ## Worker Artifact Takeover
 

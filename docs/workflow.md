@@ -125,8 +125,9 @@ When a task is stuck, inspect state before retrying:
 
 Prefer the smallest Signposter-native recovery path. If backend execution cannot
 produce usable output, preserve runtime artifacts and create a bounded
-human/operator summary. If a bug blocks the loop, record it in the bug ledger or
-create a narrow follow-up issue with dependencies and acceptance criteria.
+human/operator summary. If a bug blocks the loop, record it locally with
+`signposter artifact record-bug --summary "..." --apply` or create a narrow
+follow-up issue with dependencies and acceptance criteria.
 
 ## Validation
 
@@ -135,6 +136,7 @@ validation:
 
 ```bash
 ruff check .
+mypy src/signposter
 python -m pytest tests/ -q
 ```
 
@@ -143,6 +145,7 @@ Inside an isolated worktree, reuse the main clone virtualenv:
 ```bash
 MAIN_REPO=~/projects/signposter
 PYTHONPATH="$PWD/src" "$MAIN_REPO/.venv/bin/ruff" check .
+PYTHONPATH="$PWD/src" "$MAIN_REPO/.venv/bin/mypy" src/signposter
 PYTHONPATH="$PWD/src" "$MAIN_REPO/.venv/bin/python" -m pytest tests/ -q
 ```
 

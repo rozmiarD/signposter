@@ -232,5 +232,3 @@ grep -n "Dirty Guard\|Exit Code\|Scope\|Verdict\|Confidence\|NEEDS-WORK\|PASS" a
 
 - `operator-lifecycle-runbook.md` gives the command sequence.
 - This document explains the evidence files those commands produce and consume.
-
-SMOKE-002 validated the full artifact flow from worker execution through reviewer gate and integration.
