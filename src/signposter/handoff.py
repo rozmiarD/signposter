@@ -146,10 +146,16 @@ def _git_output(args: list[str], *, cwd: str | Path = ".") -> str | None:
 def _issue_ref(value: object | None) -> int | None:
     if value is None:
         return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
+    if isinstance(value, bool):
         return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
 
 
 def _planner_active_issue(planner_run: dict[str, Any] | None) -> int | None:

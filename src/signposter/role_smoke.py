@@ -6,6 +6,7 @@ import datetime
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from signposter.artifact_safety import find_stale_or_failover_signal
 from signposter.openclaw_diagnostics import (
@@ -193,7 +194,7 @@ def _format_summary_artifact(
     *,
     plan: RoleSmokePlan,
     diagnosis: RoleSmokeDiagnosis,
-    result: dict,
+    result: dict[str, Any],
     diagnostics_warnings: tuple[str, ...],
 ) -> str:
     lines = [
@@ -338,7 +339,7 @@ def execute_role_smoke(
     *,
     runs_dir: Path | str = "artifacts/runs",
     diagnostics: OpenClawRuntimeDiagnostics | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Run a local OpenClaw smoke turn for one role policy."""
     plan = build_role_smoke_plan(role_name)
     preflight = check_openclaw_preflight(artifact_kind="worker", target=0)
@@ -473,7 +474,11 @@ def execute_role_smoke_matrix(
             result_status = (
                 diagnosis.status if diagnosis is not None else result.get("error", "unknown")
             )
-            result_reason = diagnosis.reason if diagnosis is not None else result.get("error")
+            result_reason = (
+                diagnosis.reason
+                if diagnosis is not None
+                else str(result.get("error") or "unknown")
+            )
             raw_path = result.get("raw_path")
             summary_path = result.get("summary_path")
         else:

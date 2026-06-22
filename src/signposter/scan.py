@@ -159,7 +159,7 @@ def fetch_issue_by_number(repo: str, number: int) -> LabeledItem | None:
     )
 
 
-def fetch_issue_context(repo: str, number: int) -> dict | None:
+def fetch_issue_context(repo: str, number: int) -> dict[str, Any] | None:
     """Fetch rich issue context for prompt embedding (read-only, authenticated gh).
 
     Returns full JSON from `gh issue view --json number,title,body,url,state,labels,comments`.
@@ -182,7 +182,10 @@ def fetch_issue_context(repo: str, number: int) -> dict | None:
     )
     if result.returncode != 0:
         return None
-    return json.loads(result.stdout)
+    payload = json.loads(result.stdout)
+    if not isinstance(payload, dict):
+        return None
+    return payload
 
 
 def fetch_open_prs(repo: str, limit: int = 50) -> list[LabeledItem]:

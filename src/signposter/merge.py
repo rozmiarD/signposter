@@ -563,7 +563,7 @@ def apply_merge(
     allow_large_scope: bool = False,
     allow_medium_risk: bool = False,
     allow_high_risk: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     """Execute (or dry-run) a guarded merge of a PR.
 
     Only performs the actual gh pr merge when apply=True AND the merge plan status is "ready".

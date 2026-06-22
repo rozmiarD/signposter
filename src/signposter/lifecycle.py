@@ -277,7 +277,7 @@ def _detect_associated_pr_from_issue(repo: str, issue: int) -> int | None:
     return None
 
 
-def _get_non_author_approval(reviews: list[dict]) -> tuple[bool, str | None]:
+def _get_non_author_approval(reviews: list[dict[str, Any]]) -> tuple[bool, str | None]:
     """Return (has_non_author_approval, reviewer_login) from reviews list."""
     if not reviews:
         return False, None

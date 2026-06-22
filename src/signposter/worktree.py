@@ -10,6 +10,7 @@ import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from signposter.dependencies import is_dependency_blocked
 from signposter.dispatch import classify_candidate
@@ -377,7 +378,7 @@ def apply_worktree_plan(plan: WorktreePlan, *, dry_run: bool = True) -> list[str
     return commands
 
 
-def get_worktree_status_for_issue(issue_number: int, title: str | None = None) -> dict:
+def get_worktree_status_for_issue(issue_number: int, title: str | None = None) -> dict[str, Any]:
     """Lightweight diagnostic for runner integration (HARDENING-009).
 
     Returns:

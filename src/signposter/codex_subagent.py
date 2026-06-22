@@ -208,6 +208,7 @@ def plan_codex_subagent_takeover(
     validation_required = not validation_evidence_present
     takeover_required = output.takeover_required or validation_required
 
+    actions: tuple[str, ...]
     if not takeover_required:
         status = "not-required"
         reason = "subagent output is complete and validation evidence is present"

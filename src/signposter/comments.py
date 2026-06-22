@@ -111,10 +111,21 @@ def redact_github_comment_body(body: str) -> str:
     return redacted
 
 
-def ensure_github_comment_body(body: str, **kwargs: object) -> str:
+def ensure_github_comment_body(
+    body: str,
+    *,
+    max_chars: int = DEFAULT_MAX_COMMENT_CHARS,
+    require_signposter_marker: bool = True,
+    allow_auto_close_keywords: bool = False,
+) -> str:
     """Return body when safe enough for GitHub, otherwise raise ValueError."""
     redacted = redact_github_comment_body(body)
-    audit = audit_github_comment_body(redacted, **kwargs)
+    audit = audit_github_comment_body(
+        redacted,
+        max_chars=max_chars,
+        require_signposter_marker=require_signposter_marker,
+        allow_auto_close_keywords=allow_auto_close_keywords,
+    )
     if not audit.valid:
         raise ValueError("unsafe GitHub comment body: " + "; ".join(audit.errors))
     return redacted

@@ -298,11 +298,15 @@ def apply_sync(
 
 def format_sync_apply_result(result: dict[str, Any]) -> str:
     """Format result of sync apply or blocked attempt."""
-    plan: SyncPlan = result.get("plan")
+    plan_obj = result.get("plan")
+    plan = plan_obj if isinstance(plan_obj, SyncPlan) else None
     repo = plan.repo_path if plan else "?"
 
     if result.get("mode") == "dry_run":
         lines = [f"Signposter Sync Apply Plan — {repo}\n"]
+        if plan is None:
+            lines.append("Sync plan: unavailable")
+            return "\n".join(lines)
         lines.append("Sync plan:")
         lines.append(f"  status: {plan.status}")
         lines.append(f"  action: {plan.recommended_action}")

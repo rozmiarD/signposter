@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -33,14 +34,14 @@ class OpenClawPreflightResult:
     manual_fallback: str
 
 
-def _configured_token_envs(env: dict[str, str] | None = None) -> tuple[str, ...]:
-    env = env or os.environ
-    configured = env.get("SIGNPOSTER_OPENCLAW_PROVIDER_TOKEN_ENV", "")
+def _configured_token_envs(env: Mapping[str, str] | None = None) -> tuple[str, ...]:
+    effective: Mapping[str, str] = os.environ if env is None else env
+    configured = effective.get("SIGNPOSTER_OPENCLAW_PROVIDER_TOKEN_ENV", "")
     extra = tuple(item.strip() for item in configured.split(",") if item.strip())
     return (*DEFAULT_PROVIDER_TOKEN_ENVS, *extra)
 
 
-def _openclaw_config_path(env: dict[str, str]) -> Path:
+def _openclaw_config_path(env: Mapping[str, str]) -> Path:
     configured = env.get("OPENCLAW_CONFIG_PATH", "").strip()
     if configured:
         return Path(configured).expanduser()
@@ -52,7 +53,7 @@ def _openclaw_config_path(env: dict[str, str]) -> Path:
     return Path.home() / ".openclaw" / "openclaw.json"
 
 
-def _count_usable_auth_profiles(env: dict[str, str]) -> tuple[str, int, bool]:
+def _count_usable_auth_profiles(env: Mapping[str, str]) -> tuple[str, int, bool]:
     config_path = _openclaw_config_path(env)
 
     try:
@@ -91,11 +92,11 @@ def check_openclaw_preflight(
     *,
     artifact_kind: str,
     target: int,
-    env: dict[str, str] | None = None,
+    env: Mapping[str, str] | None = None,
 ) -> OpenClawPreflightResult:
     """Check that OpenClaw execution is likely available before running it."""
-    env = env or os.environ
-    token_envs = _configured_token_envs(env)
+    effective: Mapping[str, str] = os.environ if env is None else env
+    token_envs = _configured_token_envs(effective)
     fallback = _manual_fallback_command(artifact_kind, target)
     openclaw_path = shutil.which("openclaw")
 
@@ -110,7 +111,7 @@ def check_openclaw_preflight(
             manual_fallback=fallback,
         )
 
-    if any(env.get(name) for name in token_envs):
+    if any(effective.get(name) for name in token_envs):
         return OpenClawPreflightResult(
             ok=True,
             reason="OpenClaw CLI and provider token environment are present",
@@ -121,7 +122,9 @@ def check_openclaw_preflight(
             manual_fallback=fallback,
         )
 
-    auth_config_path, auth_profile_count, auth_config_unreadable = _count_usable_auth_profiles(env)
+    auth_config_path, auth_profile_count, auth_config_unreadable = _count_usable_auth_profiles(
+        effective
+    )
     if auth_profile_count > 0:
         return OpenClawPreflightResult(
             ok=True,

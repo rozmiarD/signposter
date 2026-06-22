@@ -69,13 +69,17 @@ def fetch_issue_state_label(repo: str, number: int) -> str | None:
 
     try:
         data = json.loads(result.stdout)
-        labels = [lbl["name"] for lbl in data.get("labels", [])]
+        labels = [
+            str(lbl["name"])
+            for lbl in data.get("labels", [])
+            if isinstance(lbl, dict) and "name" in lbl
+        ]
     except Exception:
         return None
 
     for label in labels:
         if label.startswith("state:"):
-            return label.split(":", 1)[1]
+            return str(label.split(":", 1)[1])
     return None
 
 

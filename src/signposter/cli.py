@@ -67,6 +67,8 @@ from signposter.handoff import (
     write_handoff_snapshot_artifact,
 )
 from signposter.integration import (
+    IntegrationPlan,
+    NoopIntegrationPlan,
     apply_integration,
     apply_noop_integration,
     format_integration_apply_dry_run,
@@ -87,6 +89,7 @@ from signposter.issue_manifest import (
     plan_issue_dag_manifest,
 )
 from signposter.merge import (
+    MergePlan,
     apply_merge,
     format_merge_apply_dry_run,
     format_merge_plan,
@@ -173,6 +176,7 @@ from signposter.planner import (
 from signposter.pr import format_pr_plan, plan_pr_for_issue
 from signposter.report import report_main
 from signposter.review import (
+    ReviewSubmitPlan,
     evaluate_review_gate,
     execute_pr_review,
     format_review_artifact_validation,
@@ -2442,14 +2446,17 @@ def run_review_submit(args: argparse.Namespace) -> int:
                 allow_medium_risk=allow_medium_risk,
                 allow_high_risk=allow_high_risk,
             )
-            plan = result.get("plan")
+            submit_plan_raw = result.get("plan")
+            submit_plan = (
+                submit_plan_raw if isinstance(submit_plan_raw, ReviewSubmitPlan) else None
+            )
 
             if result.get("mode") == "apply":
                 success = result.get("success", False)
                 print(f"Signposter Review Submit — PR #{pr}")
                 print("")
                 print("GitHub review:")
-                print(f"  action: {plan.action if plan else 'unknown'}")
+                print(f"  action: {submit_plan.action if submit_plan else 'unknown'}")
                 print(f"  status: {'submitted' if success else 'failed'}")
                 if not success and result.get("stderr"):
                     print(f"  stderr: {result['stderr'].strip()[:300]}")
@@ -2530,9 +2537,13 @@ def run_merge_apply(args: argparse.Namespace) -> int:
             allow_medium_risk=allow_medium_risk,
             allow_high_risk=allow_high_risk,
         )
-        plan = result.get("plan")
+        plan_raw = result.get("plan")
+        plan = plan_raw if isinstance(plan_raw, MergePlan) else None
 
         if result.get("mode") == "dry_run":
+            if plan is None:
+                print("Error: merge apply dry-run missing plan", file=sys.stderr)
+                return 2
             print(format_merge_apply_dry_run(plan))
             return 0 if plan and plan.status == "ready" else 1
         elif result.get("mode") == "apply":
@@ -2628,9 +2639,13 @@ def run_noop_integration_apply(args: argparse.Namespace) -> int:
 
     try:
         result = apply_noop_integration(repo, issue, apply=do_apply)
-        plan = result.get("plan")
+        plan_raw = result.get("plan")
+        plan = plan_raw if isinstance(plan_raw, NoopIntegrationPlan) else None
 
         if result.get("mode") == "dry_run":
+            if plan is None:
+                print("Error: noop integration apply dry-run missing plan", file=sys.stderr)
+                return 2
             print(format_noop_integration_apply_dry_run(plan, repo))
             return 0
         if result.get("mode") == "apply":
@@ -2688,9 +2703,13 @@ def run_integration_apply(args: argparse.Namespace) -> int:
 
     try:
         result = apply_integration(repo, pr, apply=do_apply)
-        plan = result.get("plan")
+        plan_raw = result.get("plan")
+        plan = plan_raw if isinstance(plan_raw, IntegrationPlan) else None
 
         if result.get("mode") == "dry_run":
+            if plan is None:
+                print("Error: integration apply dry-run missing plan", file=sys.stderr)
+                return 2
             print(format_integration_apply_dry_run(plan, repo))
             apply_status = integration_apply_status(plan, repo) if plan else "blocked"
             return 0 if apply_status in {"ready", "completed"} else 1
@@ -2760,6 +2779,7 @@ def run_integration_apply(args: argparse.Namespace) -> int:
 # =============================================================================
 
 from signposter.cleanup import (  # noqa: E402
+    CleanupPlan,
     apply_cleanup,
     format_cleanup_apply_dry_run,
     format_cleanup_apply_result,
@@ -2800,7 +2820,11 @@ def run_cleanup_apply(args: argparse.Namespace) -> int:
         result = apply_cleanup(repo, pr, apply=do_apply)
 
         if result.get("mode") == "dry_run":
-            plan = result.get("plan")
+            plan_raw = result.get("plan")
+            plan = plan_raw if isinstance(plan_raw, CleanupPlan) else None
+            if plan is None:
+                print("Error: cleanup apply dry-run missing plan", file=sys.stderr)
+                return 2
             print(format_cleanup_apply_dry_run(plan))
             return 0 if plan and plan.status in ("ready", "completed") else 1
         elif result.get("mode") == "apply":
@@ -2819,7 +2843,9 @@ def run_cleanup_apply(args: argparse.Namespace) -> int:
         return 2
 
 
-def _register_cleanup_subcommands(subparsers: argparse._SubParsersAction) -> None:
+def _register_cleanup_subcommands(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
     """Register the cleanup command group (plan + apply)."""
     cleanup_parser = subparsers.add_parser(
         "cleanup",
@@ -2933,7 +2959,9 @@ def run_lifecycle_watch(args: argparse.Namespace) -> int:
     print(format_lifecycle_watch(snapshot))
     return 0 if snapshot.status == "ready" else 1
 
-def _register_lifecycle_subcommands(subparsers: argparse._SubParsersAction) -> None:
+def _register_lifecycle_subcommands(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
     """Register the lifecycle command group."""
     lifecycle_parser = subparsers.add_parser(
         "lifecycle",
@@ -3234,7 +3262,7 @@ def run_orchestrator_autonomy_smoke_cli(args: argparse.Namespace) -> int:
 
 
 def _register_orchestrator_subcommands(
-    subparsers: argparse._SubParsersAction,
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
 ) -> None:
     """Register the orchestrator command group."""
     orchestrator_parser = subparsers.add_parser(
@@ -3535,7 +3563,7 @@ def _control_plane_refresh_command(args: argparse.Namespace) -> str:
 
 
 def _register_control_plane_subcommands(
-    subparsers: argparse._SubParsersAction,
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
 ) -> None:
     """Register compact read-only control-plane status commands."""
     control_parser = subparsers.add_parser(
@@ -3634,7 +3662,9 @@ def run_scheduler_manifest(args: argparse.Namespace) -> int:
         return 2
 
 
-def _register_scheduler_subcommands(subparsers: argparse._SubParsersAction) -> None:
+def _register_scheduler_subcommands(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
     """Register the scheduler command group."""
     scheduler_parser = subparsers.add_parser(
         "scheduler",
@@ -3701,7 +3731,9 @@ def run_issue_factory(args: argparse.Namespace) -> int:
         return 2
 
 
-def _register_issue_factory_subcommand(subparsers: argparse._SubParsersAction) -> None:
+def _register_issue_factory_subcommand(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
     parser = subparsers.add_parser(
         "issue-factory",
         help="Create GitHub issues from a local JSON/TSV task list",
@@ -3756,7 +3788,9 @@ def run_sync_apply(args: argparse.Namespace) -> int:
         return 2
 
 
-def _register_sync_subcommands(subparsers: argparse._SubParsersAction) -> None:
+def _register_sync_subcommands(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
     """Register guarded local sync/rebase commands."""
     sync_parser = subparsers.add_parser(
         "sync",
@@ -3841,7 +3875,9 @@ def run_labels_ensure(args: argparse.Namespace) -> int:
         return 2
 
 
-def _register_labels_subcommands(subparsers: argparse._SubParsersAction) -> None:
+def _register_labels_subcommands(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
     """Register the labels command group (check only for now)."""
     labels_parser = subparsers.add_parser(
         "labels",
@@ -4030,8 +4066,11 @@ def _fetch_merged_prs_by_issue(repo: str) -> dict[int, dict[str, object]]:
         if not match:
             continue
         issue_number = int(match.group(1))
+        raw_number = item.get("number")
+        if raw_number is None:
+            continue
         merged_by_issue[issue_number] = {
-            "number": int(item.get("number")),
+            "number": int(raw_number),
             "headRefName": head_ref,
             "title": str(item.get("title") or ""),
             "mergedAt": str(item.get("mergedAt") or ""),
@@ -4043,7 +4082,10 @@ def _fetch_manifest_issue_states(repo: str, manifest: dict[str, object]) -> dict
     """Fetch GitHub issue states for issues listed in a planner manifest."""
     states: dict[int, object] = {}
     timeout_seconds = 30
-    for issue in manifest.get("issues", []):
+    issues = manifest.get("issues", [])
+    if not isinstance(issues, list):
+        return states
+    for issue in issues:
         if not isinstance(issue, dict):
             continue
         issue_number = issue.get("github_issue")

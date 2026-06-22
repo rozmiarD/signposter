@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from signposter.codex_cli_backend import RunCommand
 from signposter.dependencies import parse_depends_on
 from signposter.scheduler import parse_graph_metadata
 
@@ -26,7 +27,7 @@ def build_issue_dag_manifest(
     repo: str,
     *,
     limit: int = 200,
-    run_command=subprocess.run,
+    run_command: RunCommand = subprocess.run,
 ) -> dict[str, Any]:
     issues = _fetch_issues(repo, limit=limit, run_command=run_command)
     tasks = []
@@ -70,7 +71,7 @@ def plan_issue_dag_manifest(
     *,
     limit: int = 200,
     apply: bool = False,
-    run_command=subprocess.run,
+    run_command: RunCommand = subprocess.run,
 ) -> IssueManifestPlan:
     manifest = build_issue_dag_manifest(repo, limit=limit, run_command=run_command)
     if apply:
@@ -128,7 +129,9 @@ def format_issue_dag_manifest_plan(plan: IssueManifestPlan) -> str:
     return "\n".join(lines)
 
 
-def _fetch_issues(repo: str, *, limit: int, run_command=subprocess.run) -> list[dict[str, Any]]:
+def _fetch_issues(
+    repo: str, *, limit: int, run_command: RunCommand = subprocess.run
+) -> list[dict[str, Any]]:
     proc = run_command(
         [
             "gh",
@@ -148,7 +151,7 @@ def _fetch_issues(repo: str, *, limit: int, run_command=subprocess.run) -> list[
         timeout=30,
     )
     if proc.returncode != 0:
-        raise RuntimeError(proc.stderr.strip() or "gh issue list failed")
+        raise RuntimeError((proc.stderr or "").strip() or "gh issue list failed")
     data = json.loads(proc.stdout or "[]")
     if not isinstance(data, list):
         raise ValueError("gh issue list returned unexpected data")

@@ -10,7 +10,7 @@ import json
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from signposter.comments import ensure_github_comment_body
 from signposter.gate import evaluate_ci_gate
@@ -615,7 +615,7 @@ def _label_preflight(repo: str) -> tuple[bool, list[str], str | None]:
 
 def apply_integration(
     repo: str, pr_number: int, *, apply: bool = False
-) -> dict:
+) -> dict[str, Any]:
     """Dry-run or execute the post-merge issue integration.
 
     Only mutates when apply=True and the integration plan is 'ready' plus all guards pass.
@@ -880,11 +880,11 @@ def _fetch_noop_issue_state(repo: str, issue_number: int) -> dict[str, Any]:
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or f"failed to fetch issue #{issue_number}")
 
-    data = json.loads(result.stdout or "{}")
+    data = cast(dict[str, Any], json.loads(result.stdout or "{}"))
     labels = []
     for label in data.get("labels", []) or []:
         if isinstance(label, dict):
-            labels.append(label.get("name", ""))
+            labels.append(str(label.get("name", "")))
         elif isinstance(label, str):
             labels.append(label)
     data["label_names"] = [label for label in labels if label]
@@ -1144,7 +1144,7 @@ def apply_noop_integration(
     issue_number: int,
     *,
     apply: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     plan = plan_noop_integration_for_issue(repo, issue_number)
 
     if not apply:

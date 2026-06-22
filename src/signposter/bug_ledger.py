@@ -94,10 +94,16 @@ def _coerce_entry(raw: dict[str, object]) -> BugLedgerEntry:
 def _coerce_optional_int(value: object) -> int | None:
     if value in (None, "", "none"):
         return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
+    if isinstance(value, bool):
         return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
 
 
 def load_bug_ledger(path: str | Path = DEFAULT_LEDGER_PATH) -> tuple[BugLedgerEntry, ...]:

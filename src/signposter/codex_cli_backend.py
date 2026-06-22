@@ -20,8 +20,8 @@ from signposter.token_usage import format_token_usage_accounting, summarize_toke
 
 class CompletedProcessLike(Protocol):
     returncode: int
-    stdout: str | None
-    stderr: str | None
+    stdout: str
+    stderr: str
 
 
 RunCommand = Callable[..., CompletedProcessLike]
@@ -291,8 +291,10 @@ def execute_codex_cli_invocation(
             else f"Codex CLI exited with code {exit_code}; classified as {status}."
         )
     except subprocess.TimeoutExpired as exc:
-        stdout = exc.stdout or ""
-        stderr = exc.stderr or ""
+        stdout_raw = exc.stdout or ""
+        stderr_raw = exc.stderr or ""
+        stdout = stdout_raw if isinstance(stdout_raw, str) else stdout_raw.decode()
+        stderr = stderr_raw if isinstance(stderr_raw, str) else stderr_raw.decode()
         exit_code = -1
         status = "timeout"
         reason = f"Codex CLI execution exceeded timeout ({invocation.timeout_seconds}s)."

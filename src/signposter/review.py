@@ -13,7 +13,7 @@ import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from signposter.artifact_safety import find_stale_or_failover_signal
 from signposter.bug_ledger import (
@@ -182,7 +182,7 @@ def _run_gh_pr_view(repo: str, pr: int, fields: list[str]) -> dict[str, Any]:
     if result.returncode != 0:
         raise RuntimeError(f"gh pr view failed: {result.stderr.strip()}")
 
-    return json.loads(result.stdout)
+    return cast(dict[str, Any], json.loads(result.stdout))
 
 
 def _normalize_check_rollup(rollup: Any) -> list[dict[str, Any]]:
@@ -818,7 +818,7 @@ def write_review_prompt_artifact(
 
 def _generate_pr_reviewer_summary(
     *, pr_number: int, plan: ReviewPlan, session_key: str, exit_code: int,
-    raw_path: str, stdout: str, stderr: str, start_time,
+    raw_path: str, stdout: str, stderr: str, start_time: datetime.datetime,
     diagnosis: OpenClawExecutionDiagnosis | None = None,
     diagnostics_warnings: tuple[str, ...] = (),
 ) -> str:
@@ -902,7 +902,7 @@ def execute_pr_review(
     runs_dir: Path | str = "artifacts/runs",
     allow_high_risk: bool = False,
     backend: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Execute the reviewer agent locally against an existing PR review prompt artifact.
 
     Purely local execution. Writes raw + summary artifacts under artifacts/runs/.
@@ -2269,7 +2269,7 @@ def submit_review(
     apply: bool = False,
     allow_medium_risk: bool = False,
     allow_high_risk: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     """Execute (or dry-run) the GitHub PR review submission.
 
     HARDENING-018A: Respects self-review identity guard.
@@ -2362,7 +2362,7 @@ def submit_review(
 # =============================================================================
 
 
-def _get_gh_env(token: str | None = None) -> dict:
+def _get_gh_env(token: str | None = None) -> dict[str, str]:
     """Return env dict with GH_TOKEN injected if provided."""
     env = os.environ.copy()
     if token:
@@ -2418,7 +2418,7 @@ def _is_reviewer_token_configured() -> bool:
     return bool(_get_reviewer_token())
 
 
-def _run_gh_with_token(cmd: list[str], token: str | None) -> subprocess.CompletedProcess:
+def _run_gh_with_token(cmd: list[str], token: str | None) -> subprocess.CompletedProcess[str]:
     """Run a gh command with optional dedicated token."""
     return subprocess.run(
         cmd,

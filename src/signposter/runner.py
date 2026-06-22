@@ -5,17 +5,19 @@ Determines how a selected claimable item would be executed via a backend.
 
 from __future__ import annotations
 
+import datetime
 import os
 import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from signposter.bug_ledger import (
     format_runtime_bug_ledger_record,
     record_runtime_bug_ledger_entry,
 )
-from signposter.claim import build_claim_plan, perform_claim_mutation, plan_claims
+from signposter.claim import ClaimPlan, build_claim_plan, perform_claim_mutation, plan_claims
 from signposter.codex_cli_backend import (
     execute_codex_cli_invocation,
     plan_codex_cli_invocation,
@@ -152,7 +154,7 @@ def _format_dirty_tree_refusal(
     ]
 
 
-def _dirty_tree_result(*, cwd: str, dirty_paths: list[str]) -> dict:
+def _dirty_tree_result(*, cwd: str, dirty_paths: list[str]) -> dict[str, Any]:
     return {
         "exit_code": 1,
         "raw_path": None,
@@ -176,7 +178,7 @@ def _format_repo_mutation_refusal(safety: RepoMutationSafety) -> list[str]:
     ]
 
 
-def _repo_mutation_refusal_result(safety: RepoMutationSafety) -> dict:
+def _repo_mutation_refusal_result(safety: RepoMutationSafety) -> dict[str, Any]:
     return {
         "exit_code": 1,
         "raw_path": None,
@@ -237,7 +239,7 @@ def _select_runner_and_profile(
         return backend_plan.backend, "worker"
 
 
-def _build_explicit_claim_plan(plan: RunnerPlan):
+def _build_explicit_claim_plan(plan: RunnerPlan) -> ClaimPlan:
     return build_claim_plan(plan.dispatch)
 
 
@@ -871,12 +873,14 @@ def _capture_command(cmd: list[str], timeout: int = 30) -> str:
     return f"[error: {last_err}]"
 
 
-def collect_evidence_bundle(repo: str, number: int, plan: RunnerPlan | None = None) -> dict:
+def collect_evidence_bundle(
+    repo: str, number: int, plan: RunnerPlan | None = None,
+) -> dict[str, Any]:
     """Collect current evidence for reviewer/gatekeeper prompts.
 
     Saves snapshots to artifacts/evidence/issue-<number>/
     """
-    evidence: dict = {}
+    evidence: dict[str, Any] = {}
     evidence_dir = _ensure_evidence_dir(number)
 
     # Current scan output (exact CLI view)
@@ -960,8 +964,8 @@ def collect_evidence_bundle(repo: str, number: int, plan: RunnerPlan | None = No
 def render_prompt(
     plan: RunnerPlan,
     repo: str,
-    issue_context: dict | None = None,
-    evidence_bundle: dict | None = None,
+    issue_context: dict[str, Any] | None = None,
+    evidence_bundle: dict[str, Any] | None = None,
 ) -> str:
     """Generate the full prompt artifact content for a RunnerPlan.
 
@@ -1255,7 +1259,7 @@ Begin execution following the constraints and role profile above.
     return content
 
 
-def _render_compact_evidence_section(evidence_bundle: dict, plan: RunnerPlan) -> str:
+def _render_compact_evidence_section(evidence_bundle: dict[str, Any], plan: RunnerPlan) -> str:
     """Render a compact evidence block for reviewer/gatekeeper prompts."""
     scan = _compact_evidence_text(
         evidence_bundle.get("scan"),
@@ -1874,7 +1878,7 @@ def execute_plan(
     *,
     allow_dirty: bool = False,
     worktree_cwd: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Execute the runner plan using the selected backend (local only).
 
     Safety: This function assumes the item is already in an executable state
@@ -2283,7 +2287,7 @@ def _record_runner_runtime_bug(
 
 def _generate_execution_summary(
     *, repo: str, plan: RunnerPlan, session_key: str, exit_code: int,
-    raw_path: str, stdout: str, stderr: str, start_time,
+    raw_path: str, stdout: str, stderr: str, start_time: datetime.datetime,
     allow_dirty: bool = False,
     fallback_used: bool = False,
     original_role_name: str | None = None,

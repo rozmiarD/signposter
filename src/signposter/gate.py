@@ -9,6 +9,7 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from signposter.artifact import WorkerArtifactValidation, validate_worker_summary_artifact
 from signposter.artifact_safety import find_stale_or_failover_signal
@@ -1053,7 +1054,7 @@ def _has_scoped_worker_completion_evidence(text: str) -> bool:
     return strong_count >= 2 and supportive_count >= 1
 
 
-def _is_already_integrated_issue(issue_state: dict) -> bool:
+def _is_already_integrated_issue(issue_state: dict[str, Any]) -> bool:
     """Return True if issue is CLOSED and carries the state:merged workflow label.
 
     This indicates the issue has completed the full lifecycle (PR merged + integrated).
@@ -1064,7 +1065,7 @@ def _is_already_integrated_issue(issue_state: dict) -> bool:
     return state == "CLOSED" and "state:merged" in labels
 
 
-def fetch_issue_state(repo: str, issue: int) -> dict:
+def fetch_issue_state(repo: str, issue: int) -> dict[str, Any]:
     """Fetch current labels and state for the issue (read-only)."""
     result = subprocess.run(
         [
@@ -1108,7 +1109,7 @@ def run_gate_dry_run(
     repo: str,
     issue: int,
     summary_path: str | Path,
-) -> dict:
+) -> dict[str, Any]:
     """Main dry-run gate evaluation."""
     issue_state = fetch_issue_state(repo, issue)
     labels = issue_state["labels"]
@@ -1247,7 +1248,7 @@ def run_gate_dry_run(
     }
 
 
-def format_gate_report(result: dict) -> str:
+def format_gate_report(result: dict[str, Any]) -> str:
     # HARDENING-025E-B: Clean output for already-integrated issues
     if result.get("is_already_integrated"):
         lines = [
@@ -1352,7 +1353,7 @@ def format_gate_report(result: dict) -> str:
     return "\n".join(lines)
 
 
-def _blocked_evidence_sections(result: dict) -> tuple[str, ...]:
+def _blocked_evidence_sections(result: dict[str, Any]) -> tuple[str, ...]:
     """Return operator-facing evidence sections to repair for blocked gates."""
     decision = str(result.get("decision", "")).lower()
     if decision in {"pass", "not-applicable"}:
@@ -1520,7 +1521,7 @@ def evaluate_gate_for_complete(repo: str, issue: int) -> tuple[bool, str, str, s
     )
 
 
-def _worker_artifact_validation_payload(result: WorkerArtifactValidation) -> dict:
+def _worker_artifact_validation_payload(result: WorkerArtifactValidation) -> dict[str, Any]:
     return {
         "status": result.status,
         "summary_path": result.path,

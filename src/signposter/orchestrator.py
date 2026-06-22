@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from signposter.artifact import validate_worker_summary_artifact
+from signposter.codex_cli_backend import RunCommand
 from signposter.delegation import evaluate_delegation_policy
 from signposter.lifecycle import LifecycleNext, plan_lifecycle_next
 from signposter.planner import build_planner_next_from_status, build_planner_status
@@ -239,7 +240,7 @@ def run_orchestrator_step(
     pr: int | None = None,
     apply: bool = False,
     execute: bool = False,
-    run_command=subprocess.run,
+    run_command: RunCommand = subprocess.run,
 ) -> OrchestratorStep:
     """Run at most one allow-listed lifecycle command."""
     planned = plan_orchestrator_next(
@@ -342,7 +343,7 @@ def run_orchestrator_step(
     status = "applied" if proc.returncode == 0 else "failed"
     stop_reason = None if proc.returncode == 0 else "step command failed"
     diagnosis_status, diagnosis_reason, raw_artifact_path, summary_artifact_path = (
-        _extract_execute_diagnosis(proc.stdout, proc.stderr)
+        _extract_execute_diagnosis(proc.stdout or "", proc.stderr or "")
     )
     fallback_commands = _plan_fallback_commands(
         repo=repo,
@@ -354,8 +355,8 @@ def run_orchestrator_step(
         status=status,
         applied=proc.returncode == 0,
         exit_code=proc.returncode,
-        stdout=proc.stdout,
-        stderr=proc.stderr,
+        stdout=proc.stdout or "",
+        stderr=proc.stderr or "",
         stop_reason=stop_reason,
         notes=notes,
         diagnosis_status=diagnosis_status,
@@ -374,7 +375,7 @@ def run_orchestrator_loop(
     max_cycles: int = 1,
     apply: bool = False,
     execute: bool = False,
-    run_command=subprocess.run,
+    run_command: RunCommand = subprocess.run,
 ) -> OrchestratorLoop:
     """Run a bounded orchestrator loop and stop on any non-applied state."""
     if max_cycles < 1:
@@ -441,7 +442,7 @@ def plan_orchestrator_run_next(
     allow_execute: bool = False,
     manifest_path: str | Path | None = None,
     sync_github: bool = False,
-    run_command=subprocess.run,
+    run_command: RunCommand = subprocess.run,
 ) -> OrchestratorRunNext:
     """Select the next scheduler issue and plan its lifecycle action."""
     selection = _select_run_next_source(
@@ -490,7 +491,7 @@ def run_orchestrator_run_next(
     execute: bool = False,
     manifest_path: str | Path | None = None,
     sync_github: bool = False,
-    run_command=subprocess.run,
+    run_command: RunCommand = subprocess.run,
 ) -> OrchestratorRunNext:
     """Select the next scheduler issue and optionally run one lifecycle step."""
     planned = plan_orchestrator_run_next(
@@ -541,7 +542,7 @@ def run_orchestrator_run_next_loop(
     tolerate_failed_step: bool = False,
     manifest_path: str | Path | None = None,
     sync_github: bool = False,
-    run_command=subprocess.run,
+    run_command: RunCommand = subprocess.run,
 ) -> OrchestratorRunNextLoop:
     """Run scheduler-selected lifecycle work with hard task and cycle limits."""
     if max_cycles < 1:
@@ -674,7 +675,7 @@ def _select_run_next_loop_issue(
     limit: int,
     manifest_path: str | Path | None = None,
     sync_github: bool = False,
-    run_command=subprocess.run,
+    run_command: RunCommand = subprocess.run,
 ) -> tuple[int | None, str | None, str, str]:
     selection = _select_run_next_source(
         repo,
@@ -733,7 +734,7 @@ def _select_run_next_source(
     limit: int,
     manifest_path: str | Path | None,
     sync_github: bool,
-    run_command=subprocess.run,
+    run_command: RunCommand = subprocess.run,
 ) -> _RunNextSelection:
     if manifest_path is None:
         scheduler = select_next_issue(repo, limit=limit)
@@ -831,7 +832,10 @@ def _select_run_next_source(
 
 
 def _labeled_item_from_planner_task(task: dict[str, object], *, state: str) -> LabeledItem:
-    issue_number = int(task["github_issue"])  # manifest validation owns type shape
+    raw_issue = task.get("github_issue")
+    if not isinstance(raw_issue, (int, str)):
+        raise ValueError(f"invalid github_issue in planner task: {raw_issue!r}")
+    issue_number = int(raw_issue)
     return LabeledItem(
         number=issue_number,
         title=str(task.get("title", f"Issue {issue_number}")),
@@ -1401,7 +1405,7 @@ def _recovery_summary_category(result: OrchestratorNext | None) -> str:
         return "none"
     takeover_category = getattr(result, "takeover_category", None)
     if takeover_category:
-        return takeover_category
+        return str(takeover_category)
     if getattr(result, "stop_reason", None) == EXECUTION_BACKEND_EXPLICIT_EXECUTE_REASON:
         return "execution-requires-explicit-execute"
     if getattr(result, "status", None) == "blocked":
@@ -1412,7 +1416,7 @@ def _recovery_summary_category(result: OrchestratorNext | None) -> str:
 def _recovery_summary_next(result: OrchestratorNext) -> str:
     recovery_commands = getattr(result, "recovery_commands", ())
     if recovery_commands:
-        return recovery_commands[0]
+        return str(recovery_commands[0])
     if getattr(result, "takeover_category", None):
         return "inspect takeover plan and preserve existing evidence"
     if getattr(result, "stop_reason", None) == EXECUTION_BACKEND_EXPLICIT_EXECUTE_REASON:
@@ -1473,15 +1477,20 @@ def _fetch_manifest_issue_states(
     repo: str,
     manifest: dict[str, object],
     *,
-    run_command=subprocess.run,
+    run_command: RunCommand = subprocess.run,
 ) -> dict[int, str]:
     """Fetch workflow-aware issue states for seeded planner tasks."""
     states: dict[int, str] = {}
-    for issue in manifest.get("issues", []):
+    issues = manifest.get("issues", [])
+    if not isinstance(issues, list):
+        return states
+    for issue in issues:
         if not isinstance(issue, dict):
             continue
         issue_number = issue.get("github_issue")
         if issue_number is None:
+            continue
+        if not isinstance(issue_number, (int, str)):
             continue
 
         result = run_command(
@@ -1538,7 +1547,7 @@ def run_orchestrator_autonomy_smoke(
     sync_github: bool = False,
     artifact_path: str | Path = "artifacts/runs/orchestrator-autonomy-smoke.txt",
     transcript_path: str | Path | None = None,
-    run_command=subprocess.run,
+    run_command: RunCommand = subprocess.run,
 ) -> OrchestratorAutonomySmoke:
     """Run a read-only end-to-end autonomy smoke across planner and orchestrator."""
     manifest_file = Path(manifest_path)

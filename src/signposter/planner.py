@@ -6,10 +6,12 @@ import json
 import re
 import shlex
 import subprocess
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from signposter.codex_cli_backend import RunCommand
 from signposter.comments import contains_auto_close_keyword
 
 PLAN_VERSION = "planner.v0.1"
@@ -951,7 +953,10 @@ def _planner_label_value(labels: Any, prefix: str) -> str | None:
         return None
     label_prefix = f"{prefix}:"
     for label in labels:
-        name = label.get("name") if isinstance(label, dict) else str(label)
+        if isinstance(label, dict):
+            name = str(label.get("name") or "")
+        else:
+            name = str(label)
         if name.startswith(label_prefix):
             return name.split(":", 1)[1].strip()
     return None
@@ -1024,8 +1029,8 @@ def _planner_title_family(title: str) -> str:
             return token
     words = re.findall(r"[a-z0-9]+", title)
     if len(words) > 1 and words[0].startswith("h0"):
-        return words[1]
-    return words[0] if words else ""
+        return str(words[1])
+    return str(words[0]) if words else ""
 
 
 
@@ -3150,7 +3155,7 @@ def apply_planner_advance_plan(
     advance_plan: dict[str, Any],
     *,
     repo: str,
-    run_command,
+    run_command: RunCommand = subprocess.run,
 ) -> dict[str, Any]:
     """Apply one guarded planner advance label mutation."""
     if advance_plan.get("status") == "completed":
@@ -3973,7 +3978,7 @@ def _infer_next_roadmap_prefix(current_prefix: str, task: dict[str, Any]) -> str
     current = current_prefix.upper()
     for prefix in re.findall(r"\bH\d{3,}\b", text):
         if prefix != current:
-            return prefix
+            return str(prefix)
 
     match = re.fullmatch(r"([A-Z]+)(\d+)", current)
     if not match:
@@ -4444,7 +4449,10 @@ def _find_manifest_task_by_github_issue(
 
 
 def _copy_json_object(value: dict[str, Any]) -> dict[str, Any]:
-    return json.loads(json.dumps(value))
+    copied = json.loads(json.dumps(value))
+    if not isinstance(copied, dict):
+        raise TypeError("expected JSON object")
+    return copied
 
 
 def _mainline_from_task_key(key: str) -> str | None:
@@ -4904,7 +4912,7 @@ def _planner_status_expected_github_title(issue: dict[str, Any]) -> str:
 
 def build_planner_status(
     manifest: dict[str, Any],
-    issue_states: dict[int, object] | None = None,
+    issue_states: Mapping[int, object] | None = None,
 ) -> dict[str, Any]:
     """Build a local planner status summary from a seed manifest."""
     manifest = _refresh_seed_manifest_dependency_metadata(dict(manifest))

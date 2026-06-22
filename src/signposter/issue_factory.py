@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from signposter.codex_cli_backend import RunCommand
+
 
 @dataclass(frozen=True)
 class IssueFactoryTask:
@@ -54,7 +56,7 @@ def plan_issue_factory(
     repo: str,
     task_path: Path,
     *,
-    run_command=subprocess.run,
+    run_command: RunCommand = subprocess.run,
 ) -> IssueFactoryPlan:
     tasks = load_issue_factory_tasks(task_path)
     existing = _fetch_existing_issue_titles(repo, run_command=run_command)
@@ -87,7 +89,7 @@ def apply_issue_factory(
     task_path: Path,
     *,
     apply: bool = False,
-    run_command=subprocess.run,
+    run_command: RunCommand = subprocess.run,
 ) -> IssueFactoryPlan:
     plan = plan_issue_factory(repo, task_path, run_command=run_command)
     if not apply:
@@ -171,7 +173,9 @@ def _parse_labels(value: Any) -> list[str]:
     return [item.strip() for item in str(value).split(",") if item.strip()]
 
 
-def _fetch_existing_issue_titles(repo: str, *, run_command=subprocess.run) -> list[dict[str, Any]]:
+def _fetch_existing_issue_titles(
+    repo: str, *, run_command: RunCommand = subprocess.run
+) -> list[dict[str, Any]]:
     proc = run_command(
         [
             "gh",
@@ -191,8 +195,11 @@ def _fetch_existing_issue_titles(repo: str, *, run_command=subprocess.run) -> li
         timeout=30,
     )
     if proc.returncode != 0:
-        raise RuntimeError(proc.stderr.strip() or "gh issue list failed")
-    return json.loads(proc.stdout or "[]")
+        raise RuntimeError((proc.stderr or "").strip() or "gh issue list failed")
+    payload = json.loads(proc.stdout or "[]")
+    if not isinstance(payload, list):
+        raise RuntimeError("unexpected gh issue list payload")
+    return [item for item in payload if isinstance(item, dict)]
 
 
 def _find_existing_issue(task_id: str, existing: list[dict[str, Any]]) -> int | None:
@@ -203,7 +210,9 @@ def _find_existing_issue(task_id: str, existing: list[dict[str, Any]]) -> int | 
     return None
 
 
-def _create_issue(repo: str, task: IssueFactoryTask, *, run_command=subprocess.run) -> int | None:
+def _create_issue(
+    repo: str, task: IssueFactoryTask, *, run_command: RunCommand = subprocess.run
+) -> int | None:
     body = f"Task-ID: {task.task_id}\n\n{task.body}".strip()
     command = [
         "gh",
@@ -220,8 +229,8 @@ def _create_issue(repo: str, task: IssueFactoryTask, *, run_command=subprocess.r
         command.extend(["--label", label])
     proc = run_command(command, capture_output=True, text=True, timeout=30)
     if proc.returncode != 0:
-        raise RuntimeError(proc.stderr.strip() or "gh issue create failed")
-    for token in proc.stdout.split("/"):
+        raise RuntimeError((proc.stderr or "").strip() or "gh issue create failed")
+    for token in (proc.stdout or "").split("/"):
         if token.strip().isdigit():
             return int(token.strip())
     return None

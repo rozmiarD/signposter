@@ -10,6 +10,7 @@ import shlex
 import subprocess
 from dataclasses import dataclass
 
+from signposter.codex_cli_backend import RunCommand
 from signposter.comments import contains_auto_close_keyword, redact_github_comment_body
 from signposter.git_utils import BranchSyncStatus, get_branch_sync_status
 from signposter.handoff import HandoffPlan, plan_handoff_for_issue
@@ -112,7 +113,7 @@ def run_github_command_with_timeout(
     command: list[str] | tuple[str, ...],
     *,
     timeout_seconds: int = DEFAULT_GITHUB_COMMAND_TIMEOUT_SECONDS,
-    run_command=subprocess.run,
+    run_command: RunCommand = subprocess.run,
 ) -> GitHubCommandResult:
     """Run one gh command with a bounded timeout.
 
@@ -233,7 +234,7 @@ def read_github_issue_with_timeout(
     *,
     fields: tuple[str, ...] = DEFAULT_GITHUB_ISSUE_READ_FIELDS,
     timeout_seconds: int = DEFAULT_GITHUB_COMMAND_TIMEOUT_SECONDS,
-    run_command=subprocess.run,
+    run_command: RunCommand = subprocess.run,
 ) -> GitHubCommandResult:
     """Read one GitHub issue through gh with bounded timeout evidence."""
     json_fields = ",".join(fields)
@@ -303,7 +304,7 @@ def edit_github_issue_with_timeout(
     remove_labels: tuple[str, ...] = (),
     state: str | None = None,
     timeout_seconds: int = DEFAULT_GITHUB_COMMAND_TIMEOUT_SECONDS,
-    run_command=subprocess.run,
+    run_command: RunCommand = subprocess.run,
 ) -> GitHubCommandResult:
     """Run one guarded gh issue edit command with bounded timeout evidence."""
     command = ["gh", "issue", "edit", str(issue_number), "-R", repo]

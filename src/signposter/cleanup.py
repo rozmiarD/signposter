@@ -316,7 +316,7 @@ def format_cleanup_apply_dry_run(plan: CleanupPlan) -> str:
 
 def apply_cleanup(
     repo: str, pr_number: int, *, apply: bool = False
-) -> dict:
+) -> dict[str, Any]:
     """Execute (or dry-run) local cleanup.
 
     Only performs git worktree remove + branch delete when apply=True and plan.status == "ready".
@@ -428,9 +428,10 @@ def apply_cleanup(
     }
 
 
-def format_cleanup_apply_result(result: dict) -> str:
+def format_cleanup_apply_result(result: dict[str, Any]) -> str:
     """Final output after real apply (or blocked)."""
-    plan: CleanupPlan = result.get("plan")
+    plan_obj = result.get("plan")
+    plan = plan_obj if isinstance(plan_obj, CleanupPlan) else None
     pr = plan.pr_number if plan else "?"
 
     if result.get("mode") == "apply_blocked":
