@@ -3,15 +3,16 @@
 [![CI](https://github.com/rozmiarD/signposter/actions/workflows/ci.yml/badge.svg)](https://github.com/rozmiarD/signposter/actions/workflows/ci.yml)
 [![Python: 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
 
-**Signposter is a local, safety-first workflow control plane for supervised GitHub issue lifecycles.**
+**Signposter is a local workflow control plane for supervised GitHub issue lifecycles.**
 
-It is built around a simple idea: autonomous coding help is only useful when it stays bounded, inspectable, and operator-controlled.
+It coordinates issue work end to end: pick the next task, isolate the branch,
+collect worker evidence, run gates, land the PR, close the issue, and advance
+the roadmap. Plans are cheap; mutations are explicit.
 
-Signposter is separate from the Neutral Agent Pack.
+## Core responsibilities
 
-## What Signposter does
-
-Signposter moves GitHub issues through a deterministic development lifecycle under explicit operator gates. It combines:
+Signposter moves issues through a deterministic development loop under operator
+gates. In practice it covers:
 
 - dependency-aware planner manifests and roadmap advancement;
 - isolated worker worktrees and guarded issue claiming;
@@ -20,11 +21,14 @@ Signposter moves GitHub issues through a deterministic development lifecycle und
 - CI, review, merge, integration, and cleanup gates;
 - lifecycle, scheduler, orchestrator, and control-plane status surfaces.
 
-The control plane is deterministic: it reads GitHub and local repository state, plans safe next steps, writes local artifacts, enforces gates, and mutates GitHub only on guarded `--apply` paths. LLM-backed execution runs only when the operator explicitly enables `--execute`.
+The control plane stays deterministic: it reads GitHub and local repository
+state, plans the next safe step, writes local artifacts, and mutates GitHub only
+on guarded `--apply` paths. Backend execution runs only when the operator passes
+`--execute`.
 
-## What makes it different
+## Operating model
 
-Signposter is not a free-running autonomous agent.
+Signposter is a supervised dispatcher, not an unattended coding agent.
 
 - GitHub mutation requires `--apply`; backend execution requires `--execute`.
 - Worker changes run from isolated task branches/worktrees; protected base branches are refused.
@@ -34,13 +38,13 @@ Signposter is not a free-running autonomous agent.
 
 Default behavior is read-only or dry-run. If a critical mutation fails, stop and inspect state before continuing.
 
-## Architecture at a glance
+## Control-plane map
 
-High-level governed flow:
+Issue flow at a high level:
 
 `manifest -> planner -> worktree -> worker run -> report/gate -> complete -> PR review -> merge -> integration -> cleanup -> planner advance`
 
-Main control-plane layers:
+Main layers:
 
 - **Planner** — manifest-scoped dependency graph, seeding, advancement, reconcile hints
 - **Scheduler** — repository-wide ready-task discovery from GitHub labels
@@ -50,7 +54,7 @@ Main control-plane layers:
 
 See `docs/architecture.md` for module boundaries and `docs/workflow.md` for the full lifecycle.
 
-## Safe quickstart
+## Get started
 
 ```bash
 git clone https://github.com/rozmiarD/signposter.git
@@ -73,7 +77,7 @@ Operator step-by-step flow: `docs/operator-lifecycle-runbook.md`. Recovery check
 
 Example planner inputs: `configs/planner.example-plan.json` and `configs/planner.example-seed-manifest.json`.
 
-## Typical lifecycle
+## Issue-to-merge path
 
 1. Planner marks a dependency-ready issue as `state:ready`.
 2. `worktree apply --apply` creates an isolated branch/worktree.
@@ -84,7 +88,7 @@ Example planner inputs: `configs/planner.example-plan.json` and `configs/planner
 
 The loop is resumable via planner, lifecycle, worktree, artifact, PR, CI, review, integration, and cleanup status commands.
 
-## Limits and non-goals
+## Out of scope
 
 Signposter is **not**:
 
@@ -95,7 +99,7 @@ Signposter is **not**:
 
 Backend availability is not the same as model availability. When execution fails, preserve raw and summary artifacts locally, write a bounded manual summary, and continue through the normal gates.
 
-## Repository guide
+## Repo layout
 
 - `src/signposter/` — control-plane implementation
 - `tests/` — regression and contract coverage
