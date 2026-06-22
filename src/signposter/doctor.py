@@ -237,19 +237,21 @@ def check_gh_auth() -> CheckResult:
         )
         output = (result.stdout + result.stderr).lower()
 
-        if "logged in" in output:
+        # gh exits 0 only when at least one host is authenticated. Do not match the
+        # naive substring "logged in" — it is contained in "not logged into".
+        if result.returncode == 0 and "not logged" not in output:
             return CheckResult(
                 name="gh-auth",
                 status=CheckStatus.OK,
                 message="gh is authenticated",
             )
-        else:
-            return CheckResult(
-                name="gh-auth",
-                status=CheckStatus.WARN,
-                message="gh is not authenticated",
-                details="Run 'gh auth login' when ready",
-            )
+
+        return CheckResult(
+            name="gh-auth",
+            status=CheckStatus.WARN,
+            message="gh is not authenticated",
+            details="Run 'gh auth login' when ready",
+        )
     except (subprocess.TimeoutExpired, subprocess.SubprocessError):
         return CheckResult(
             name="gh-auth",

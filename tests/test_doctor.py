@@ -13,6 +13,7 @@ from signposter.doctor import (
     build_validation_command_plan,
     check_config_examples_exist,
     check_docs_exist,
+    check_gh_auth,
     check_openclaw_runtime_hygiene,
     check_pytest_tool,
     check_python_version,
@@ -132,6 +133,69 @@ def test_virtualenv_check_returns_structured_status():
 
     assert result.name == "venv"
     assert result.status in (CheckStatus.OK, CheckStatus.WARN)
+
+
+def test_gh_auth_check_warns_when_not_logged_in_message_contains_logged_in_substring():
+    """Regression: 'logged in' must not match 'not logged into'."""
+    from unittest.mock import patch
+
+    completed = type(
+        "CompletedProcess",
+        (),
+        {"returncode": 1, "stdout": "", "stderr": "You are not logged into any GitHub hosts.\n"},
+    )()
+
+    with patch("signposter.doctor.shutil.which", return_value="/usr/bin/gh"), patch(
+        "signposter.doctor.subprocess.run", return_value=completed
+    ):
+        result = check_gh_auth()
+
+    assert result.status == CheckStatus.WARN
+    assert result.message == "gh is not authenticated"
+
+
+def test_gh_auth_check_ok_when_gh_reports_success_exit_code():
+    from unittest.mock import patch
+
+    completed = type(
+        "CompletedProcess",
+        (),
+        {
+            "returncode": 0,
+            "stdout": "github.com\n  ✓ Logged in to github.com account user (keyring)\n",
+            "stderr": "",
+        },
+    )()
+
+    with patch("signposter.doctor.shutil.which", return_value="/usr/bin/gh"), patch(
+        "signposter.doctor.subprocess.run", return_value=completed
+    ):
+        result = check_gh_auth()
+
+    assert result.status == CheckStatus.OK
+    assert result.message == "gh is authenticated"
+
+
+def test_gh_auth_check_warns_when_exit_code_zero_but_output_denies_login():
+    from unittest.mock import patch
+
+    completed = type(
+        "CompletedProcess",
+        (),
+        {
+            "returncode": 0,
+            "stdout": "",
+            "stderr": "You are not logged into any GitHub hosts.\n",
+        },
+    )()
+
+    with patch("signposter.doctor.shutil.which", return_value="/usr/bin/gh"), patch(
+        "signposter.doctor.subprocess.run", return_value=completed
+    ):
+        result = check_gh_auth()
+
+    assert result.status == CheckStatus.WARN
+    assert result.message == "gh is not authenticated"
 
 
 def test_run_automation_doctor_checks_has_expected_checks():
