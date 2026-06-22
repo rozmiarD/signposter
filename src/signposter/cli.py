@@ -276,7 +276,7 @@ def main() -> None:
     scan_parser.add_argument(
         "--repo",
         required=True,
-        help="Target repository in owner/repo format (e.g. ExatronOmega/signposter)",
+        help="Target repository in owner/repo format (e.g. rozmiarD/signposter)",
     )
     scan_parser.set_defaults(func=run_scan)
 

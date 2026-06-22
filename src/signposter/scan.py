@@ -368,7 +368,7 @@ def main() -> int:
     parser.add_argument(
         "--repo",
         required=True,
-        help="Target repository in owner/repo format (e.g. ExatronOmega/signposter)",
+        help="Target repository in owner/repo format (e.g. rozmiarD/signposter)",
     )
     args = parser.parse_args()
 

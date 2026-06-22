@@ -1,193 +1,116 @@
-# signposter
+# Signposter
 
-Signposter is a local, safety-first workflow control plane for moving GitHub
-issues through a bounded development lifecycle.
+[![CI: pytest](https://github.com/rozmiarD/signposter/actions/workflows/ci.yml/badge.svg)](https://github.com/rozmiarD/signposter/actions/workflows/ci.yml)
+[![Python: 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-It is not a free-running autonomous agent. The control plane stays
-deterministic: it reads GitHub and local repository state, plans safe next
-steps, writes local artifacts, enforces gates, and performs mutations only when
-the operator uses the guarded apply/execute paths.
+**Signposter is a local, safety-first workflow control plane for supervised GitHub issue lifecycles.**
+
+It is built around a simple idea: autonomous coding help is only useful when it stays bounded, inspectable, and operator-controlled.
 
 Signposter is separate from the Neutral Agent Pack.
 
-## Current Status
+## What Signposter does
 
-Signposter is beyond the original bootstrap skeleton. The repository now has
-working surfaces for:
+Signposter moves GitHub issues through a deterministic development lifecycle under explicit operator gates. It combines:
 
-- GitHub issue scanning and label-based dispatch;
 - dependency-aware planner manifests and roadmap advancement;
-- guarded issue claiming and completion;
-- isolated worker worktree planning and creation;
-- worker prompt generation and execution planning;
-- Codex CLI execution backend support with legacy OpenClaw compatibility;
-- bounded local worker and reviewer artifacts;
-- CI, review, human, and no-op gate evaluation;
-- PR review prompt generation, review artifact parsing, and review submission;
-- merge planning/apply with risk and scope overrides;
-- post-merge integration that owns issue closure;
-- local cleanup for merged worktrees and branches;
-- lifecycle, scheduler, orchestrator, control-plane, backend, and bug-ledger
-  status surfaces.
+- isolated worker worktrees and guarded issue claiming;
+- worker and reviewer prompt generation with Codex CLI execution (OpenClaw legacy compatibility);
+- bounded local artifacts and GitHub comment summaries;
+- CI, review, merge, integration, and cleanup gates;
+- lifecycle, scheduler, orchestrator, and control-plane status surfaces.
 
-The system is still supervised. Operators should expect to inspect plans,
-approve guarded mutations, watch CI, and recover backend/runtime failures with
-bounded manual artifacts when needed.
+The control plane is deterministic: it reads GitHub and local repository state, plans safe next steps, writes local artifacts, enforces gates, and mutates GitHub only on guarded `--apply` paths. LLM-backed execution runs only when the operator explicitly enables `--execute`.
 
-## Safety Model
+## What makes it different
 
-Default behavior is read-only or dry-run.
+Signposter is not a free-running autonomous agent.
 
-Core invariants:
+- GitHub mutation requires `--apply`; backend execution requires `--execute`.
+- Worker changes run from isolated task branches/worktrees; protected base branches are refused.
+- Raw backend output stays local under `artifacts/runs/`; GitHub sees bounded summaries only.
+- `state:done` does not close an issue — post-merge integration owns closure and `state:merged`.
+- Merge requires green CI, review gate, approval, and explicit readiness checks.
 
-- GitHub mutation requires an explicit `--apply`.
-- Backend execution requires an explicit `--execute`.
-- Worker mutation runs from an isolated task branch/worktree; protected base
-  branches such as `main`, `master`, and `trunk` are refused for direct worker
-  execution.
-- Raw backend output stays local under `artifacts/runs/`.
-- GitHub comments use bounded summaries.
-- `state:done` does not close a GitHub issue.
-- Post-merge integration owns issue closure and `state:merged`.
-- Merge requires green CI, review gate, required approval, and merge readiness.
-- Risk/scope overrides are explicit operator choices.
-- Cleanup removes local worktrees and branches only through guarded cleanup
-  apply paths.
+Default behavior is read-only or dry-run. If a critical mutation fails, stop and inspect state before continuing.
 
-If a critical mutation fails, stop and inspect state before continuing.
+## Architecture at a glance
 
-## Typical Lifecycle
+High-level governed flow:
 
-A normal Signposter-managed issue follows this shape:
+`manifest -> planner -> worktree -> worker run -> report/gate -> complete -> PR review -> merge -> integration -> cleanup -> planner advance`
 
-1. Planner marks a dependency-ready issue as `state:ready`.
-2. `worktree plan` previews the isolated branch/worktree.
-3. `worktree apply --apply` creates the local worktree.
-4. `run --claim --write-prompt` claims the issue and writes a prompt artifact.
-5. `run --execute --worktree` attempts the selected execution backend.
-6. Worker output is summarized into a bounded local artifact.
-7. `report --apply` posts a bounded GitHub issue comment.
-8. `gate --dry-run` validates evidence.
-9. `complete --apply` moves the issue to `state:done`.
-10. A PR is opened for the worker branch.
-11. PR CI is watched to completion.
-12. Reviewer prompt/artifact/gate/approval runs.
-13. `merge plan` verifies merge readiness.
-14. `merge apply --apply` merges without closing the issue.
-15. `integration apply --apply` moves the issue to `state:merged` and closes it.
-16. `cleanup apply --apply` removes local worker state.
-17. Planner advances downstream dependencies.
+Main control-plane layers:
 
-The loop is resumable by inspecting planner, lifecycle, worktree, artifact, PR,
-CI, review, integration, and cleanup state.
+- **Planner** — manifest-scoped dependency graph, seeding, advancement, reconcile hints
+- **Scheduler** — repository-wide ready-task discovery from GitHub labels
+- **Orchestrator / lifecycle** — cross-phase truth for a single issue or PR
+- **Runner / backends** — Codex CLI (default) and legacy OpenClaw execution adapters
+- **Review / merge / integration / cleanup** — PR gates, merge safety, issue closure, local teardown
 
-## Common Commands
+See `docs/architecture.md` for module boundaries and `docs/workflow.md` for the full lifecycle.
 
-Read-only status and planning:
+## Safe quickstart
 
 ```bash
-signposter --help
+git clone https://github.com/rozmiarD/signposter.git
+cd signposter
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
 signposter doctor
 signposter backend status
-signposter roles status
-signposter planner run --manifest configs/planner.example-seed-manifest.json --sync-github --dry-run
+```
+
+Read-only status for a target repo (replace with your `owner/repo`):
+
+```bash
 signposter lifecycle status --repo rozmiarD/signposter --issue <issue>
-signposter control-plane status --repo rozmiarD/signposter --manifest configs/planner.example-seed-manifest.json --sync-github
+signposter planner run --manifest configs/planner.example-seed-manifest.json --sync-github --dry-run
 ```
 
-Issue execution:
+Operator step-by-step flow: `docs/operator-lifecycle-runbook.md`. Recovery checklist: `docs/troubleshooting.md`.
 
-```bash
-signposter run --repo rozmiarD/signposter --issue <issue> --dry-run
-signposter worktree plan --repo rozmiarD/signposter --issue <issue>
-signposter worktree apply --repo rozmiarD/signposter --issue <issue> --apply
-signposter run --repo rozmiarD/signposter --issue <issue> --claim --write-prompt
-signposter run --repo rozmiarD/signposter --issue <issue> --execute --worktree
-```
+Example planner inputs: `configs/planner.example-plan.json` and `configs/planner.example-seed-manifest.json`.
 
-Evidence and completion:
+## Typical lifecycle
 
-```bash
-signposter artifact write-worker-summary --repo rozmiarD/signposter --issue <issue> --agent human/operator --apply
-signposter report --repo rozmiarD/signposter --issue <issue> --summary artifacts/runs/issue-<issue>-worker.summary.md --apply
-signposter gate --repo rozmiarD/signposter --issue <issue> --dry-run
-signposter complete --repo rozmiarD/signposter --issue <issue> --apply
-```
+1. Planner marks a dependency-ready issue as `state:ready`.
+2. `worktree apply --apply` creates an isolated branch/worktree.
+3. `run --claim --write-prompt` claims the issue and writes a prompt artifact.
+4. `run --execute --worktree` runs the selected backend when explicitly enabled.
+5. `report --apply`, `gate`, and `complete --apply` move evidence through worker gates.
+6. PR review, merge, integration, and cleanup complete the loop; planner advances downstream tasks.
 
-Review, merge, integration, and cleanup:
+The loop is resumable via planner, lifecycle, worktree, artifact, PR, CI, review, integration, and cleanup status commands.
 
-```bash
-signposter review write-prompt --repo rozmiarD/signposter --pr <pr>
-signposter review execute --repo rozmiarD/signposter --pr <pr>
-signposter review gate --repo rozmiarD/signposter --pr <pr>
-signposter review submit --repo rozmiarD/signposter --pr <pr> --apply
-signposter merge plan --repo rozmiarD/signposter --pr <pr>
-signposter merge apply --repo rozmiarD/signposter --pr <pr> --apply
-signposter integration plan --repo rozmiarD/signposter --pr <pr>
-signposter integration apply --repo rozmiarD/signposter --pr <pr> --apply
-signposter cleanup plan --repo rozmiarD/signposter --pr <pr>
-signposter cleanup apply --repo rozmiarD/signposter --pr <pr> --apply
-```
+## Limits and non-goals
 
-Use explicit risk or scope override flags only when the corresponding dry-run
-plan explains the blocker and the operator accepts it.
+Signposter is **not**:
 
-## Execution Backends
+- an unconstrained autonomous coding agent;
+- a hosted CI/CD or project-management service;
+- a guarantee that backend execution will succeed on every attempt;
+- a replacement for operator judgment on risk/scope overrides.
 
-Codex CLI is the current default execution backend. OpenClaw surfaces remain as
-legacy compatibility where the code still supports them.
+Backend availability is not the same as model availability. When execution fails, preserve raw and summary artifacts locally, write a bounded manual summary, and continue through the normal gates.
 
-Backend availability is not the same as selected-model availability. If an
-execution attempt cannot produce usable output, preserve the raw and summary
-artifacts locally, write a bounded manual worker or reviewer summary, and
-continue through the normal Signposter gates.
+## Repository guide
 
-## Project Layout
+- `src/signposter/` — control-plane implementation
+- `tests/` — regression and contract coverage
+- `docs/` — public operator documentation
+- `configs/` — example planner, routing, and label configs
 
-Important modules live under `src/signposter/`:
+Operator-internal audits and roadmaps (`docs/audits/`, `docs/roadmaps/`) are gitignored and kept local only — they are not published from this repository.
 
-- `planner.py`, `issue_manifest.py`, `issue_factory.py`, `dependencies.py`:
-  roadmap, manifest, issue seeding, dependency, and advancement logic;
-- `runner.py`, `execution_backend.py`, `codex_cli_backend.py`,
-  `codex_subagent.py`: worker prompt, execution backend, and subagent contracts;
-- `gate.py`, `artifact.py`, `artifact_safety.py`: worker evidence and gate
-  validation;
-- `review.py`, `merge.py`, `integration.py`, `cleanup.py`: PR review, merge,
-  issue closure, and local cleanup safety;
-- `lifecycle.py`, `orchestrator.py`, `control_status.py`, `scheduler/`:
-  status, resumability, orchestration, and operator-facing control-plane
-  views;
-- `role_policy.py`, `role_routing.py`: deterministic role/model/reasoning
-  selection metadata.
+### Preserved branch: `test-last-know-working`
 
-Tests live under `tests/` and should be updated with each behavior change.
+This branch is intentionally kept. It captures the last known working configuration that allowed the Codex mechanism to finish in-flight work without interruption — Signposter could run until the roadmap completed rather than stopping on token limits. That behavior was reported to OpenAI and subsequently fixed. The branch retains the H052 roadmap manifests and alignment used during that validation; it is a historical reference, not the active development line. Current work lives on `main`.
 
-## Documentation
+Stale worker branches (`work/h038-*`, `work/issue-*`) are abandoned task branches and were not merged.
 
-Public operator docs live under `docs/`:
-
-- `architecture.md` — control-plane layers and module boundaries
-- `workflow.md` — lifecycle overview and safety boundaries
-- `operator-lifecycle-runbook.md` — step-by-step operator flow
-- `artifacts-reference.md` — worker/reviewer artifact fields
-- `troubleshooting.md` — recovery checklist
-
-Example planner inputs live under `configs/planner.example-plan.json` and
-`configs/planner.example-seed-manifest.json`. Operator-internal audits and
-roadmaps stay local only and are not published from this repository.
-
-## Development Setup
-
-```bash
-cd ~/projects/signposter
-source .venv/bin/activate
-pip install -e ".[dev]"
-```
-
-## Validation
-
-Use targeted validation for the changed surface, then run the full suite before
-pushing:
+## Development and validation
 
 ```bash
 .venv/bin/ruff check .
@@ -201,3 +124,11 @@ MAIN_REPO=~/projects/signposter
 PYTHONPATH="$PWD/src" "$MAIN_REPO/.venv/bin/ruff" check .
 PYTHONPATH="$PWD/src" "$MAIN_REPO/.venv/bin/python" -m pytest tests/ -q
 ```
+
+## Documentation map
+
+1. `docs/architecture.md` — layers and module boundaries
+2. `docs/workflow.md` — lifecycle and safety boundaries
+3. `docs/operator-lifecycle-runbook.md` — operator flow
+4. `docs/artifacts-reference.md` — worker/reviewer artifact fields
+5. `docs/troubleshooting.md` — recovery checklist

@@ -5619,5 +5619,5 @@ def _target_command_for_issue(issue: dict[str, Any]) -> str:
     if area == "tests":
         return "python -m pytest tests/ -q"
     if key.startswith("WATCH-"):
-        return "signposter lifecycle watch --repo ExatronOmega/signposter --issue N --interval 5"
-    return "signposter <command> --repo ExatronOmega/signposter"
+        return "signposter lifecycle watch --repo owner/repo --issue N --interval 5"
+    return "signposter <command> --repo owner/repo"
