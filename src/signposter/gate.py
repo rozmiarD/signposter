@@ -6,6 +6,7 @@ All functions are pure where possible for easy testing.
 
 from __future__ import annotations
 
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -590,6 +591,25 @@ def evaluate_human_gate(
         proposed_transition="state:active (human gate approval required)",
         proposed_command=None,
     )
+_BACKTICK_PATH_RE = re.compile(r"`([^`]+)`")
+
+
+def _evidence_lists_scoped_code_path(text: str) -> bool:
+    """Detect non-test Python paths in worker evidence without repo-specific roots."""
+    t = (text or "").lower()
+    if "src/" in t:
+        return True
+    for match in _BACKTICK_PATH_RE.finditer(t):
+        path = match.group(1).strip()
+        if not path.endswith(".py"):
+            continue
+        if path.startswith("tests/") or path.startswith("test_"):
+            continue
+        if "/" in path:
+            return True
+    return False
+
+
 def _has_scoped_worker_code_completion_evidence(text: str) -> bool:
     # Detect conservative scoped code/CLI worker completion evidence.
     # Supports legacy lifecycle-watch evidence plus general src+tests scoped-code evidence.
@@ -650,12 +670,7 @@ def _has_scoped_worker_code_completion_evidence(text: str) -> bool:
     if not all(signal in t for signal in validation_signals):
         return False
 
-    code_path_signals = (
-        "src/",
-        "govengine/",
-        "sclite/",
-    )
-    has_code_path = any(signal in t for signal in code_path_signals)
+    has_code_path = _evidence_lists_scoped_code_path(t)
     has_test_path = "tests/test_" in t
     if not (has_code_path and has_test_path):
         return False

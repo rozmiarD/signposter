@@ -317,6 +317,51 @@ PASS - scoped worker task completed with validation evidence.
     assert "scoped code change evidence" in decision.reason
 
 
+def test_evaluate_ci_gate_allows_root_package_layout_without_repo_specific_roots():
+    from signposter.gate import evaluate_ci_gate
+
+    summary = """
+# Signposter Execution Summary
+
+**Repository:** rozmiarD/SCLite
+**Issue:** #12
+**Agent:** codex-cli
+**Exit Code:** 0
+**Dirty Guard:** clean
+**Task execution complete:** yes
+**Acceptance:** pass
+
+## Files changed
+
+- `sclite_core/lifecycle.py`
+- `tests/test_lifecycle_chain.py`
+
+## Validation evidence
+
+Targeted validation passed:
+
+- `python -m pytest tests/test_lifecycle_chain.py -q`
+
+Full validation passed:
+
+- `ruff check .`
+- `pytest tests/ -q`
+
+## Safety
+
+No GitHub mutation was performed by the implemented code.
+No OpenClaw execution was performed by the implemented code.
+No issue was closed by the implemented code.
+No merge was performed by the implemented code.
+No unrelated files were changed.
+"""
+
+    decision = evaluate_ci_gate(0, summary)
+
+    assert decision.decision == "pass"
+    assert "scoped code change evidence" in decision.reason
+
+
 def test_gate_heuristic_audit_maps_gate_surfaces_and_risks():
     audit = build_gate_heuristic_audit()
     output = format_gate_heuristic_audit(audit)
